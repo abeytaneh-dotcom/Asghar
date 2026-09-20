@@ -173,8 +173,7 @@ void setup() {
 }
 
 void loop() {
-  if (SerialBT.available()) handleCommand(SerialBT.readStringUntil('
-'));
+  if (SerialBT.available()) handleCommand(SerialBT.readStringUntil('\n'));
   uint32_t now=millis();
   if (now-lastWater >= WATER_PERIOD_MS) { lastWater=now; checkWater(); }
   if (now-lastPid >= PID_PERIOD_MS) { lastPid=now; sendLiveData(); }
