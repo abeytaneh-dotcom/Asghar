@@ -39,7 +39,7 @@ bool installCAN(int kbps) {
   g.tx_queue_len = 10;
   g.rx_queue_len = 20;
   g.alerts_enabled = TWAI_ALERT_NONE;
-  twai_timing_config_t t = (kbps == 250) ? TWAI_TIMING_CONFIG_250KBITS() : TWAI_TIMING_CONFIG_500KBITS();
+  twai_timing_config_t t;\n  if (kbps == 250) {\n    twai_timing_config_t cfg = TWAI_TIMING_CONFIG_250KBITS();\n    t = cfg;\n  } else {\n    twai_timing_config_t cfg = TWAI_TIMING_CONFIG_500KBITS();\n    t = cfg;\n  }
   twai_filter_config_t f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
   if (twai_driver_install(&g, &t, &f) != ESP_OK) return false;
   if (twai_start() != ESP_OK) {
