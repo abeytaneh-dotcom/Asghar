@@ -33,3 +33,5 @@ jobs:
           name: KhanehRemap-SmartOBD-ESP32
           path: build/*.bin
           retention-days: 1
+
+# trigger
