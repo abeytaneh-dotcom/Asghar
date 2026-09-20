@@ -41,7 +41,7 @@ public class MainActivity extends Activity {
  void dashboard(boolean land){body.setOrientation(land?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);
   LinearLayout center=new LinearLayout(this);center.setOrientation(LinearLayout.VERTICAL);LinearLayout gauges=new LinearLayout(this);gauges.setGravity(Gravity.CENTER);
   GaugeView rg=new GaugeView(this,true),sg=new GaugeView(this,false);gauges.addView(rg,new LinearLayout.LayoutParams(0,land?0:235,1));gauges.addView(sg,new LinearLayout.LayoutParams(0,land?0:235,1));if(land){LinearLayout.LayoutParams gp=(LinearLayout.LayoutParams)rg.getLayoutParams();gp.height=0;gp.weight=1;rg.setLayoutParams(gp);sg.setLayoutParams(new LinearLayout.LayoutParams(0,0,1));}
-  center.addView(gauges,new LinearLayout.LayoutParams(-1,0,land?1:0)); if(!land)gauges.getLayoutParams().height=235;
+  if(land) center.addView(gauges,new LinearLayout.LayoutParams(-1,0,1)); else center.addView(gauges,new LinearLayout.LayoutParams(-1,235));
   LinearLayout car=panel();TextView c=txt("◢  🚘  ◣",land?30:24,CYAN);c.setTypeface(null,Typeface.BOLD);car.addView(c);ecuText=txt("موتور سالم  •  ECU: CAN 500 kbps",15,GREEN);car.addView(ecuText);center.addView(car,new LinearLayout.LayoutParams(-1,land?95:75));
   LinearLayout stats=new LinearLayout(this);stats.setOrientation(LinearLayout.HORIZONTAL);tempText=stat(stats,"🌡","دمای آب","-- °C",RED);fuelText=stat(stats,"⛽","سوخت","48 %",AMBER);battText=stat(stats,"▣","باتری","13.8 V",GREEN);coolText=stat(stats,"▤","سطح آب","مناسب",GREEN);center.addView(stats,new LinearLayout.LayoutParams(-1,land?115:105));
   body.addView(center,new LinearLayout.LayoutParams(land?0:-1,land?-1:0,land?1:0));
