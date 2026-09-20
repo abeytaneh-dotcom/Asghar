@@ -17,8 +17,13 @@ jobs:
           cp "$BT/apksigner" out/apksigner
           cp "$BT/lib/apksigner.jar" out/lib/apksigner.jar
           cp "$BT/zipalign" out/zipalign
+          CXX="$(find "$ANDROID_HOME" /usr -name 'libc++.so' -type f 2>/dev/null | head -1 || true)"
+          if [ -n "$CXX" ]; then
+            cp "$CXX" out/libc++.so
+          fi
           chmod +x out/apksigner out/zipalign
           ls -lh out out/lib
+          ldd out/zipalign || true
       - uses: actions/upload-artifact@v4
         with:
           name: android-sign-tools
