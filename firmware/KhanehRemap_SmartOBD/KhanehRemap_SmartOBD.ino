@@ -172,3 +172,5 @@ void loop() {
   if (now-lastPid >= PID_PERIOD_MS) { lastPid=now; sendLiveData(); }
   delay(2);
 }
+
+// build-revision: 2026-09-20-fixed
