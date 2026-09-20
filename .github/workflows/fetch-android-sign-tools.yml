@@ -1,0 +1,26 @@
+name: Fetch Android Sign Tools
+on:
+  push:
+    paths:
+      - '.github/workflows/fetch-android-sign-tools.yml'
+  workflow_dispatch:
+jobs:
+  tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect latest Android build tools
+        run: |
+          set -euxo pipefail
+          BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          echo "Using $BT"
+          mkdir -p out/lib
+          cp "$BT/apksigner" out/apksigner
+          cp "$BT/lib/apksigner.jar" out/lib/apksigner.jar
+          cp "$BT/zipalign" out/zipalign
+          chmod +x out/apksigner out/zipalign
+          ls -lh out out/lib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-sign-tools
+          path: out/
+          retention-days: 1
