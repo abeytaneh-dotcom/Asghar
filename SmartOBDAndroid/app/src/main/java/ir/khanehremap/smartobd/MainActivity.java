@@ -38,14 +38,55 @@ public class MainActivity extends Activity {
  void render(String page){base();boolean land=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE;if(page.equals("خانه"))dashboard(land);else if(page.equals("دیاگ"))diag();else if(page.equals("داده زنده"))live();else if(page.equals("اتصال"))connectPage();else settingsPage();nav();}
  void nav(){LinearLayout n=new LinearLayout(this);String[] a={"خانه","دیاگ","داده زنده","اتصال","تنظیمات"};for(String s:a){Button b=button(s);b.setOnClickListener(v->render(s));n.addView(b,new LinearLayout.LayoutParams(0,55,1));}root.addView(n);}
  LinearLayout panel(){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setGravity(Gravity.CENTER);p.setPadding(8,8,8,8);p.setBackground(box(PANEL,Color.rgb(24,52,75),24));return p;}
- void dashboard(boolean land){body.setOrientation(land?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);
-  LinearLayout center=new LinearLayout(this);center.setOrientation(LinearLayout.VERTICAL);LinearLayout gauges=new LinearLayout(this);gauges.setGravity(Gravity.CENTER);
-  GaugeView rg=new GaugeView(this,true),sg=new GaugeView(this,false);gauges.addView(rg,new LinearLayout.LayoutParams(0,land?0:235,1));gauges.addView(sg,new LinearLayout.LayoutParams(0,land?0:235,1));if(land){LinearLayout.LayoutParams gp=(LinearLayout.LayoutParams)rg.getLayoutParams();gp.height=0;gp.weight=1;rg.setLayoutParams(gp);sg.setLayoutParams(new LinearLayout.LayoutParams(0,0,1));}
-  if(land) center.addView(gauges,new LinearLayout.LayoutParams(-1,0,1)); else center.addView(gauges,new LinearLayout.LayoutParams(-1,235));
-  LinearLayout car=panel();TextView c=txt("◢  🚘  ◣",land?30:24,CYAN);c.setTypeface(null,Typeface.BOLD);car.addView(c);ecuText=txt("موتور سالم  •  ECU: CAN 500 kbps",15,GREEN);car.addView(ecuText);center.addView(car,new LinearLayout.LayoutParams(-1,land?95:75));
-  LinearLayout stats=new LinearLayout(this);stats.setOrientation(LinearLayout.HORIZONTAL);tempText=stat(stats,"🌡","دمای آب","-- °C",RED);fuelText=stat(stats,"⛽","سوخت","48 %",AMBER);battText=stat(stats,"▣","باتری","13.8 V",GREEN);coolText=stat(stats,"▤","سطح آب","مناسب",GREEN);center.addView(stats,new LinearLayout.LayoutParams(-1,land?115:105));
-  body.addView(center,new LinearLayout.LayoutParams(land?0:-1,land?-1:0,land?1:0));
-  if(land){LinearLayout side=new LinearLayout(this);side.setOrientation(LinearLayout.VERTICAL);side.setPadding(8,0,0,0);String[] x={"دیاگ و DTC","اطلاعات ECU","تست عملکرد","گزارش و ذخیره","حالت دمو / واقعی"};for(String q:x){Button b=button(q);b.setOnClickListener(v->{if(q.startsWith("دیاگ"))render("دیاگ");else if(q.startsWith("حالت"))render("اتصال");else render("داده زنده");});side.addView(b,new LinearLayout.LayoutParams(-1,0,1));}body.addView(side,new LinearLayout.LayoutParams(230,-1));}
+ void dashboard(boolean land){
+  body.setOrientation(LinearLayout.VERTICAL);
+  ScrollView scroll=new ScrollView(this);
+  scroll.setFillViewport(true);
+  LinearLayout dash=new LinearLayout(this);
+  dash.setOrientation(LinearLayout.VERTICAL);
+  dash.setPadding(0,6,0,6);
+  scroll.addView(dash,new ScrollView.LayoutParams(-1,-2));
+
+  LinearLayout gauges=new LinearLayout(this);
+  gauges.setOrientation(LinearLayout.HORIZONTAL);
+  gauges.setGravity(Gravity.CENTER);
+  GaugeView rg=new GaugeView(this,true);
+  GaugeView sg=new GaugeView(this,false);
+  int gh=land?300:260;
+  gauges.addView(rg,new LinearLayout.LayoutParams(0,gh,1));
+  gauges.addView(sg,new LinearLayout.LayoutParams(0,gh,1));
+  dash.addView(gauges,new LinearLayout.LayoutParams(-1,gh));
+
+  LinearLayout car=panel();
+  TextView ccar=txt("◢   🚘   ◣",land?32:28,CYAN);
+  ccar.setTypeface(null,Typeface.BOLD);
+  car.addView(ccar);
+  ecuText=txt("موتور سالم  •  ECU: CAN 500 kbps",land?16:14,GREEN);
+  car.addView(ecuText);
+  dash.addView(car,new LinearLayout.LayoutParams(-1,land?100:90));
+
+  LinearLayout stats1=new LinearLayout(this);
+  stats1.setOrientation(LinearLayout.HORIZONTAL);
+  tempText=stat(stats1,"🌡","دمای آب","-- °C",RED);
+  fuelText=stat(stats1,"⛽","سوخت","48 %",AMBER);
+  dash.addView(stats1,new LinearLayout.LayoutParams(-1,115));
+
+  LinearLayout stats2=new LinearLayout(this);
+  stats2.setOrientation(LinearLayout.HORIZONTAL);
+  battText=stat(stats2,"▣","باتری","13.8 V",GREEN);
+  coolText=stat(stats2,"▤","سطح آب","مناسب",GREEN);
+  dash.addView(stats2,new LinearLayout.LayoutParams(-1,115));
+
+  LinearLayout quick=new LinearLayout(this);
+  quick.setOrientation(LinearLayout.HORIZONTAL);
+  String[] q={"دیاگ و DTC","داده زنده","اتصال ESP32"};
+  for(String x:q){
+    Button b=button(x);
+    b.setOnClickListener(v->{if(x.startsWith("دیاگ"))render("دیاگ");else if(x.startsWith("داده"))render("داده زنده");else render("اتصال");});
+    quick.addView(b,new LinearLayout.LayoutParams(0,62,1));
+  }
+  dash.addView(quick,new LinearLayout.LayoutParams(-1,62));
+  body.addView(scroll,new LinearLayout.LayoutParams(-1,-1));
  }
  TextView stat(LinearLayout row,String icon,String name,String value,int color){LinearLayout p=panel();p.addView(txt(icon,21,color));p.addView(txt(name,12,MUTED));TextView v=txt(value,18,color);v.setTypeface(null,Typeface.BOLD);p.addView(v);row.addView(p,new LinearLayout.LayoutParams(0,-1,1));return v;}
  class GaugeView extends View{boolean r;Paint p=new Paint(1);GaugeView(Context c,boolean rpmGauge){super(c);r=rpmGauge;setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
