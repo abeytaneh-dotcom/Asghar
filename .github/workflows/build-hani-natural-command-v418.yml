@@ -1,0 +1,220 @@
+name: Build Hani Natural Command v418
+on:
+  push:
+    paths:
+      - '.github/workflows/build-hani-natural-command-v418.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Java helpers
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p src/ir/htaelec/haniassistant out
+          cat > src/ir/htaelec/haniassistant/FuzzyCommandNormalizer.java <<'JAVA'
+          package ir.htaelec.haniassistant;
+
+          import java.util.Locale;
+
+          public final class FuzzyCommandNormalizer {
+              private FuzzyCommandNormalizer() {}
+
+              public static String normalize(String s) {
+                  if (s == null) return "";
+                  String x = s.toLowerCase(new Locale("fa", "IR"))
+                          .replace('ي','ی').replace('ى','ی').replace('ك','ک')
+                          .replace('ة','ه').replace('ۀ','ه')
+                          .replace("\u200c"," ").replace("\u200f"," ").replace("\u200e"," ")
+                          .replaceAll("[\\p{Punct}،؛؟!]+", " ")
+                          .replaceAll("\\s+", " ").trim();
+
+                  x = " " + x + " ";
+
+                  // Remove wake/filler words that make exact command matching brittle.
+                  x = x.replace(" های هانی ", " ")
+                       .replace(" هی هانی ", " ")
+                       .replace(" ای هانی ", " ")
+                       .replace(" هانی ", " ")
+                       .replace(" لطفا ", " ")
+                       .replace(" لطفاً ", " ")
+                       .replace(" میشه ", " ")
+                       .replace(" می شه ", " ")
+                       .replace(" می شود ", " ")
+                       .replace(" خواهشا ", " ")
+                       .replace(" خواهشاً ", " ")
+                       .replace(" برام ", " ")
+                       .replace(" حالا ", " ")
+                       .replace(" یه ", " ")
+                       .replace(" یکم ", " ");
+
+                  // Common Persian STT variants and colloquial forms.
+                  x = x.replace(" واتس اپ ", " واتساپ ")
+                       .replace(" واتسآپ ", " واتساپ ")
+                       .replace(" واتساپپ ", " واتساپ ")
+                       .replace(" تلگرامم ", " تلگرام ")
+                       .replace(" اینستا گرام ", " اینستاگرام ")
+                       .replace(" اینستا ", " اینستاگرام ")
+                       .replace(" چت جی پی تی ", " chatgpt ")
+                       .replace(" چت جی‌پی‌تی ", " chatgpt ")
+                       .replace(" چت جیپیتی ", " chatgpt ");
+
+                  x = x.replace(" چراغ کوه ", " چراغ قوه ")
+                       .replace(" چراغ قوا ", " چراغ قوه ")
+                       .replace(" چراق قوه ", " چراغ قوه ")
+                       .replace(" چراق کوه ", " چراغ قوه ")
+                       .replace(" فلاش گوشی ", " چراغ قوه ")
+                       .replace(" فلش گوشی ", " چراغ قوه ")
+                       .replace(" فلاش ", " چراغ قوه ")
+                       .replace(" فلش ", " چراغ قوه ");
+
+                  x = x.replace(" روشنش کن ", " روشن کن ")
+                       .replace(" روشن کنش ", " روشن کن ")
+                       .replace(" روش کن ", " روشن کن ")
+                       .replace(" روشنش کنه ", " روشن کن ")
+                       .replace(" خاموشش کن ", " خاموش کن ")
+                       .replace(" خاموش کنش ", " خاموش کن ")
+                       .replace(" خموش کن ", " خاموش کن ");
+
+                  x = x.replace(" صدارو ", " صدا رو ")
+                       .replace(" صداشو ", " صدا رو ")
+                       .replace(" صدای گوشی رو ", " صدا رو ")
+                       .replace(" ولوم رو ", " صدا رو ")
+                       .replace(" ولوم ", " صدا ")
+                       .replace(" صداتو ", " صدا رو ")
+                       .replace(" صدا کمتر ", " صدا کم کن ")
+                       .replace(" صدا رو کمتر کن ", " صدا رو کم کن ")
+                       .replace(" صدا کمش کن ", " صدا کم کن ")
+                       .replace(" صدا رو کمش کن ", " صدا رو کم کن ")
+                       .replace(" صدا بلندتر ", " صدا زیاد کن ")
+                       .replace(" صدا رو بلند کن ", " صدا زیاد کن ")
+                       .replace(" صدا زیادش کن ", " صدا زیاد کن ");
+
+                  x = x.replace(" تایمر بزار ", " تایمر بذار ")
+                       .replace(" تایمر بگذار ", " تایمر بذار ")
+                       .replace(" تایمر بزارش ", " تایمر بذار ")
+                       .replace(" زمان سنج ", " تایمر ")
+                       .replace(" زنگ هشدار ", " آلارم ")
+                       .replace(" الارم ", " آلارم ");
+
+                  x = x.replace(" زنگ بگیر ", " زنگ بزن ")
+                       .replace(" تماس بزن ", " تماس بگیر ")
+                       .replace(" تماسش بگیر ", " تماس بگیر ")
+                       .replace(" زنگش بزن ", " زنگ بزن ")
+                       .replace(" پیامک ", " پیام ")
+                       .replace(" اس ام اس ", " پیام ")
+                       .replace(" اسم اس ", " پیام ");
+
+                  x = x.replace(" بازش کن ", " باز کن ")
+                       .replace(" اجراش کن ", " اجرا کن ")
+                       .replace(" بیارش ", " بیار ")
+                       .replace(" برو عقب ", " برگرد ")
+                       .replace(" برگرد عقب ", " برگرد ")
+                       .replace(" برو خونه ", " صفحه اصلی ")
+                       .replace(" برو خانه ", " صفحه اصلی ")
+                       .replace(" صفحه اول ", " صفحه اصلی ");
+
+                  x = x.replace(" اسکرین شات ", " اسکرین شات ")
+                       .replace(" اسکرین‌شات ", " اسکرین شات ")
+                       .replace(" عکس صفحه ", " اسکرین شات ")
+                       .replace(" عکس از صفحه ", " اسکرین شات ")
+                       .replace(" نوتیفیکیشن ", " اعلان ")
+                       .replace(" نوتیفیکیشن ها ", " اعلان ها ");
+
+                  x = x.replaceAll("\\s+", " ").trim();
+                  return x;
+              }
+          }
+          JAVA
+
+          cat > src/ir/htaelec/haniassistant/RecognitionChooser.java <<'JAVA'
+          package ir.htaelec.haniassistant;
+
+          import android.content.Context;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
+          public final class RecognitionChooser {
+              private RecognitionChooser() {}
+
+              public static String best(Context c, String json, boolean partial) {
+                  if (json == null || json.trim().isEmpty()) return "";
+                  try {
+                      JSONObject o = new JSONObject(json);
+                      if (partial) {
+                          String p = o.optString("partial", "").trim();
+                          return FuzzyCommandNormalizer.normalize(p);
+                      }
+
+                      String direct = o.optString("text", "").trim();
+                      String best = direct;
+                      int bestScore = score(c, direct);
+                      double bestConfidence = -1d;
+
+                      JSONArray alts = o.optJSONArray("alternatives");
+                      if (alts != null) {
+                          for (int i = 0; i < alts.length(); i++) {
+                              JSONObject a = alts.optJSONObject(i);
+                              if (a == null) continue;
+                              String t = a.optString("text", "").trim();
+                              if (t.isEmpty()) continue;
+                              int s = score(c, t);
+                              double conf = a.optDouble("confidence", 0d);
+                              // Command intent wins first; confidence breaks ties.
+                              if (s > bestScore || (s == bestScore && conf > bestConfidence)) {
+                                  best = t;
+                                  bestScore = s;
+                                  bestConfidence = conf;
+                              }
+                          }
+                      }
+                      return FuzzyCommandNormalizer.normalize(best);
+                  } catch (Throwable ignored) {
+                      return FuzzyCommandNormalizer.normalize(json);
+                  }
+              }
+
+              private static int score(Context c, String raw) {
+                  if (raw == null || raw.trim().isEmpty()) return 0;
+                  String n = FuzzyCommandNormalizer.normalize(raw);
+                  int s = 0;
+                  try { s = CommandRouter.estimateScore(c, n); } catch (Throwable ignored) {}
+                  // Prefer complete command-like phrases over fragments.
+                  if (n.contains(" کن") || n.contains(" بزن") || n.contains(" بذار") ||
+                      n.contains(" بگیر") || n.contains(" باز") || n.contains(" برو") ||
+                      n.contains(" روشن") || n.contains(" خاموش")) s += 8;
+                  if (n.contains("چراغ قوه") || n.contains("تایمر") || n.contains("صدا") ||
+                      n.contains("واتساپ") || n.contains("تماس") || n.contains("پیام") ||
+                      n.contains("صفحه اصلی") || n.contains("برگرد") || n.contains("اسکرین شات")) s += 6;
+                  return s;
+              }
+          }
+          JAVA
+
+          cat > src/ir/htaelec/haniassistant/CommandRouter.java <<'JAVA'
+          package ir.htaelec.haniassistant;
+          import android.content.Context;
+          public final class CommandRouter {
+              public static int estimateScore(Context c, String s) { return 0; }
+          }
+          JAVA
+
+      - name: Compile helpers to dex
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ANDROID_JAR="$(find "$ANDROID_HOME/platforms" -name android.jar | sort -V | tail -1)"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          mkdir -p classes helperclasses
+          javac -source 8 -target 8 -cp "$ANDROID_JAR" -d classes $(find src -name '*.java')
+          cp classes/ir/htaelec/haniassistant/FuzzyCommandNormalizer.class helperclasses/
+          cp classes/ir/htaelec/haniassistant/RecognitionChooser.class helperclasses/
+          "$BUILD_TOOLS/d8" --lib "$ANDROID_JAR" --min-api 23 --output out helperclasses/*.class
+          cp out/classes.dex out/hani-natural-command-v418.dex
+          ls -lh out/hani-natural-command-v418.dex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hani-natural-command-v418
+          path: out/hani-natural-command-v418.dex
+          retention-days: 1
