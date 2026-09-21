@@ -30,4 +30,6 @@ jobs:
         with:
           name: KhanehRemap-SmartOBD-Android
           path: SmartOBDAndroid/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 3
+          retention-days: 90
+
+# refreshed long-lived artifact 2026-09-21
