@@ -101,19 +101,40 @@ public class MainActivity extends Activity {
       card(c,x0+3*(cw+gap),top,x0+4*cw+3*gap,top+90,"باتری","13.8 V",GREEN);
       text(c,"ECU  •  CAN 500 kbps  •  موتور سالم",x0+mainW/2,h-28,18,GREEN,Paint.Align.CENTER,true);
     }else{
-      float top=6, gh=Math.min(w*.46f,205),cy=top+gh*.62f,rad=gh*.44f;
-      gauge(c,w*.27f,cy,rad,Math.min(1,rpm/8000f),true);gauge(c,w*.73f,cy,rad,Math.min(1,speed/240f),false);
-      float carTop=top+gh+6;round(c,8,carTop,w-8,carTop+86,22,Color.rgb(7,23,37),Color.rgb(24,64,90));
-      text(c,"🚘",w/2,carTop+43,38,CYAN,Paint.Align.CENTER,true);
-      text(c,demo?"حالت دمو":"اتصال واقعی",w-24,carTop+30,15,demo?AMBER:GREEN,Paint.Align.RIGHT,true);
-      text(c,"ECU • CAN 500 kbps",w-24,carTop+58,14,MUTED,Paint.Align.RIGHT,false);
-      float y=carTop+96,g=8,cw=(w-24)/2f,ch=90;
-      card(c,8,y,8+cw,y+ch,"دمای آب",temp+" °C",RED);
-      card(c,16+cw,y,w-8,y+ch,"سوخت","48 %",AMBER);
-      y+=ch+g;card(c,8,y,8+cw,y+ch,"سطح آب","مناسب",GREEN);
-      card(c,16+cw,y,w-8,y+ch,"باتری","13.8 V",GREEN);
-      y+=ch+12;round(c,8,y,w-8,Math.min(h-8,y+64),18,Color.rgb(5,28,39),GREEN);
-      text(c,"●  موتور سالم    •    ارتباط ECU برقرار",w/2,y+40,17,GREEN,Paint.Align.CENTER,true);
+      // Portrait: use the whole available dashboard area, with large primary instruments.
+      float pad=10f;
+      float available=h-4f;
+      float gaugeTop=4f;
+      float gaugeH=Math.min(w*.64f,available*.35f);
+      float rad=Math.min(w*.245f,gaugeH*.46f);
+      float cy=gaugeTop+gaugeH*.52f;
+      gauge(c,w*.255f,cy,rad,Math.min(1,rpm/8000f),true);
+      gauge(c,w*.745f,cy,rad,Math.min(1,speed/240f),false);
+
+      float heroTop=gaugeTop+gaugeH+4f;
+      float heroH=Math.max(92f,available*.13f);
+      round(c,pad,heroTop,w-pad,heroTop+heroH,24,Color.rgb(6,22,36),Color.rgb(20,68,98));
+      text(c,"🚘",w*.50f,heroTop+heroH*.46f,Math.min(48,heroH*.42f),CYAN,Paint.Align.CENTER,true);
+      text(c,demo?"DEMO":"LIVE",w*.50f,heroTop+heroH*.76f,15,demo?AMBER:GREEN,Paint.Align.CENTER,true);
+      text(c,"ECU",w-pad-18,heroTop+heroH*.33f,14,MUTED,Paint.Align.RIGHT,false);
+      text(c,"CAN 500 kbps",w-pad-18,heroTop+heroH*.60f,16,GREEN,Paint.Align.RIGHT,true);
+      text(c,"موتور سالم",pad+18,heroTop+heroH*.48f,17,GREEN,Paint.Align.LEFT,true);
+
+      float cardsTop=heroTop+heroH+10f;
+      float bottomBarH=58f;
+      float cardsAvail=Math.max(220f,available-cardsTop-bottomBarH-10f);
+      float rowH=(cardsAvail-10f)/2f;
+      float gap=9f,cw=(w-pad*2-gap)/2f;
+      card(c,pad,cardsTop,pad+cw,cardsTop+rowH,"دمای آب",temp+" °C",RED);
+      card(c,pad+cw+gap,cardsTop,w-pad,cardsTop+rowH,"سوخت","48 %",AMBER);
+      float row2=cardsTop+rowH+10f;
+      card(c,pad,row2,pad+cw,row2+rowH,"سطح آب","مناسب",GREEN);
+      card(c,pad+cw+gap,row2,w-pad,row2+rowH,"باتری","13.8 V",GREEN);
+
+      float barY=Math.min(available-bottomBarH,row2+rowH+8f);
+      round(c,pad,barY,w-pad,barY+bottomBarH,20,Color.rgb(4,30,42),GREEN);
+      text(c,"●  ارتباط ECU برقرار    •    داده زنده",w/2,barY+36,17,GREEN,Paint.Align.CENTER,true);
+
     }
   }
  } class GaugeView extends View{boolean r;Paint p=new Paint(1);GaugeView(Context c,boolean rpmGauge){super(c);r=rpmGauge;setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
