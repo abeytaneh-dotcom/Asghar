@@ -29,14 +29,14 @@ public class MainActivity extends Activity {
  GradientDrawable box(int fill,int stroke,float r){GradientDrawable d=new GradientDrawable();d.setColor(fill);d.setCornerRadius(r);if(stroke!=0)d.setStroke(2,stroke);return d;}
  TextView txt(String s,int sp,int c){TextView v=new TextView(this);v.setText(s);v.setTextSize(sp);v.setTextColor(c);v.setGravity(Gravity.CENTER);v.setPadding(10,7,10,7);return v;}
  Button button(String s){Button b=new Button(this);b.setText(s);b.setTextSize(15);b.setTextColor(Color.WHITE);b.setAllCaps(false);b.setBackground(box(PANEL,CYAN,18));b.setPadding(5,3,5,3);return b;}
- void base(){root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);root.setPadding(10,7,10,8);setContentView(root);
-  LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);TextView brand=txt("خانه ریمپ\nSMART OBD",20,Color.WHITE);brand.setGravity(Gravity.RIGHT);brand.setTypeface(null,Typeface.BOLD);head.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
+ void base(){root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);root.setPadding(6,4,6,5);setContentView(root);
+  LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);TextView brand=txt("خانه ریمپ   SMART OBD",18,Color.WHITE);brand.setGravity(Gravity.RIGHT);brand.setTypeface(null,Typeface.BOLD);head.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
   modeChip=txt(demo?"● دمو":"● واقعی",15,demo?CYAN:GREEN);modeChip.setBackground(box(PANEL,demo?CYAN:GREEN,24));head.addView(modeChip);root.addView(head);
-  status=txt(demo?"حالت آزمایشی فعال است":"آماده اتصال به ESP32_OBD",14,MUTED);status.setGravity(Gravity.RIGHT);root.addView(status);
+  status=txt(demo?"● DEMO  •  ESP32_OBD":"● LIVE  •  آماده اتصال ESP32_OBD",12,demo?AMBER:GREEN);status.setGravity(Gravity.RIGHT);root.addView(status);
   body=new LinearLayout(this);root.addView(body,new LinearLayout.LayoutParams(-1,0,1));
  }
  void render(String page){base();boolean land=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE;if(page.equals("خانه"))dashboard(land);else if(page.equals("دیاگ"))diag();else if(page.equals("داده زنده"))live();else if(page.equals("اتصال"))connectPage();else settingsPage();nav();}
- void nav(){LinearLayout n=new LinearLayout(this);String[] a={"خانه","دیاگ","داده زنده","اتصال","تنظیمات"};for(String s:a){Button b=button(s);b.setOnClickListener(v->render(s));n.addView(b,new LinearLayout.LayoutParams(0,55,1));}root.addView(n);}
+ void nav(){LinearLayout n=new LinearLayout(this);String[] a={"⌂ خانه","⚙ ECU","▤ گزارش","⚠ خطا","▥ تنظیمات"};for(String s:a){Button b=button(s);b.setOnClickListener(v->{if(s.contains("خانه"))render("خانه");else if(s.contains("خطا"))render("دیاگ");else if(s.contains("تنظیمات"))render("تنظیمات");else render("داده زنده");});n.addView(b,new LinearLayout.LayoutParams(0,55,1));}root.addView(n);}
  LinearLayout panel(){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setGravity(Gravity.CENTER);p.setPadding(8,8,8,8);p.setBackground(box(PANEL,Color.rgb(24,52,75),24));return p;}
  void dashboard(boolean land){
   body.setOrientation(LinearLayout.VERTICAL);
@@ -45,96 +45,42 @@ public class MainActivity extends Activity {
  }
  TextView stat(LinearLayout row,String icon,String name,String value,int color){LinearLayout p=panel();p.addView(txt(icon,21,color));p.addView(txt(name,12,MUTED));TextView v=txt(value,18,color);v.setTypeface(null,Typeface.BOLD);p.addView(v);row.addView(p,new LinearLayout.LayoutParams(0,-1,1));return v;}
  class ClusterView extends View{
-  Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
-  RectF r=new RectF();
+  Paint p=new Paint(Paint.ANTI_ALIAS_FLAG); RectF r=new RectF();
   ClusterView(Context x){super(x);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
-  void text(Canvas c,String s,float x,float y,float size,int color,Paint.Align align,boolean bold){
-    p.setStyle(Paint.Style.FILL);p.setColor(color);p.setTextSize(size);p.setTextAlign(align);
-    p.setTypeface(bold?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);p.clearShadowLayer();c.drawText(s,x,y,p);
+  void tx(Canvas c,String s,float x,float y,float z,int col,Paint.Align al,boolean bold){p.setStyle(Paint.Style.FILL);p.setColor(col);p.setTextSize(z);p.setTextAlign(al);p.setTypeface(bold?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);p.clearShadowLayer();c.drawText(s,x,y,p);}
+  void rr(Canvas c,float l,float t,float x,float y,float rad,int fill,int stroke){p.setStyle(Paint.Style.FILL);p.setColor(fill);p.clearShadowLayer();c.drawRoundRect(l,t,x,y,rad,rad,p);if(stroke!=0){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(stroke);c.drawRoundRect(l,t,x,y,rad,rad,p);}}
+  void gauge(Canvas c,float cx,float cy,float rad,float val,boolean rpmg){
+    p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(2,12,22));p.setShadowLayer(28,0,0,Color.rgb(0,75,125));c.drawCircle(cx,cy,rad,p);p.clearShadowLayer();
+    p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(rad*.075f);r.set(cx-rad*.91f,cy-rad*.91f,cx+rad*.91f,cy+rad*.91f);p.setColor(Color.rgb(15,42,65));c.drawArc(r,140,260,false,p);
+    p.setShadowLayer(18,0,0,CYAN);p.setColor(CYAN);c.drawArc(r,140,Math.max(5,220*Math.min(1,val)),false,p);p.clearShadowLayer();p.setShadowLayer(16,0,0,RED);p.setColor(RED);c.drawArc(r,350,50,false,p);p.clearShadowLayer();
+    int max=rpmg?8:240,step=rpmg?1:20;p.setStrokeWidth(2);
+    for(int v=0;v<=max;v+=step){float q=(float)v/max,an=(float)Math.toRadians(140+260*q);float x1=(float)(cx+Math.cos(an)*rad*.69),y1=(float)(cy+Math.sin(an)*rad*.69),x2=(float)(cx+Math.cos(an)*rad*.81),y2=(float)(cy+Math.sin(an)*rad*.81);p.setColor(Color.WHITE);c.drawLine(x1,y1,x2,y2,p);tx(c,""+v,(float)(cx+Math.cos(an)*rad*.57),(float)(cy+Math.sin(an)*rad*.57)+4,rad*.085f,Color.WHITE,Paint.Align.CENTER,false);}
+    tx(c,rpmg?""+rpm:""+speed,cx,cy+rad*.10f,rad*.30f,Color.WHITE,Paint.Align.CENTER,true);tx(c,rpmg?"RPM  x1000":"km/h",cx,cy+rad*.34f,rad*.10f,MUTED,Paint.Align.CENTER,true);
   }
-  void round(Canvas c,float l,float t,float rr,float bb,float radius,int fill,int stroke){
-    p.setStyle(Paint.Style.FILL);p.setColor(fill);p.clearShadowLayer();c.drawRoundRect(l,t,rr,bb,radius,radius,p);
-    if(stroke!=0){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(stroke);c.drawRoundRect(l,t,rr,bb,radius,radius,p);}
+  void stat(Canvas c,float l,float t,float x,float y,String ico,String name,String val,int col){
+    rr(c,l,t,x,y,14,Color.rgb(5,22,35),Color.rgb(20,60,88));tx(c,ico,l+18,t+30,22,col,Paint.Align.LEFT,true);tx(c,name,x-12,t+25,12,MUTED,Paint.Align.RIGHT,false);tx(c,val,x-12,y-14,18,col,Paint.Align.RIGHT,true);
   }
-  void gauge(Canvas c,float cx,float cy,float rad,float fraction,boolean isRpm){
-    p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(rad*.105f);
-    p.setColor(Color.rgb(14,39,61));p.clearShadowLayer();r.set(cx-rad,cy-rad,cx+rad,cy+rad);c.drawArc(r,140,260,false,p);
-    p.setShadowLayer(rad*.10f,0,0,CYAN);p.setColor(CYAN);c.drawArc(r,140,Math.max(4,260*Math.min(1,fraction)),false,p);
-    p.setShadowLayer(rad*.08f,0,0,RED);p.setColor(RED);c.drawArc(r,350,50,false,p);p.clearShadowLayer();
-    p.setStrokeWidth(2);p.setColor(Color.rgb(190,220,240));
-    int max=isRpm?8:240, step=isRpm?1:30;
-    for(int v=0;v<=max;v+=step){
-      float f=(float)v/max, ang=(float)Math.toRadians(140+260*f);
-      float x1=(float)(cx+Math.cos(ang)*rad*.74),y1=(float)(cy+Math.sin(ang)*rad*.74);
-      float x2=(float)(cx+Math.cos(ang)*rad*.86),y2=(float)(cy+Math.sin(ang)*rad*.86);
-      c.drawLine(x1,y1,x2,y2,p);
-      text(c,String.valueOf(v),(float)(cx+Math.cos(ang)*rad*.61),(float)(cy+Math.sin(ang)*rad*.61)+5,rad*.105f,Color.WHITE,Paint.Align.CENTER,false);
-    }
-    String value=isRpm?String.valueOf(rpm):String.valueOf(speed);
-    text(c,value,cx,cy+rad*.10f,rad*.34f,Color.WHITE,Paint.Align.CENTER,true);
-    text(c,isRpm?"RPM":"km/h",cx,cy+rad*.37f,rad*.13f,MUTED,Paint.Align.CENTER,true);
+  void car(Canvas c,float cx,float top,float scale){
+    p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(0,120,230));p.setShadowLayer(22,0,0,CYAN);r.set(cx-55*scale,top+22*scale,cx+55*scale,top+57*scale);c.drawRoundRect(r,18*scale,18*scale,p);p.clearShadowLayer();
+    p.setColor(Color.rgb(15,35,48));Path glass=new Path();glass.moveTo(cx-35*scale,top+25*scale);glass.lineTo(cx-22*scale,top+8*scale);glass.lineTo(cx+22*scale,top+8*scale);glass.lineTo(cx+35*scale,top+25*scale);glass.close();c.drawPath(glass,p);
+    p.setColor(Color.WHITE);c.drawCircle(cx-35*scale,top+46*scale,6*scale,p);c.drawCircle(cx+35*scale,top+46*scale,6*scale,p);tx(c,"خانه ریمپ",cx,top+55*scale,8*scale,Color.WHITE,Paint.Align.CENTER,true);
   }
-  void card(Canvas c,float l,float t,float rr,float b,String title,String val,int accent){
-    round(c,l,t,rr,b,20,Color.rgb(7,23,37),Color.rgb(25,63,88));
-    p.setStyle(Paint.Style.FILL);p.setColor(accent);c.drawRoundRect(l+10,t+12,l+16,b-12,5,5,p);
-    text(c,title,rr-16,t+(b-t)*.40f,Math.min(29,(b-t)*.23f),MUTED,Paint.Align.RIGHT,false);
-    text(c,val,rr-16,t+(b-t)*.75f,Math.min(34,(b-t)*.29f),accent,Paint.Align.RIGHT,true);
-  }
-  protected void onDraw(Canvas c){
-    super.onDraw(c);float w=getWidth(),h=getHeight();boolean land=w>h;
-    c.drawColor(BG);
-    if(land){
-      float side=Math.min(245,w*.21f),mainW=w-side-12;
-      round(c,0,0,side,h,22,Color.rgb(5,17,29),Color.rgb(20,55,80));
-      text(c,"خانه ریمپ",side/2,42,27,Color.WHITE,Paint.Align.CENTER,true);
-      text(c,"SMART OBD",side/2,69,19,CYAN,Paint.Align.CENTER,true);
-      String[] m={"داشبورد","دیاگ و DTC","داده‌های زنده","اطلاعات ECU","گزارش","تنظیمات"};
-      for(int i=0;i<m.length;i++){float y=98+i*55;round(c,12,y,side-12,y+44,13,i==0?Color.rgb(4,58,98):Color.rgb(8,25,40),i==0?CYAN:Color.rgb(28,57,76));text(c,m[i],side-25,y+29,16,Color.WHITE,Paint.Align.RIGHT,i==0);}
-      float x0=side+14,cx1=x0+mainW*.27f,cx2=x0+mainW*.73f,cy=h*.34f,rad=Math.min(mainW*.22f,h*.30f);
-      gauge(c,cx1,cy,rad,Math.min(1,rpm/8000f),true);gauge(c,cx2,cy,rad,Math.min(1,speed/240f),false);
-      text(c,"🚘",x0+mainW*.5f,cy+10,52,CYAN,Paint.Align.CENTER,true);
-      text(c,demo?"DEMO":"LIVE",x0+mainW*.5f,cy+52,17,demo?AMBER:GREEN,Paint.Align.CENTER,true);
-      float top=h*.64f,gap=8,cw=(mainW-gap*3)/4;
-      card(c,x0,top,x0+cw,top+90,"دمای آب",temp+" °C",RED);
-      card(c,x0+cw+gap,top,x0+2*cw+gap,top+90,"سوخت","48 %",AMBER);
-      card(c,x0+2*(cw+gap),top,x0+3*cw+2*gap,top+90,"سطح آب","مناسب",GREEN);
-      card(c,x0+3*(cw+gap),top,x0+4*cw+3*gap,top+90,"باتری","13.8 V",GREEN);
-      text(c,"ECU  •  CAN 500 kbps  •  موتور سالم",x0+mainW/2,h-28,18,GREEN,Paint.Align.CENTER,true);
+  protected void onDraw(Canvas c){super.onDraw(c);float w=getWidth(),h=getHeight();boolean land=w>h;c.drawColor(BG);
+    if(!land){
+      float heroH=Math.min(h*.48f,w*.82f),rad=Math.min(w*.235f,heroH*.33f),cy=rad+10;
+      gauge(c,w*.25f,cy,rad,Math.min(1,rpm/8000f),true);gauge(c,w*.75f,cy,rad,Math.min(1,speed/240f),false);
+      float carTop=cy+rad*.65f;car(c,w/2,carTop,.82f);tx(c,demo?"DEMO":"LIVE",w/2,carTop+72,12,demo?AMBER:GREEN,Paint.Align.CENTER,true);
+      float y=heroH,g=7,cw=(w-19)/2f,ch=Math.max(70,(h-heroH-160)/2f);
+      stat(c,6,y,6+cw,y+ch,"🌡","دمای آب",temp+" °C",RED);stat(c,13+cw,y,w-6,y+ch,"⛽","سوخت","48 %",AMBER);
+      y+=ch+g;stat(c,6,y,6+cw,y+ch,"▣","ولتاژ باتری","13.8 V",GREEN);stat(c,13+cw,y,w-6,y+ch,"💧","سطح آب","مناسب",GREEN);
+      float by=y+ch+7;rr(c,6,by,w-6,Math.min(h-4,by+52),15,Color.rgb(4,28,39),GREEN);tx(c,"✓ موتور سالم     ECU: CAN 500kbps",w/2,by+32,14,GREEN,Paint.Align.CENTER,true);
     }else{
-      // Portrait: use the whole available dashboard area, with large primary instruments.
-      float pad=10f;
-      float available=h-4f;
-      float gaugeTop=4f;
-      float gaugeH=Math.min(w*.64f,available*.35f);
-      float rad=Math.min(w*.245f,gaugeH*.46f);
-      float cy=gaugeTop+gaugeH*.52f;
-      gauge(c,w*.255f,cy,rad,Math.min(1,rpm/8000f),true);
-      gauge(c,w*.745f,cy,rad,Math.min(1,speed/240f),false);
-
-      float heroTop=gaugeTop+gaugeH+4f;
-      float heroH=Math.max(92f,available*.13f);
-      round(c,pad,heroTop,w-pad,heroTop+heroH,24,Color.rgb(6,22,36),Color.rgb(20,68,98));
-      text(c,"🚘",w*.50f,heroTop+heroH*.46f,Math.min(48,heroH*.42f),CYAN,Paint.Align.CENTER,true);
-      text(c,demo?"DEMO":"LIVE",w*.50f,heroTop+heroH*.76f,15,demo?AMBER:GREEN,Paint.Align.CENTER,true);
-      text(c,"ECU",w-pad-18,heroTop+heroH*.33f,14,MUTED,Paint.Align.RIGHT,false);
-      text(c,"CAN 500 kbps",w-pad-18,heroTop+heroH*.60f,16,GREEN,Paint.Align.RIGHT,true);
-      text(c,"موتور سالم",pad+18,heroTop+heroH*.48f,17,GREEN,Paint.Align.LEFT,true);
-
-      float cardsTop=heroTop+heroH+10f;
-      float bottomBarH=58f;
-      float cardsAvail=Math.max(220f,available-cardsTop-bottomBarH-10f);
-      float rowH=(cardsAvail-10f)/2f;
-      float gap=9f,cw=(w-pad*2-gap)/2f;
-      card(c,pad,cardsTop,pad+cw,cardsTop+rowH,"دمای آب",temp+" °C",RED);
-      card(c,pad+cw+gap,cardsTop,w-pad,cardsTop+rowH,"سوخت","48 %",AMBER);
-      float row2=cardsTop+rowH+10f;
-      card(c,pad,row2,pad+cw,row2+rowH,"سطح آب","مناسب",GREEN);
-      card(c,pad+cw+gap,row2,w-pad,row2+rowH,"باتری","13.8 V",GREEN);
-
-      float barY=Math.min(available-bottomBarH,row2+rowH+8f);
-      round(c,pad,barY,w-pad,barY+bottomBarH,20,Color.rgb(4,30,42),GREEN);
-      text(c,"●  ارتباط ECU برقرار    •    داده زنده",w/2,barY+36,17,GREEN,Paint.Align.CENTER,true);
-
+      float side=Math.min(190,w*.18f);rr(c,0,0,side,h,15,Color.rgb(4,17,29),Color.rgb(18,55,82));tx(c,"خانه ریمپ",side/2,28,20,Color.WHITE,Paint.Align.CENTER,true);tx(c,"SMART OBD",side/2,49,14,CYAN,Paint.Align.CENTER,true);
+      String[] menu={"⌂ داشبورد","⚠ خطاها","▥ داده زنده","⚙ تست عملکرد","▣ ECU","▤ گزارش","⚙ تنظیمات"};for(int i=0;i<menu.length;i++){float yy=65+i*40;rr(c,8,yy,side-8,yy+33,9,i==0?Color.rgb(0,68,120):Color.rgb(7,27,42),i==0?CYAN:Color.rgb(25,55,75));tx(c,menu[i],side-15,yy+23,13,Color.WHITE,Paint.Align.RIGHT,i==0);}
+      float x0=side+8,mw=w-side-12,top=8;rr(c,x0,top,x0+mw,top+38,10,Color.rgb(5,24,38),Color.rgb(20,60,85));tx(c,"● موتور سالم     CAN 500kbps     ESP32_OBD",x0+mw/2,top+25,13,GREEN,Paint.Align.CENTER,true);
+      float cy=h*.39f,rad=Math.min(mw*.20f,h*.31f);gauge(c,x0+mw*.25f,cy,rad,Math.min(1,rpm/8000f),true);gauge(c,x0+mw*.75f,cy,rad,Math.min(1,speed/240f),false);
+      car(c,x0+mw*.5f,cy-rad*.15f,1.0f);tx(c,"D",x0+mw*.5f,cy-rad*.45f,24,Color.WHITE,Paint.Align.CENTER,true);
+      float y=h*.69f,g=6,cw=(mw-g*3)/4;stat(c,x0,y,x0+cw,h-8,"🌡","دمای آب",temp+" °C",RED);stat(c,x0+cw+g,y,x0+2*cw+g,h-8,"⛽","سوخت","48 %",AMBER);stat(c,x0+2*(cw+g),y,x0+3*cw+2*g,h-8,"▣","باتری","13.8 V",GREEN);stat(c,x0+3*(cw+g),y,x0+4*cw+3*g,h-8,"💧","سطح آب","مناسب",GREEN);
     }
   }
  } class GaugeView extends View{boolean r;Paint p=new Paint(1);GaugeView(Context c,boolean rpmGauge){super(c);r=rpmGauge;setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
