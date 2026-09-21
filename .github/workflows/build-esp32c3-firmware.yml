@@ -5,6 +5,10 @@ on:
     paths:
       - 'firmware/khaneh-remap-esp32c3/**'
       - '.github/workflows/build-esp32c3-firmware.yml'
+  pull_request:
+    paths:
+      - 'firmware/khaneh-remap-esp32c3/**'
+      - '.github/workflows/build-esp32c3-firmware.yml'
   workflow_dispatch:
 
 jobs:
