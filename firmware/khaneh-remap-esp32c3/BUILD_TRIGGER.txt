@@ -1,0 +1,1 @@
+Trigger ESP32-C3 firmware build for compiled artifact.
