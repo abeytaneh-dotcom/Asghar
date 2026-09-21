@@ -79,14 +79,32 @@ public class MainActivity extends Activity {
   void tile(Canvas c,float l,float t,float x,float y,String ico,String name,int col){rr(c,l,t,x,y,12,Color.rgb(4,19,32),Color.rgb(18,60,90));tx(c,ico,(l+x)/2,t+(y-t)*.42f,24,col,Paint.Align.CENTER,true);tx(c,name,(l+x)/2,y-12,12,Color.WHITE,Paint.Align.CENTER,true);}
   protected void onDraw(Canvas c){super.onDraw(c);float w=getWidth(),h=getHeight();boolean land=w>h;c.drawColor(BG);
    if(!land){
-    float header=h*.047f;rr(c,8,7,w-8,header,16,Color.rgb(3,18,31),Color.rgb(12,65,98));tx(c,"☰",26,header*.67f,24,Color.WHITE,Paint.Align.CENTER,true);tx(c,"خانه ریمپ",w*.68f,header*.43f,20,Color.WHITE,Paint.Align.CENTER,true);tx(c,"SMART OBD",w*.68f,header*.76f,14,CYAN,Paint.Align.CENTER,true);rr(c,w-145,12,w-14,header-6,12,Color.rgb(4,27,44),CYAN);tx(c,"● ESP32_OBD",w-80,header*.42f,11,Color.WHITE,Paint.Align.CENTER,true);tx(c,demo?"DEMO":"LIVE",w-80,header*.72f,10,demo?AMBER:GREEN,Paint.Align.CENTER,true);
-    float clusterTop=header+6,clusterBottom=h*.315f,gy=(clusterTop+clusterBottom)*.53f,rad=Math.min(w*.205f,(clusterBottom-clusterTop)*.45f);gauge(c,w*.245f,gy,rad,Math.min(1,rpm/8000f),true);gauge(c,w*.755f,gy,rad,Math.min(1,speed/240f),false);
-    float sceneTop=h*.325f,sceneBot=h*.505f;city(c,0,sceneTop,w,sceneBot);p.setStyle(Paint.Style.FILL);LinearGradient sky=new LinearGradient(0,sceneTop,0,sceneBot,Color.rgb(2,13,28),Color.rgb(1,7,14),Shader.TileMode.CLAMP);p.setShader(sky);c.drawRect(0,sceneTop,w,sceneBot,p);p.setShader(null);
-    Path road=new Path();road.moveTo(w*.08f,sceneBot);road.lineTo(w*.43f,sceneTop+h*.065f);road.lineTo(w*.57f,sceneTop+h*.065f);road.lineTo(w*.92f,sceneBot);road.close();p.setColor(Color.rgb(5,18,29));c.drawPath(road,p);glowLine(c,w*.46f,sceneBot,w*.492f,sceneTop+h*.09f,CYAN,2);glowLine(c,w*.54f,sceneBot,w*.508f,sceneTop+h*.09f,CYAN,2);car(c,w/2,sceneTop+h*.018f,Math.max(1.35f,w/470f));
-    float sy=h*.515f,cw=(w-35)/4f,ch=h*.078f;stat(c,7,sy,7+cw,sy+ch,"T","دمای آب",temp+" °C",RED);stat(c,14+cw,sy,14+2*cw,sy+ch,"F","سوخت","48 %",AMBER);stat(c,21+2*cw,sy,21+3*cw,sy+ch,"V","باتری","13.8 V",GREEN);stat(c,28+3*cw,sy,w-7,sy+ch,"P","سطح آب","مناسب",GREEN);
-    float ey=sy+ch+7;rr(c,7,ey,w-7,ey+h*.048f,14,Color.rgb(4,25,37),Color.rgb(24,105,94));tx(c,"● موتور سالم",20,ey+h*.030f,13,GREEN,Paint.Align.LEFT,true);tx(c,"CAN 500 kbps  •  OBD-II  •  TU5",w-18,ey+h*.030f,11,Color.WHITE,Paint.Align.RIGHT,true);
-    float ty=ey+h*.058f,th=h*.068f,tw=(w-30)/4f;tile(c,6,ty,6+tw,ty+th,"ECU","دیاگ",BLUE);tile(c,12+tw,ty,12+2*tw,ty+th,"▥","داده زنده",AMBER);tile(c,18+2*tw,ty,18+3*tw,ty+th,"!","DTC",RED);tile(c,24+3*tw,ty,w-6,ty+th,"✓","تست عملگر",Color.rgb(160,80,255));
-    float ny=h-h*.075f;rr(c,0,ny,w,h,0,Color.rgb(2,12,22),0);glowLine(c,0,ny,w,ny,Color.rgb(0,90,145),1);String[] n={"⌂\\nخانه","▣\\nECU","▥\\nگزارش","⚙\\nتنظیمات"};for(int i=0;i<4;i++){float cx=w*(i+.5f)/4;tx(c,n[i].split("\\\\n")[0],cx,ny+h*.028f,22,i==0?CYAN:MUTED,Paint.Align.CENTER,true);tx(c,n[i].split("\\\\n")[1],cx,ny+h*.055f,11,i==0?Color.WHITE:MUTED,Paint.Align.CENTER,false);}
+    // Premium portrait cockpit: dense, readable and fills the useful screen.
+    float header=h*.052f; rr(c,8,7,w-8,header,16,Color.rgb(3,18,31),Color.rgb(12,65,98));
+    tx(c,"☰",27,header*.68f,25,Color.WHITE,Paint.Align.CENTER,true); tx(c,"خانه ریمپ",w*.50f,header*.42f,21,Color.WHITE,Paint.Align.CENTER,true); tx(c,"SMART OBD",w*.50f,header*.77f,14,CYAN,Paint.Align.CENTER,true);
+    rr(c,w-145,12,w-14,header-6,12,Color.rgb(4,27,44),CYAN); tx(c,"● ESP32_OBD",w-80,header*.42f,11,Color.WHITE,Paint.Align.CENTER,true); tx(c,demo?"DEMO":"LIVE",w-80,header*.72f,10,demo?AMBER:GREEN,Paint.Align.CENTER,true);
+
+    float gy=h*.178f,rad=Math.min(w*.205f,h*.115f); gauge(c,w*.255f,gy,rad,Math.min(1,rpm/8000f),true); gauge(c,w*.745f,gy,rad,Math.min(1,speed/240f),false);
+    tx(c,"SPORT",w*.5f,h*.135f,12,MUTED,Paint.Align.CENTER,true); tx(c,"D",w*.5f,h*.185f,42,Color.WHITE,Paint.Align.CENTER,true); tx(c,"ECO",w*.5f,h*.212f,11,GREEN,Paint.Align.CENTER,true);
+
+    float sceneTop=h*.285f,sceneBot=h*.455f;
+    LinearGradient sky=new LinearGradient(0,sceneTop,0,sceneBot,Color.rgb(3,22,43),Color.rgb(1,7,14),Shader.TileMode.CLAMP);p.setShader(sky);p.setStyle(Paint.Style.FILL);c.drawRect(0,sceneTop,w,sceneBot,p);p.setShader(null); city(c,0,sceneTop,w,sceneBot);
+    Path road=new Path();road.moveTo(w*.04f,sceneBot);road.lineTo(w*.42f,sceneTop+h*.055f);road.lineTo(w*.58f,sceneTop+h*.055f);road.lineTo(w*.96f,sceneBot);road.close();p.setColor(Color.rgb(5,18,29));c.drawPath(road,p);
+    glowLine(c,w*.45f,sceneBot,w*.492f,sceneTop+h*.08f,CYAN,2); glowLine(c,w*.55f,sceneBot,w*.508f,sceneTop+h*.08f,CYAN,2); car(c,w/2,sceneTop+h*.016f,Math.max(1.45f,w/445f));
+
+    float sy=h*.466f,cw=(w-35)/4f,ch=h*.086f;
+    stat(c,7,sy,7+cw,sy+ch,"T","دمای آب",temp+" °C",RED); stat(c,14+cw,sy,14+2*cw,sy+ch,"F","سوخت","48 %",AMBER); stat(c,21+2*cw,sy,21+3*cw,sy+ch,"V","باتری","13.8 V",GREEN); stat(c,28+3*cw,sy,w-7,sy+ch,"P","سطح آب","مناسب",GREEN);
+
+    float sy2=sy+ch+7, cw2=(w-28)/3f, ch2=h*.072f;
+    stat(c,7,sy2,7+cw2,sy2+ch2,"A","فشار مانیفولد","35 kPa",CYAN); stat(c,14+cw2,sy2,14+2*cw2,sy2+ch2,"L","مصرف لحظه‌ای","7.2 L/100",AMBER); stat(c,21+2*cw2,sy2,w-7,sy2+ch2,"I","دمای ورودی","32 °C",Color.WHITE);
+
+    float ey=sy2+ch2+7; rr(c,7,ey,w-7,ey+h*.047f,14,Color.rgb(4,25,37),Color.rgb(24,105,94)); tx(c,"● موتور سالم",20,ey+h*.029f,13,GREEN,Paint.Align.LEFT,true); tx(c,"TU5  •  OBD-II  •  CAN 500 kbps",w-18,ey+h*.029f,11,Color.WHITE,Paint.Align.RIGHT,true);
+
+    float ty=ey+h*.057f,th=h*.075f,tw=(w-30)/4f; tile(c,6,ty,6+tw,ty+th,"ECU","دیاگ",BLUE); tile(c,12+tw,ty,12+2*tw,ty+th,"▥","داده زنده",AMBER); tile(c,18+2*tw,ty,18+3*tw,ty+th,"!","DTC",RED); tile(c,24+3*tw,ty,w-6,ty+th,"✓","تست عملگر",Color.rgb(160,80,255));
+
+    float iy=ty+th+8,ih=h*.066f,iw=(w-42)/6f; String[] ic={"A/C","فن","چراغ","ABS","AIR","ENG"}; int[] cc={CYAN,GREEN,BLUE,AMBER,RED,GREEN}; for(int i=0;i<6;i++){float x=6+i*(iw+6);rr(c,x,iy,x+iw,iy+ih,11,Color.rgb(4,22,34),Color.rgb(18,62,82));tx(c,ic[i],x+iw/2,iy+ih*.58f,13,cc[i],Paint.Align.CENTER,true);}
+
+    float ny=h-h*.075f; rr(c,0,ny,w,h,0,Color.rgb(2,12,22),0); glowLine(c,0,ny,w,ny,Color.rgb(0,90,145),1); String[] n={"⌂\\nخانه","▣\\nECU","▥\\nگزارش","⚙\\nتنظیمات"}; for(int i=0;i<4;i++){float cx=w*(i+.5f)/4;tx(c,n[i].split("\\\\n")[0],cx,ny+h*.028f,22,i==0?CYAN:MUTED,Paint.Align.CENTER,true);tx(c,n[i].split("\\\\n")[1],cx,ny+h*.055f,11,i==0?Color.WHITE:MUTED,Paint.Align.CENTER,false);}
    }else{
     float side=170;rr(c,0,0,side,h,0,Color.rgb(3,17,29),Color.rgb(16,56,83));tx(c,"خانه ریمپ",side/2,24,17,Color.WHITE,Paint.Align.CENTER,true);tx(c,"SMART OBD",side/2,43,12,CYAN,Paint.Align.CENTER,true);String[] menu={"⌂ داشبورد","▥ داده زنده","⚠ کد خطا","⚙ تست عملکرد","▣ تحلیل ECU","▤ گزارش","⚙ تنظیمات"};for(int i=0;i<menu.length;i++){float yy=55+i*38;rr(c,7,yy,side-7,yy+31,8,i==0?Color.rgb(0,67,120):Color.rgb(5,25,40),i==0?CYAN:Color.rgb(20,53,76));tx(c,menu[i],side-14,yy+21,12,Color.WHITE,Paint.Align.RIGHT,i==0);}
     float x0=side+7,mw=w-side-14;rr(c,x0,6,w-7,40,9,Color.rgb(5,23,37),Color.rgb(20,60,86));tx(c,"● ESP32_OBD     TU5-206     CAN 500kbps     موتور سالم",x0+mw/2,28,12,GREEN,Paint.Align.CENTER,true);
