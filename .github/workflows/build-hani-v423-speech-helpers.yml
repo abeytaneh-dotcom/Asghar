@@ -417,7 +417,7 @@ jobs:
           cp classes/ir/htaelec/haniassistant/ContactMatcher*.class helperclasses/ir/htaelec/haniassistant/
           cp classes/ir/htaelec/haniassistant/AccurateSpeechBridge*.class helperclasses/ir/htaelec/haniassistant/
 
-          "$BUILD_TOOLS/d8" --lib "$ANDROID_JAR" --min-api 26 --output out helperclasses
+          "$BUILD_TOOLS/d8" --lib "$ANDROID_JAR" --min-api 26 --output out $(find helperclasses -name '*.class')
           mv out/classes.dex out/hani-v423-speech-helpers.dex
           ls -lh out/hani-v423-speech-helpers.dex
 
