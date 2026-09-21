@@ -49,7 +49,7 @@ int lastButton=0;
 
 static String fnum(float v,uint8_t decimals=2){
   if(isnan(v)||isinf(v)) return "null";
-  return String(v,decimals);
+  return String(v,(unsigned int)decimals);
 }
 
 static void emitEvent(const String& s){
@@ -513,7 +513,7 @@ void setup(){
   delay(100); hxOk=scale.is_ready();
   if(hxOk) scale.set_scale(calFactor);
 
-  rgb.begin(); rgb.setBrightness(RGB_BRIGHTNESS); rgb.clear(); rgb.show();
+  rgb.begin(); rgb.setBrightness(KR_RGB_BRIGHTNESS); rgb.clear(); rgb.show();
   obd.begin();
   initBle();
   selfTest();
