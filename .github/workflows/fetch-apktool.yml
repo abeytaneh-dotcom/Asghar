@@ -1,0 +1,19 @@
+name: Fetch Apktool
+on:
+  push:
+    paths:
+      - '.github/workflows/fetch-apktool.yml'
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set -euxo pipefail
+          mkdir -p out
+          curl -fL --retry 3 -o out/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar
+          java -jar out/apktool.jar --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apktool
+          path: out/apktool.jar
+          retention-days: 1
