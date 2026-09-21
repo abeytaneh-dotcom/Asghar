@@ -1,0 +1,49 @@
+name: Build ESP32-C3 Firmware
+
+on:
+  push:
+    paths:
+      - 'firmware/khaneh-remap-esp32c3/**'
+      - '.github/workflows/build-esp32c3-firmware.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio esptool
+
+      - name: Build ESP32-C3 firmware
+        run: |
+          pio run -d firmware/khaneh-remap-esp32c3
+
+      - name: Collect binaries
+        run: |
+          mkdir -p firmware-out
+          BUILD=firmware/khaneh-remap-esp32c3/.pio/build/esp32-c3
+          cp "$BUILD/firmware.bin" firmware-out/KHANEH_REMAP_ESP32C3_OTA.bin
+          cp "$BUILD/bootloader.bin" firmware-out/bootloader.bin
+          cp "$BUILD/partitions.bin" firmware-out/partitions.bin
+          BOOTAPP="$(find ~/.platformio/packages -name boot_app0.bin | head -n 1)"
+          python -m esptool --chip esp32c3 merge_bin             -o firmware-out/KHANEH_REMAP_ESP32C3_FULL.bin             --flash_mode dio --flash_freq 80m --flash_size 4MB             0x0 "$BUILD/bootloader.bin"             0x8000 "$BUILD/partitions.bin"             0xe000 "$BOOTAPP"             0x10000 "$BUILD/firmware.bin"
+          sha256sum firmware-out/*.bin > firmware-out/SHA256SUMS.txt
+          cp firmware/khaneh-remap-esp32c3/platformio.ini firmware-out/
+          cp firmware/khaneh-remap-esp32c3/src/config.h firmware-out/
+
+      - name: Upload firmware package
+        uses: actions/upload-artifact@v4
+        with:
+          name: KhanehRemap-ESP32C3-Firmware
+          path: firmware-out/
+          if-no-files-found: error
