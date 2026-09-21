@@ -1,0 +1,422 @@
+name: Build Hani v421 Overlay Voice Helpers
+on:
+  push:
+    paths:
+      - '.github/workflows/build-hani-v421-overlay-voice.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create helper sources
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p src/ir/htaelec/haniassistant out
+          cat > src/ir/htaelec/haniassistant/OverlayPermission.java <<'JAVA'
+          package ir.htaelec.haniassistant;
+
+          import android.app.Activity;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.provider.Settings;
+
+          public final class OverlayPermission {
+              private OverlayPermission() {}
+
+              public static boolean has(Activity a) {
+                  if (a == null) return false;
+                  return Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(a);
+              }
+
+              public static void ensure(Activity a) {
+                  if (a == null || Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(a)) return;
+                  try {
+                      Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                              Uri.parse("package:" + a.getPackageName()));
+                      i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                      a.startActivity(i);
+                  } catch (Throwable ignored) {}
+              }
+          }
+          JAVA
+
+          cat > src/ir/htaelec/haniassistant/RobotOverlay.java <<'JAVA'
+          package ir.htaelec.haniassistant;
+
+          import android.accessibilityservice.AccessibilityService;
+          import android.animation.ObjectAnimator;
+          import android.animation.ValueAnimator;
+          import android.content.Context;
+          import android.graphics.Canvas;
+          import android.graphics.Color;
+          import android.graphics.Paint;
+          import android.graphics.RectF;
+          import android.graphics.drawable.GradientDrawable;
+          import android.os.Build;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.provider.Settings;
+          import android.view.Gravity;
+          import android.view.MotionEvent;
+          import android.view.View;
+          import android.view.WindowManager;
+          import android.widget.FrameLayout;
+          import android.widget.TextView;
+
+          import java.lang.reflect.Field;
+
+          public final class RobotOverlay {
+              public static final int IDLE=0, LISTENING=1, SPEAKING=2, WORKING=3;
+              private static WindowManager wm;
+              private static FrameLayout root;
+              private static RobotFace face;
+              private static TextView label;
+              private static WindowManager.LayoutParams lp;
+              private static ObjectAnimator pulse;
+              private static Context owner;
+              private static int windowType;
+              private static float downX, downY;
+              private static int startX, startY;
+
+              private RobotOverlay(){}
+
+              public static void show(final Context context, final int state, final String text) {
+                  if (context == null) return;
+                  new Handler(Looper.getMainLooper()).post(new Runnable() {
+                      @Override public void run() {
+                          try {
+                              Context nextOwner = resolveOwner(context);
+                              if (nextOwner == null) return;
+
+                              int nextType = resolveType(context, nextOwner);
+                              if (root != null && (owner != nextOwner || windowType != nextType)) {
+                                  removeNow();
+                              }
+                              owner = nextOwner;
+                              windowType = nextType;
+                              if (wm == null) wm = (WindowManager) owner.getSystemService(Context.WINDOW_SERVICE);
+                              if (wm == null) return;
+                              if (root == null) create(owner, windowType);
+                              update(state, text);
+                          } catch (Throwable ignored) {}
+                      }
+                  });
+              }
+
+              public static void hide() {
+                  new Handler(Looper.getMainLooper()).post(new Runnable() {
+                      @Override public void run() { removeNow(); }
+                  });
+              }
+
+              private static Context resolveOwner(Context c) {
+                  try {
+                      if (Build.VERSION.SDK_INT >= 23 && Settings.canDrawOverlays(c)) {
+                          Context app = c.getApplicationContext();
+                          return app != null ? app : c;
+                      }
+                  } catch (Throwable ignored) {}
+                  AccessibilityService as = accessibilityService();
+                  return as;
+              }
+
+              private static int resolveType(Context original, Context resolved) {
+                  if (resolved instanceof AccessibilityService) return 2032;
+                  return Build.VERSION.SDK_INT >= 26 ? 2038 : 2003;
+              }
+
+              private static AccessibilityService accessibilityService() {
+                  try {
+                      Class<?> c = Class.forName("ir.htaelec.haniassistant.HaniAccessibilityService");
+                      Field f = c.getDeclaredField("instance");
+                      f.setAccessible(true);
+                      Object o = f.get(null);
+                      return o instanceof AccessibilityService ? (AccessibilityService)o : null;
+                  } catch(Throwable e) { return null; }
+              }
+
+              private static int dp(Context c, int v) {
+                  return (int)(v*c.getResources().getDisplayMetrics().density+0.5f);
+              }
+
+              private static void removeNow() {
+                  try { if (pulse != null) pulse.cancel(); } catch(Throwable ignored) {}
+                  try { if (wm != null && root != null) wm.removeView(root); } catch(Throwable ignored) {}
+                  root=null; face=null; label=null; lp=null; pulse=null; wm=null; owner=null; windowType=0;
+              }
+
+              private static void create(final Context c, int type) {
+                  root = new FrameLayout(c);
+                  root.setPadding(dp(c,5),dp(c,5),dp(c,5),dp(c,5));
+                  GradientDrawable bg = new GradientDrawable();
+                  bg.setColor(Color.argb(232,7,24,31));
+                  bg.setCornerRadius(dp(c,28));
+                  bg.setStroke(dp(c,1),Color.argb(220,45,230,190));
+                  root.setBackground(bg);
+                  root.setElevation(dp(c,8));
+
+                  face = new RobotFace(c);
+                  FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(dp(c,58),dp(c,58));
+                  fp.gravity=Gravity.START|Gravity.CENTER_VERTICAL;
+                  root.addView(face,fp);
+
+                  label = new TextView(c);
+                  label.setTextColor(Color.WHITE);
+                  label.setTextSize(14);
+                  label.setGravity(Gravity.CENTER);
+                  label.setMaxLines(2);
+                  label.setPadding(dp(c,4),0,dp(c,7),0);
+                  FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(dp(c,125),dp(c,58));
+                  tp.gravity=Gravity.END|Gravity.CENTER_VERTICAL;
+                  tp.leftMargin=dp(c,58);
+                  root.addView(label,tp);
+
+                  lp = new WindowManager.LayoutParams(
+                          dp(c,72), dp(c,70), type,
+                          WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                          WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL |
+                          WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                          android.graphics.PixelFormat.TRANSLUCENT);
+                  lp.gravity = Gravity.TOP|Gravity.END;
+                  lp.x=dp(c,10);
+                  lp.y=dp(c,105);
+
+                  root.setOnTouchListener(new View.OnTouchListener(){
+                      @Override public boolean onTouch(View v, MotionEvent e) {
+                          if(lp==null||wm==null) return false;
+                          switch(e.getActionMasked()){
+                              case MotionEvent.ACTION_DOWN:
+                                  downX=e.getRawX(); downY=e.getRawY(); startX=lp.x; startY=lp.y; return true;
+                              case MotionEvent.ACTION_MOVE:
+                                  lp.x=startX-(int)(e.getRawX()-downX);
+                                  lp.y=startY+(int)(e.getRawY()-downY);
+                                  try{wm.updateViewLayout(root,lp);}catch(Throwable ignored){}
+                                  return true;
+                              case MotionEvent.ACTION_UP:
+                                  return true;
+                          }
+                          return false;
+                      }
+                  });
+                  wm.addView(root,lp);
+              }
+
+              private static void update(int state, String text) {
+                  if(root==null||face==null||label==null||lp==null||wm==null) return;
+                  face.state=state; face.invalidate();
+                  if (pulse!=null) { try{pulse.cancel();}catch(Throwable ignored){} pulse=null; }
+
+                  String s=text==null?"":text.trim();
+                  if(state==IDLE) {
+                      label.setVisibility(View.GONE);
+                      lp.width=dp(root.getContext(),72);
+                      lp.height=dp(root.getContext(),70);
+                  } else {
+                      label.setVisibility(View.VISIBLE);
+                      lp.width=dp(root.getContext(),205);
+                      lp.height=dp(root.getContext(),70);
+
+                      if(state==LISTENING) {
+                          label.setText(s.length()>0?s:"گوش می‌کنم...");
+                          pulse=ObjectAnimator.ofFloat(face,"alpha",1f,.4f,1f);
+                          pulse.setDuration(750);
+                      } else if(state==SPEAKING) {
+                          label.setText(s.length()>0?s:"در خدمتم");
+                          pulse=ObjectAnimator.ofFloat(face,"scaleY",1f,1.12f,1f);
+                          pulse.setDuration(520);
+                      } else {
+                          label.setText(s.length()>0?s:"در حال انجام...");
+                          pulse=ObjectAnimator.ofFloat(face,"rotation",-6f,6f,-6f);
+                          pulse.setDuration(430);
+                      }
+                      pulse.setRepeatCount(ValueAnimator.INFINITE);
+                      pulse.start();
+                  }
+                  try{wm.updateViewLayout(root,lp);}catch(Throwable ignored){}
+              }
+
+              public static final class RobotFace extends View {
+                  final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+                  final RectF r=new RectF();
+                  int state=0;
+                  public RobotFace(Context c){super(c); setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
+                  @Override protected void onDraw(Canvas c){
+                      super.onDraw(c);
+                      float w=getWidth(),h=getHeight(),cx=w/2f;
+                      int accent = state==LISTENING?Color.rgb(45,240,190)
+                              : state==SPEAKING?Color.rgb(95,195,255)
+                              : state==WORKING?Color.rgb(255,196,72)
+                              : Color.rgb(106,220,196);
+
+                      p.setStrokeWidth(Math.max(3f,w*.055f));
+                      p.setStrokeCap(Paint.Cap.ROUND);
+                      p.setStyle(Paint.Style.STROKE);
+                      p.setColor(accent);
+                      p.setShadowLayer(w*.12f,0,0,accent);
+
+                      c.drawLine(cx,h*.17f,cx,h*.055f,p);
+                      p.setStyle(Paint.Style.FILL);
+                      c.drawCircle(cx,h*.05f,w*.05f,p);
+
+                      p.clearShadowLayer();
+                      p.setColor(Color.rgb(24,44,54));
+                      r.set(w*.10f,h*.18f,w*.90f,h*.76f);
+                      c.drawRoundRect(r,w*.18f,w*.18f,p);
+
+                      p.setStyle(Paint.Style.STROKE);
+                      p.setColor(accent);
+                      p.setStrokeWidth(w*.055f);
+                      c.drawRoundRect(r,w*.18f,w*.18f,p);
+
+                      p.setStyle(Paint.Style.FILL);
+                      c.drawCircle(w*.35f,h*.43f,w*.07f,p);
+                      c.drawCircle(w*.65f,h*.43f,w*.07f,p);
+
+                      p.setStrokeWidth(w*.045f);
+                      p.setStrokeCap(Paint.Cap.ROUND);
+                      c.drawLine(w*.34f,h*.61f,w*.66f,h*.61f,p);
+
+                      r.set(w*.25f,h*.78f,w*.75f,h*.92f);
+                      c.drawRoundRect(r,w*.08f,w*.08f,p);
+                  }
+              }
+          }
+          JAVA
+
+          cat > src/ir/htaelec/haniassistant/HaniVoiceFeedback.java <<'JAVA'
+          package ir.htaelec.haniassistant;
+
+          import android.content.Context;
+          import android.media.AudioManager;
+          import android.media.MediaPlayer;
+          import android.os.Handler;
+          import android.os.Looper;
+
+          import java.io.File;
+          import java.io.FileOutputStream;
+          import java.io.InputStream;
+          import java.lang.reflect.Method;
+
+          public final class HaniVoiceFeedback {
+              private static MediaPlayer active;
+              private static AudioManager audioManager;
+              private HaniVoiceFeedback(){}
+
+              public static boolean play(Context c, String text) {
+                  if(c==null||text==null) return false;
+                  String n=norm(text);
+                  String clip=null;
+
+                  if(n.contains("در خدمتم")||n.contains("بفرمایید")||n.contains("جانم")||n.contains("منتظر دستور")) clip="ready.wav";
+                  else if(n.contains("چراغ") && n.contains("روشن")) clip="flash_on.wav";
+                  else if(n.contains("چراغ") && n.contains("خاموش")) clip="flash_off.wav";
+                  else if(n.contains("تایمر")||n.contains("زمان سنج")) clip="timer.wav";
+                  else if(n.contains("زنگ زدم")||n.contains("تماس گرفتم")||n.contains("دارم زنگ")) clip="call.wav";
+                  else if((n.contains("پیام")||n.contains("واتساپ")) && (n.contains("ارسال")||n.contains("فرست"))) clip="message.wav";
+                  else if(n.contains("باز شد")||n.contains("باز کردم")||n.contains("اجرا شد")) clip="opened.wav";
+                  else if(n.contains("نفهم")||n.contains("متوجه نشدم")) clip="retry.wav";
+                  else if(n.contains("انجام شد")||n.equals("باشه")||n.equals("حتما")||n.equals("حتماً")) clip="done.wav";
+
+                  if(clip==null) return false;
+                  return playClip(c.getApplicationContext(),clip);
+              }
+
+              private static String norm(String s){
+                  return s.replace('ي','ی').replace('ك','ک').replace("\u200c"," ").replaceAll("\\s+"," ").trim();
+              }
+
+              private static boolean playClip(final Context c, String clip) {
+                  try {
+                      File dir=new File(c.getCacheDir(),"hani_voice");
+                      if(!dir.exists()) dir.mkdirs();
+                      final File out=new File(dir,clip);
+                      if(!out.exists()||out.length()<100){
+                          InputStream in=c.getAssets().open("hani_voice/"+clip);
+                          FileOutputStream fos=new FileOutputStream(out);
+                          byte[] b=new byte[8192]; int n;
+                          while((n=in.read(b))>0) fos.write(b,0,n);
+                          fos.flush(); fos.close(); in.close();
+                      }
+
+                      try{ if(active!=null){active.stop();active.release();} }catch(Throwable ignored){}
+                      audioManager=(AudioManager)c.getSystemService(Context.AUDIO_SERVICE);
+                      try {
+                          if(audioManager!=null) {
+                              audioManager.requestAudioFocus(null,AudioManager.STREAM_MUSIC,AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK);
+                          }
+                      } catch(Throwable ignored){}
+
+                      MediaPlayer mp=new MediaPlayer();
+                      mp.setAudioStreamType(AudioManager.STREAM_MUSIC);
+                      mp.setDataSource(out.getAbsolutePath());
+                      mp.setVolume(1f,1f);
+                      mp.setOnCompletionListener(new MediaPlayer.OnCompletionListener(){
+                          @Override public void onCompletion(MediaPlayer m){
+                              try{m.release();}catch(Throwable ignored){}
+                              active=null;
+                              releaseFocus();
+                              finish(c);
+                          }
+                      });
+                      mp.setOnErrorListener(new MediaPlayer.OnErrorListener(){
+                          @Override public boolean onError(MediaPlayer m,int what,int extra){
+                              try{m.release();}catch(Throwable ignored){}
+                              active=null;
+                              releaseFocus();
+                              finish(c);
+                              return true;
+                          }
+                      });
+                      mp.prepare();
+                      active=mp;
+                      mp.start();
+                      return true;
+                  }catch(Throwable e){
+                      releaseFocus();
+                      return false;
+                  }
+              }
+
+              private static void releaseFocus(){
+                  try{if(audioManager!=null) audioManager.abandonAudioFocus(null);}catch(Throwable ignored){}
+                  audioManager=null;
+              }
+
+              private static void finish(final Context c){
+                  new Handler(Looper.getMainLooper()).post(new Runnable(){
+                      @Override public void run(){
+                          try{
+                              Class<?> cls=Class.forName("ir.htaelec.haniassistant.HaniVoiceService");
+                              FieldHolder.callAfterSpeech(cls,c);
+                          }catch(Throwable ignored){}
+                      }
+                  });
+              }
+
+              private static final class FieldHolder {
+                  static void callAfterSpeech(Class<?> cls, Context c) throws Exception {
+                      Method m=cls.getDeclaredMethod("afterSpeech");
+                      m.setAccessible(true);
+                      m.invoke(c);
+                  }
+              }
+          }
+          JAVA
+
+      - name: Compile helper dex
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ANDROID_JAR="$(find "$ANDROID_HOME/platforms" -name android.jar | sort -V | tail -1)"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          mkdir -p classes
+          javac -source 8 -target 8 -cp "$ANDROID_JAR" -d classes $(find src -name '*.java')
+          "$BUILD_TOOLS/d8" --lib "$ANDROID_JAR" --min-api 26 --output out $(find classes -name '*.class')
+          mv out/classes.dex out/hani-v421-overlay-voice.dex
+          ls -lh out/hani-v421-overlay-voice.dex
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hani-v421-overlay-voice
+          path: out/hani-v421-overlay-voice.dex
+          retention-days: 1
