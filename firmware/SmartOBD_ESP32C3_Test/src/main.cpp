@@ -352,17 +352,6 @@ static bool validSerial(const String& v) {
 static String simProtocol() {
   String p=simProfile; p.toUpperCase();
   if (p=="CAN_OBD2") return "CAN"+String(simCanRate);
-  if (p=="SSAT_GENERIC") {
-    // SSAT profile in CarLab can represent either transport; when CAN rate is
-    // explicitly selected on the simulator we expose it as CAN for bench use.
-    return "CAN"+String(simCanRate);
-  }
-  return "KLINE";
-}
-
-static String simProtocol() {
-  String p=simProfile; p.toUpperCase();
-  if (p=="CAN_OBD2") return "CAN"+String(simCanRate);
   if (p=="SSAT_GENERIC") return "CAN"+String(simCanRate);
   return "KLINE";
 }
