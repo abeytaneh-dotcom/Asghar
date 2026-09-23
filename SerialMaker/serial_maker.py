@@ -23,9 +23,31 @@ from PIL import Image, ImageDraw, ImageFont
 from serial.tools import list_ports
 
 APP_NAME = "Khaneh Remap Serial Maker"
-APP_VERSION = "2.0"
+APP_VERSION = "2.1"
 BRAND = "KHANEH_REMAP"
 DEFAULT_PREFIX = "KR"
+
+# Keep the GUI strictly single-instance. This also protects against any
+# accidental relaunch caused by Windows file associations or child processes.
+_INSTANCE_MUTEX = None
+
+def acquire_single_instance():
+    global _INSTANCE_MUTEX
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        _INSTANCE_MUTEX = kernel32.CreateMutexW(
+            None, False, "Global\\KhanehRemap_SerialMaker_v21"
+        )
+        if not _INSTANCE_MUTEX:
+            return True
+        ERROR_ALREADY_EXISTS = 183
+        return kernel32.GetLastError() != ERROR_ALREADY_EXISTS
+    except Exception:
+        # Never block normal startup if the mutex API itself is unavailable.
+        return True
 
 
 def user_data_dir():
@@ -172,46 +194,65 @@ def run_esptool(args):
 
 
 def read_esp32c3(port):
+    """Read a stable hardware identity from ESP32-C3 using esptool v5 syntax."""
+    if not port:
+        raise RuntimeError("پورت سریال انتخاب نشده است.")
+
+    # esptool v5 renamed CLI commands from underscore to hyphen form.
+    # ESP32-C3 has no legacy standalone Chip ID in the ESP8266 sense, so the
+    # factory/base MAC is the primary stable hardware identifier.
     candidates = [
-        ["--chip", "esp32c3", "--port", port, "chip_id"],
-        ["--chip", "esp32c3", "--port", port, "read_mac"],
+        ["--chip", "esp32c3", "--port", port, "read-mac"],
+        ["--chip", "esp32c3", "--port", port, "chip-id"],
     ]
+
     collected = []
     for args in candidates:
         try:
-            collected.append(run_esptool(args))
+            out = run_esptool(args)
+            collected.append(out)
         except Exception as exc:
             collected.append(str(exc))
+
     text = "\n".join(collected)
 
+    # Accept current and older esptool output formats.
     mac = ""
-    patterns = [
-        r"MAC:\s*([0-9A-Fa-f:]{17})",
-        r"MAC Address:\s*([0-9A-Fa-f:]{17})",
+    mac_patterns = [
+        r"\bMAC(?: Address)?\s*[:=]\s*([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})\b",
+        r"\bBase MAC\s*[:=]\s*([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})\b",
+        r"\b([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})\b",
     ]
-    for pattern in patterns:
-        m = re.search(pattern, text)
+    for pattern in mac_patterns:
+        m = re.search(pattern, text, re.IGNORECASE)
         if m:
             mac = m.group(1).upper()
             break
 
-    chip = ""
-    m = re.search(r"Chip ID:\s*(0x[0-9A-Fa-f]+)", text)
-    if m:
-        chip = m.group(1).upper()
+    # For ESP32-C3 use the immutable base MAC (without separators) as our
+    # internal hardware ID. This is deterministic and unique for provisioning.
+    chip = mac.replace(":", "") if mac else ""
 
-    if not chip and mac:
-        chip = mac.replace(":", "")
+    # Fallback for any esptool build that prints an explicit chip-id value.
     if not chip:
-        m = re.search(r"\b(?:0x)?([0-9A-Fa-f]{12,16})\b", text)
+        m = re.search(r"Chip(?:\s+ID|-ID)?\s*[:=]\s*(0x[0-9A-Fa-f]+)", text, re.IGNORECASE)
         if m:
             chip = m.group(1).upper()
 
     if not chip:
+        # Keep the useful tail of esptool output so connection/driver/BOOT
+        # errors are visible instead of being collapsed into "serial not found".
+        clean = re.sub(r"\x1b\[[0-9;]*m", "", text).strip()
+        tail = clean[-1400:] if clean else "هیچ پاسخی از برد دریافت نشد."
         raise RuntimeError(
-            "شناسه ESP32-C3 خوانده نشد.\n"
-            "کابل USB دیتادار باشد، پورت درست را انتخاب کنید و در صورت نیاز دکمه BOOT برد را نگه دارید."
+            "ارتباط با ESP32-C3 برقرار نشد یا MAC خوانده نشد.\n\n"
+            "موارد زیر را بررسی کنید:\n"
+            "• کابل USB حتماً دیتادار باشد.\n"
+            "• پورت COM صحیح را انتخاب کنید.\n"
+            "• اگر برد وارد حالت دانلود نمی‌شود، BOOT را نگه دارید و یک‌بار RESET بزنید.\n\n"
+            "خروجی esptool:\n" + tail
         )
+
     return chip, mac, text
 
 
@@ -322,7 +363,7 @@ def flash_merged_bin(port, firmware_path, address="0x0"):
         raise RuntimeError("فایل Firmware پیدا نشد.")
     args = [
         "--chip", "esp32c3", "--port", port, "--baud", "460800",
-        "write_flash", "-z", address, firmware_path
+        "write-flash", "-z", address, firmware_path
     ]
     return run_esptool(args)
 
@@ -649,13 +690,21 @@ class SerialMakerApp(ctk.CTk):
         if names:
             self.port_box.configure(values=names)
             preferred = None
+            preferred_vids = {0x303A, 0x10C4, 0x1A86}  # Espressif, CP210x, CH34x
             for p in ports:
                 desc = f"{p.description} {p.manufacturer or ''} {p.hwid}".lower()
-                if any(k in desc for k in ["espressif","usb jtag","cp210","ch340","wch"]):
+                if (getattr(p, "vid", None) in preferred_vids or
+                        any(k in desc for k in [
+                            "espressif", "esp32", "usb jtag", "usb serial",
+                            "cp210", "ch340", "ch341", "wch", "uart"
+                        ])):
                     preferred = p.device
                     break
             self.port_box.set(preferred or names[0])
-            self.port_status.configure(text=f"● {len(names)} پورت پیدا شد", text_color="#67e8a6")
+            self.port_status.configure(
+                text=f"● {len(names)} پورت پیدا شد" + (f"  •  {preferred}" if preferred else ""),
+                text_color="#67e8a6"
+            )
         else:
             self.port_box.configure(values=["بدون پورت"])
             self.port_box.set("بدون پورت")
@@ -894,4 +943,5 @@ class SerialMakerApp(ctk.CTk):
 
 
 if __name__=="__main__":
-    SerialMakerApp().mainloop()
+    if acquire_single_instance():
+        SerialMakerApp().mainloop()
