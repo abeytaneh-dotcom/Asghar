@@ -20,6 +20,12 @@ static constexpr const char* BLE_CMD_UUID     = "7f640102-7c7d-4f0a-8b6f-4f484f4
 static constexpr const char* BLE_DATA_UUID    = "7f640103-7c7d-4f0a-8b6f-4f484f4d4501";
 
 NimBLECharacteristic* dataCh = nullptr;
+NimBLEServer* bleServer = nullptr;
+
+struct BleCommand { char text[96]; };
+QueueHandle_t bleCmdQueue = nullptr;
+volatile bool bleClientConnected = false;
+
 bool canStarted = false;
 int canRate = 0;
 bool klineConnected = false;
@@ -97,6 +103,7 @@ static bool detectCAN() {
   twai_message_t r;
   const int rates[] = {500,250};
   for (int rate : rates) {
+    sendLine("ECU:SCAN,CAN:" + String(rate));
     if (!startCAN(rate)) continue;
     for (int n=0;n<2;n++) {
       if (canRequest(0x01,0x00,r,250)) {
@@ -165,8 +172,12 @@ static bool kline5BaudInit() {
 }
 
 static bool detectKLine() {
+  sendLine("ECU:SCAN,KLINE:FAST");
   klineConnected = klineFastInit();
-  if (!klineConnected) klineConnected = kline5BaudInit();
+  if (!klineConnected) {
+    sendLine("ECU:SCAN,KLINE:5BAUD");
+    klineConnected = kline5BaudInit();
+  }
   if (klineConnected) sendLine("ECU:CONNECTED,KLINE:10400");
   else sendLine("ECU:NOT_FOUND");
   return klineConnected;
@@ -329,31 +340,64 @@ static void handleCommand(String c) {
   else if(upper=="CLEAR_DTC") clearDTC_CAN();
 }
 
+class ServerCallbacks : public NimBLEServerCallbacks {
+  void onConnect(NimBLEServer* server) override {
+    bleClientConnected = true;
+    // Put the serial in the readable characteristic immediately. This makes
+    // activation robust even if the first notification is missed by Android.
+    if (dataCh) {
+      String id = deviceSerial.length() ? ("SERIAL:" + deviceSerial) : String("SERIAL:UNSET");
+      dataCh->setValue(id.c_str());
+    }
+  }
+
+  void onDisconnect(NimBLEServer* server) override {
+    bleClientConnected = false;
+    delay(20);
+    NimBLEDevice::startAdvertising();
+  }
+};
+
 class CmdCallbacks : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic* ch) override {
-    std::string v=ch->getValue();
-    handleCommand(String(v.c_str()));
+    // IMPORTANT: never run CAN/K-Line detection inside the NimBLE callback.
+    // REDETECT can take seconds (especially 5-baud K-Line init) and doing it
+    // here can starve the BLE host task and drop the GATT connection.
+    std::string v = ch->getValue();
+    if (v.empty() || !bleCmdQueue) return;
+    BleCommand m{};
+    size_t n = v.size();
+    if (n >= sizeof(m.text)) n = sizeof(m.text) - 1;
+    memcpy(m.text, v.data(), n);
+    m.text[n] = 0;
+    xQueueSend(bleCmdQueue, &m, 0);
   }
 };
 
 static void startBLE() {
   NimBLEDevice::init(DEVICE_NAME);
-  NimBLEServer* server=NimBLEDevice::createServer();
-  NimBLEService* service=server->createService(BLE_SERVICE_UUID);
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+  bleServer=NimBLEDevice::createServer();
+  bleServer->setCallbacks(new ServerCallbacks());
+  NimBLEService* service=bleServer->createService(BLE_SERVICE_UUID);
   NimBLECharacteristic* cmd=service->createCharacteristic(BLE_CMD_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
   dataCh=service->createCharacteristic(BLE_DATA_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
   cmd->setCallbacks(new CmdCallbacks());
-  dataCh->setValue("BOOT:SMART_OBD_C3");
+  dataCh->setValue(deviceSerial.length() ? ("SERIAL:"+deviceSerial).c_str() : "SERIAL:UNSET");
   service->start();
   NimBLEAdvertising* adv=NimBLEDevice::getAdvertising();
   adv->addServiceUUID(BLE_SERVICE_UUID);
   adv->setScanResponse(true);
+  adv->setMinPreferred(0x06);
+  adv->setMaxPreferred(0x12);
   NimBLEDevice::startAdvertising();
 }
 
 void setup() {
   Serial.begin(115200);
   delay(250);
+
+  bleCmdQueue = xQueueCreate(6, sizeof(BleCommand));
 
   prefs.begin("khanehremap", true);
   deviceSerial = prefs.getString("serial", "");
@@ -371,6 +415,16 @@ void setup() {
 }
 
 void loop() {
+  // Execute commands in the Arduino loop task, not in the BLE callback.
+  // This keeps the GATT link alive during long CAN/K-Line detection.
+  if (bleCmdQueue) {
+    BleCommand m{};
+    while (xQueueReceive(bleCmdQueue, &m, 0) == pdTRUE) {
+      handleCommand(String(m.text));
+      delay(1);
+    }
+  }
+
   uint32_t now=millis();
   if(now-lastPid>=1000) { lastPid=now; sendPidData(); }
   if(now-lastCoolant>=20000) { lastCoolant=now; sampleCoolant(); }
