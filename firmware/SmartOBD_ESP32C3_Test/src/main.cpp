@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include "driver/twai.h"
+#include <Preferences.h>
 
 // Khaneh Remap SMART OBD - ESP32-C3 TEST firmware
 // Prototype only: no Secure Boot / Flash Encryption yet.
@@ -27,6 +28,8 @@ uint32_t lastCoolant = 0;
 uint8_t dryCount = 0;
 bool lowCoolant = false;
 HardwareSerial KLine(1);
+Preferences prefs;
+String deviceSerial = "";
 
 static void sendLine(const String& s) {
   Serial.println(s);
@@ -42,11 +45,18 @@ static bool startCAN(int kbps) {
     twai_driver_uninstall();
     canStarted = false;
   }
-  auto g = TWAI_GENERAL_CONFIG_DEFAULT(CAN_TX, CAN_RX, TWAI_MODE_NORMAL);
+  twai_general_config_t g = TWAI_GENERAL_CONFIG_DEFAULT(CAN_TX, CAN_RX, TWAI_MODE_NORMAL);
   g.tx_queue_len = 10;
   g.rx_queue_len = 20;
-  twai_timing_config_t t = (kbps == 250) ? TWAI_TIMING_CONFIG_250KBITS() : TWAI_TIMING_CONFIG_500KBITS();
-  auto f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+  twai_timing_config_t t;
+  if (kbps == 250) {
+    twai_timing_config_t t250 = TWAI_TIMING_CONFIG_250KBITS();
+    t = t250;
+  } else {
+    twai_timing_config_t t500 = TWAI_TIMING_CONFIG_500KBITS();
+    t = t500;
+  }
+  twai_filter_config_t f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
   if (twai_driver_install(&g, &t, &f) != ESP_OK) return false;
   if (twai_start() != ESP_OK) {
     twai_driver_uninstall();
@@ -278,16 +288,45 @@ static void sendPidData() {
   }
 }
 
+static bool validSerial(const String& v) {
+  if (v.length() < 8 || v.length() > 32) return false;
+  for (size_t i=0;i<v.length();i++) {
+    char ch=v[i];
+    if (!(isalnum((unsigned char)ch) || ch=='-' || ch=='_')) return false;
+  }
+  return true;
+}
+
 static void handleCommand(String c) {
-  c.trim(); c.toUpperCase();
-  if(c=="PING") sendLine("PONG");
-  else if(c=="STATUS") {
+  c.trim();
+  String upper=c; upper.toUpperCase();
+
+  if(upper=="PING") sendLine("PONG");
+  else if(upper=="GET_SERIAL") {
+    sendLine(deviceSerial.length() ? ("SERIAL:"+deviceSerial) : "SERIAL:UNSET");
+  }
+  else if(upper.startsWith("SET_SERIAL:")) {
+    String candidate=c.substring(c.indexOf(':')+1);
+    candidate.trim(); candidate.toUpperCase();
+    if (!validSerial(candidate)) {
+      sendLine("SERIAL:INVALID");
+    } else if (deviceSerial.length() && deviceSerial != candidate) {
+      sendLine("SERIAL:LOCKED");
+    } else {
+      prefs.begin("khanehremap", false);
+      prefs.putString("serial", candidate);
+      prefs.end();
+      deviceSerial=candidate;
+      sendLine("SERIAL:SET,"+deviceSerial);
+    }
+  }
+  else if(upper=="STATUS") {
     String proto = canStarted ? ("CAN"+String(canRate)) : (klineConnected ? "KLINE" : "NONE");
     sendLine("STATUS,FW:"+String(FW_VERSION)+",PROTO:"+proto+",COOLANT:"+(lowCoolant?String("LOW"):String("OK")));
   }
-  else if(c=="REDETECT") detectProtocol();
-  else if(c=="READ_DTC") readDTC_CAN();
-  else if(c=="CLEAR_DTC") clearDTC_CAN();
+  else if(upper=="REDETECT") detectProtocol();
+  else if(upper=="READ_DTC") readDTC_CAN();
+  else if(upper=="CLEAR_DTC") clearDTC_CAN();
 }
 
 class CmdCallbacks : public NimBLECharacteristicCallbacks {
@@ -315,10 +354,16 @@ static void startBLE() {
 void setup() {
   Serial.begin(115200);
   delay(250);
+
+  prefs.begin("khanehremap", true);
+  deviceSerial = prefs.getString("serial", "");
+  prefs.end();
+
   pinMode(COOLANT_PIN, INPUT);
   pinMode(KLINE_TX, OUTPUT); digitalWrite(KLINE_TX,HIGH);
   startBLE();
   sendLine("BOOT:SMART_OBD_C3");
+  sendLine(deviceSerial.length()?("SERIAL:"+deviceSerial):"SERIAL:UNSET");
   sampleCoolant();
   detectProtocol();
   lastPid=millis();
