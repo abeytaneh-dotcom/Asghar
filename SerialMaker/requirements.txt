@@ -1,5 +1,6 @@
-pyserial
-qrcode
-pillow
-esptool
-pyinstaller
+customtkinter==5.2.2
+pyserial>=3.5
+qrcode[pil]>=7.4
+pillow>=10.0
+esptool>=4.7,<6
+pyinstaller>=6.0
