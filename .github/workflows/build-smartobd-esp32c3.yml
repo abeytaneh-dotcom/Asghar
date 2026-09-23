@@ -1,0 +1,38 @@
+name: Build SmartOBD ESP32-C3 Test Firmware
+
+on:
+  push:
+    paths:
+      - 'firmware/SmartOBD_ESP32C3_Test/**'
+      - '.github/workflows/build-smartobd-esp32c3.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio esptool
+      - name: Build
+        run: pio run -d firmware/SmartOBD_ESP32C3_Test
+      - name: Package
+        run: |
+          mkdir -p smartobd-out
+          BUILD=firmware/SmartOBD_ESP32C3_Test/.pio/build/esp32-c3
+          cp "$BUILD/firmware.bin" smartobd-out/KhanehRemap-SmartOBD-C3-OTA.bin
+          cp "$BUILD/bootloader.bin" smartobd-out/bootloader.bin
+          cp "$BUILD/partitions.bin" smartobd-out/partitions.bin
+          BOOTAPP="$(find ~/.platformio/packages -name boot_app0.bin | head -n 1)"
+          python -m esptool --chip esp32c3 merge_bin -o smartobd-out/KhanehRemap-SmartOBD-C3-FULL.bin --flash_mode dio --flash_freq 40m --flash_size 4MB 0x0 "$BUILD/bootloader.bin" 0x8000 "$BUILD/partitions.bin" 0xe000 "$BOOTAPP" 0x10000 "$BUILD/firmware.bin"
+          sha256sum smartobd-out/*.bin > smartobd-out/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KhanehRemap-SmartOBD-C3-Test
+          path: smartobd-out/
+          if-no-files-found: error
