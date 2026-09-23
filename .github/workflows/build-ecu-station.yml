@@ -1,0 +1,36 @@
+name: Build KhanehRemap ECU Station EXE
+
+on:
+  pull_request:
+    paths:
+      - 'KhanehRemap-ECU-Station-Windows/**'
+      - '.github/workflows/build-ecu-station.yml'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish single EXE
+        shell: pwsh
+        run: |
+          dotnet publish "KhanehRemap-ECU-Station-Windows/KhanehRemapEcuStation.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+          New-Item -ItemType Directory -Force -Path "artifact" | Out-Null
+          Copy-Item "KhanehRemap-ECU-Station-Windows/bin/Release/net8.0-windows/win-x64/publish/KhanehRemap-ECU-Station.exe" "artifact/KhanehRemap-ECU-Station-Demo.exe"
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: KhanehRemap-ECU-Station-Demo-Windows-x64
+          path: artifact/KhanehRemap-ECU-Station-Demo.exe
+          if-no-files-found: error
