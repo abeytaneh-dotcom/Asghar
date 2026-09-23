@@ -419,6 +419,99 @@ static void handleSimCommand(const String& original) {
   }
 }
 
+
+static void stopPhysicalBus() {
+  if (canStarted) {
+    twai_stop();
+    twai_driver_uninstall();
+    canStarted=false;
+    canRate=0;
+  }
+  if (klineConnected) {
+    KLine.end();
+    klineConnected=false;
+  }
+}
+
+static bool detectCANManual(int rate, const String& label) {
+  stopPhysicalBus();
+  sendLine("ECU:SCAN,MANUAL:" + label + ",CAN:" + String(rate));
+  if (!startCAN(rate)) {
+    sendLine("ECU:NOT_FOUND");
+    return false;
+  }
+  twai_message_t r;
+  for (int n=0;n<3;n++) {
+    if (canRequest(0x01,0x00,r,300)) {
+      sendLine("ECU:CONNECTED,CAN:" + String(rate) + ",MODEL:" + label);
+      return true;
+    }
+    delay(80);
+  }
+  twai_stop();
+  twai_driver_uninstall();
+  canStarted=false;
+  canRate=0;
+  sendLine("ECU:NOT_FOUND");
+  return false;
+}
+
+static bool detectKLineManual(bool fastOnly, bool fiveOnly, const String& label) {
+  stopPhysicalBus();
+  bool ok=false;
+  if (!fiveOnly) {
+    sendLine("ECU:SCAN,MANUAL:" + label + ",KLINE:FAST");
+    ok=klineFastInit();
+  }
+  if (!ok && !fastOnly) {
+    sendLine("ECU:SCAN,MANUAL:" + label + ",KLINE:5BAUD");
+    ok=kline5BaudInit();
+  }
+  klineConnected=ok;
+  if (ok) sendLine("ECU:CONNECTED,KLINE:10400,MODEL:" + label);
+  else sendLine("ECU:NOT_FOUND");
+  return ok;
+}
+
+static void detectManualProfile(String profile) {
+  profile.trim();
+  profile.toUpperCase();
+
+  if (simMode) {
+    // Keep CarLab and the phone/web selector in sync.
+    if (profile=="SSAT_CAN500") { simProfile="SSAT_GENERIC"; simCanRate=500; }
+    else if (profile=="SSAT_CAN250") { simProfile="SSAT_GENERIC"; simCanRate=250; }
+    else if (profile=="CAN500") { simProfile="CAN_OBD2"; simCanRate=500; }
+    else if (profile=="CAN250") { simProfile="CAN_OBD2"; simCanRate=250; }
+    else simProfile=profile;
+    simDetect();
+    return;
+  }
+
+  if (profile=="CAN500" || profile=="GENERIC_CAN500") { detectCANManual(500,"Generic CAN OBD-II"); return; }
+  if (profile=="CAN250" || profile=="GENERIC_CAN250") { detectCANManual(250,"Generic CAN OBD-II"); return; }
+  if (profile=="SSAT_CAN500") { detectCANManual(500,"SSAT"); return; }
+  if (profile=="SSAT_CAN250") { detectCANManual(250,"SSAT"); return; }
+  if (profile=="KLINE_FAST") { detectKLineManual(true,false,"K-Line Fast"); return; }
+  if (profile=="KLINE_5BAUD") { detectKLineManual(false,true,"ISO9141 5-Baud"); return; }
+  if (profile=="SSAT_KLINE") { detectKLineManual(false,false,"SSAT"); return; }
+
+  if (profile=="VALEO_S2000" || profile=="SAGEM_S2000") {
+    detectKLineManual(false,true,profile);
+    return;
+  }
+  if (profile=="VALEO_J34P" || profile=="SIEMENS_EMS3132") {
+    detectKLineManual(true,false,profile);
+    return;
+  }
+  if (profile=="BOSCH_ME744" || profile=="BOSCH_ME745" || profile=="BOSCH_ME749" || profile=="EASYU_SAIPA") {
+    detectKLineManual(false,false,profile);
+    return;
+  }
+
+  sendLine("ECU:NOT_FOUND");
+}
+
 static void handleCommand(String c) {
   c.trim();
   String upper=c; upper.toUpperCase();
@@ -451,6 +544,10 @@ static void handleCommand(String c) {
   else if(upper=="REDETECT") {
     if (simMode) simDetect();
     else detectProtocol();
+  }
+  else if(upper.startsWith("ECU_SELECT:")) {
+    String profile=c.substring(c.indexOf(':')+1);
+    detectManualProfile(profile);
   }
   else if(upper=="READ_DTC") {
     if (simMode) sendLine(simDtc.length()?("DTC:"+simDtc):"DTC:NONE");
