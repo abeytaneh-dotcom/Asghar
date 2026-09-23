@@ -6,7 +6,7 @@
 // Khaneh Remap SMART OBD - ESP32-C3 TEST firmware
 // Prototype only: no Secure Boot / Flash Encryption yet.
 
-static constexpr const char* FW_VERSION = "1.2.0-short-bridge";
+static constexpr const char* FW_VERSION = "1.2.1-ascii-fix";
 static constexpr const char* DEVICE_NAME_PREFIX = "KhanehRemap-OBD-C3";
 String bleDeviceName = "";
 
@@ -58,9 +58,14 @@ String simDtc = "";
 uint32_t simLastRxMs=0, simLastLiveMs=0, simLastHeartbeatMs=0;
 uint32_t simLiveSeq=0;
 
+static void setTextValue(NimBLECharacteristic* ch, const String& text) {
+  if (!ch) return;
+  ch->setValue(reinterpret_cast<const uint8_t*>(text.c_str()), text.length());
+}
+
 static void sendWebLine(const String& line) {
   if (dataCh) {
-    dataCh->setValue(line.c_str());
+    setTextValue(dataCh, line);
     // notify() is safe with zero subscribers. Do not gate this with a single
     // connection boolean because CarLab + phone can be connected together.
     dataCh->notify();
@@ -71,7 +76,7 @@ static void sendSimulatorLine(const String& line) {
   // USB CarLab receives this on Serial. BLE CarLab receives it on EVENT.
   Serial.println(line);
   if (simEventCh) {
-    simEventCh->setValue(line.c_str());
+    setTextValue(simEventCh, line);
     simEventCh->notify();
   }
 }
@@ -80,7 +85,7 @@ static void sendLine(const String& line) {
   Serial.println(line);
   sendWebLine(line);
   if (simStatusCh) {
-    simStatusCh->setValue(line.c_str());
+    setTextValue(simStatusCh, line);
     simStatusCh->notify();
   }
 }
@@ -697,7 +702,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     // activation robust even if the first notification is missed by Android.
     if (dataCh) {
       String id = deviceSerial.length() ? ("SERIAL:" + deviceSerial) : String("SERIAL:UNSET");
-      dataCh->setValue(id.c_str());
+      setTextValue(dataCh, id);
     }
   }
 
@@ -741,7 +746,7 @@ static void startBLE() {
   NimBLECharacteristic* cmd=service->createCharacteristic(BLE_CMD_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
   dataCh=service->createCharacteristic(BLE_DATA_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
   cmd->setCallbacks(new CmdCallbacks());
-  dataCh->setValue(deviceSerial.length() ? ("SERIAL:"+deviceSerial).c_str() : "SERIAL:UNSET");
+  setTextValue(dataCh, deviceSerial.length() ? ("SERIAL:"+deviceSerial) : String("SERIAL:UNSET"));
   service->start();
 
   // Second service keeps CarLab v1.2 compatible without changing its file.
@@ -750,8 +755,8 @@ static void startBLE() {
   simStatusCh=simSvc->createCharacteristic(SIM_STATUS_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
   simEventCh=simSvc->createCharacteristic(SIM_EVENT_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
   simCmd->setCallbacks(new CmdCallbacks());
-  simStatusCh->setValue("SIM:READY");
-  simEventCh->setValue("SIM:READY");
+  setTextValue(simStatusCh, String("SIM:READY"));
+  setTextValue(simEventCh, String("SIM:READY"));
   simSvc->start();
 
   NimBLEAdvertising* adv=NimBLEDevice::getAdvertising();
