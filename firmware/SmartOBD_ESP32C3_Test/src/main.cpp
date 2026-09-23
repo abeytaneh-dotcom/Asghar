@@ -6,7 +6,7 @@
 // Khaneh Remap SMART OBD - ESP32-C3 TEST firmware
 // Prototype only: no Secure Boot / Flash Encryption yet.
 
-static constexpr const char* FW_VERSION = "1.1.0-bridge-diag";
+static constexpr const char* FW_VERSION = "1.2.0-short-bridge";
 static constexpr const char* DEVICE_NAME_PREFIX = "KhanehRemap-OBD-C3";
 String bleDeviceName = "";
 
@@ -356,14 +356,21 @@ static String simProtocol() {
   return "KLINE";
 }
 
+static uint8_t actuatorMask() {
+  uint8_t m=0;
+  if(simHeadlight)m|=1;
+  if(simFan)m|=2;
+  if(simHorn)m|=4;
+  if(simAc)m|=8;
+  if(simWiper)m|=16;
+  if(simFuelPump)m|=32;
+  return m;
+}
+
 static void publishSimTelemetry() {
-  // One compact packet is much more reliable than five back-to-back GATT
-  // notifications, especially while CarLab and the phone are both connected.
-  String line="LIVE|"+String(simLiveSeq)+"|"+String((int)simRpm)+"|"+String((int)simSpeed)+"|"+
-              String(simEct,1)+"|"+String(simFuel,1)+"|"+String(simVbat,2)+"|"+
-              String(simHeadlight?1:0)+"|"+String(simFan?1:0)+"|"+String(simHorn?1:0)+"|"+
-              String(simAc?1:0)+"|"+String(simWiper?1:0)+"|"+String(simFuelPump?1:0);
-  sendWebLine(line);
+  // Keep BLE notifications below the default 20-byte ATT payload.
+  sendWebLine("L1|"+String((int)simRpm)+"|"+String((int)simSpeed)+"|"+String((int)simEct));
+  sendWebLine("L2|"+String((int)simFuel)+"|"+String(simVbat,1)+"|"+String(actuatorMask()));
 }
 
 static void simDetect() {
@@ -398,7 +405,7 @@ static void setSimActuator(String key, bool on, bool publish=true) {
   else if (key=="AC") simAc=on;
   else if (key=="WIPER") simWiper=on;
   else if (key=="FUELPUMP") simFuelPump=on;
-  if (publish) sendWebLine("ACT|"+key+"|"+String(on?1:0));
+  if (publish) sendWebLine("A|"+key+"|"+String(on?1:0));
 }
 
 static void handleSimCommand(const String& original) {
@@ -409,6 +416,38 @@ static void handleSimCommand(const String& original) {
   String p0=parts[0]; p0.toUpperCase();
 
   simLastRxMs=millis();
+
+  // Short BLE-safe simulator packets.
+  if(p0=="S1" && n>=4){
+    simRpm=parts[1].toFloat();
+    simSpeed=parts[2].toFloat();
+    simEct=parts[3].toFloat();
+    simLiveSeq++;
+    simLastLiveMs=millis();
+    return;
+  }
+  if(p0=="S2" && n>=4){
+    simFuel=parts[1].toFloat();
+    simVbat=parts[2].toFloat();
+    int mask=parts[3].toInt();
+    simHeadlight=(mask&1)!=0;simFan=(mask&2)!=0;simHorn=(mask&4)!=0;
+    simAc=(mask&8)!=0;simWiper=(mask&16)!=0;simFuelPump=(mask&32)!=0;
+    simLastLiveMs=millis();
+    publishSimTelemetry();
+    return;
+  }
+  if(p0=="HB"){
+    simLastHeartbeatMs=millis();
+    sendWebLine("H|1");
+    return;
+  }
+  if(p0=="A" && n>=3){
+    String rest="";
+    for(int i=1;i<n;i++){if(i>1)rest+="|";rest+=parts[i];}
+    sendWebLine("A|"+rest);
+    if(n>=3 && parts[1]!="P" && parts[1]!="S") setSimActuator(parts[1],parts[2].toInt()!=0,false);
+    return;
+  }
 
   if (p0=="HELLO" && n>=3) {
     sendLine("SIM:HELLO,SMART_OBD_C3");
@@ -424,50 +463,34 @@ static void handleSimCommand(const String& original) {
     sendLine(simMode?"SIM:MODE,ON":"SIM:MODE,OFF");
     return;
   }
-
   if (group=="ECU" && n>=3) {
     simProfile=parts[2]; simProfile.toUpperCase();
     sendLine("SIM:ECU,"+simProfile);
     return;
   }
-
   if (group=="CANRATE" && n>=3) {
     simCanRate=parts[2].toInt(); if(simCanRate<=0)simCanRate=500;
     sendLine("SIM:CANRATE,"+String(simCanRate));
     return;
   }
-
-  // New compact bridge packet:
-  // SIM|SNAP|seq|rpm|speed|ect|fuel|vbat|headlight|fan|horn|ac|wiper|fuelpump
   if (group=="SNAP" && n>=8) {
     simLiveSeq=(uint32_t)parts[2].toInt();
-    simRpm=parts[3].toFloat();
-    simSpeed=parts[4].toFloat();
-    simEct=parts[5].toFloat();
-    simFuel=parts[6].toFloat();
-    simVbat=parts[7].toFloat();
+    simRpm=parts[3].toFloat(); simSpeed=parts[4].toFloat(); simEct=parts[5].toFloat();
+    simFuel=parts[6].toFloat(); simVbat=parts[7].toFloat();
     if(n>8)setSimActuator("HEADLIGHT",parts[8].toInt()!=0,false);
     if(n>9)setSimActuator("FAN",parts[9].toInt()!=0,false);
     if(n>10)setSimActuator("HORN",parts[10].toInt()!=0,false);
     if(n>11)setSimActuator("AC",parts[11].toInt()!=0,false);
     if(n>12)setSimActuator("WIPER",parts[12].toInt()!=0,false);
     if(n>13)setSimActuator("FUELPUMP",parts[13].toInt()!=0,false);
-    simLastLiveMs=millis();
-    publishSimTelemetry();
-    return;
+    simLastLiveMs=millis(); publishSimTelemetry(); return;
   }
-
-  // Backward compatibility with CarLab v1.3:
-  // SIM|LIVE|rpm|speed|ect|fuel|vbat
   if (group=="LIVE" && n>=7) {
     simLiveSeq++;
     simRpm=parts[2].toFloat(); simSpeed=parts[3].toFloat(); simEct=parts[4].toFloat();
     simFuel=parts[5].toFloat(); simVbat=parts[6].toFloat();
-    simLastLiveMs=millis();
-    publishSimTelemetry();
-    return;
+    simLastLiveMs=millis(); publishSimTelemetry(); return;
   }
-
   if (group=="SET" && n>=4) {
     String key=parts[2]; key.toUpperCase(); float v=parts[3].toFloat();
     if (key=="RPM") simRpm=v;
@@ -475,43 +498,32 @@ static void handleSimCommand(const String& original) {
     else if (key=="ECT") simEct=v;
     else if (key=="FUEL") simFuel=v;
     else if (key=="VBAT") simVbat=v;
-    simLiveSeq++; simLastLiveMs=millis(); publishSimTelemetry();
-    return;
+    simLiveSeq++; simLastLiveMs=millis(); publishSimTelemetry(); return;
   }
-
   if (group=="ACT" && n>=4) {
-    String key=parts[2]; bool on=parts[3].toInt()!=0;
-    setSimActuator(key,on,true);
-    return;
+    setSimActuator(parts[2],parts[3].toInt()!=0,true); return;
   }
-
   if (group=="DTC" && n>=3) {
     String op=parts[2];op.toUpperCase();
     if(op=="ADD" && n>=4)simDtc=parts[3];
     else if(op=="CLEAR")simDtc="";
     return;
   }
-
   if (group=="CAN" && n>=3) {
     String op=parts[2];op.toUpperCase();
     if(op=="SAMPLE")publishSimTelemetry();
     return;
   }
-
   if (group=="HEARTBEAT") {
-    simLastHeartbeatMs=millis();
-    sendWebLine("SIM:HEARTBEAT,OK");
-    return;
+    simLastHeartbeatMs=millis(); sendWebLine("H|1"); return;
   }
-
   if (group=="WEB_ACK") {
     String rest="";
     for(int i=2;i<n;i++){if(i>2)rest+="|";rest+=parts[i];}
-    sendWebLine("BRIDGE|SIM_ACK|"+rest);
-    // When the simulator confirms an actuator, publish its final state.
+    sendWebLine("A|"+rest);
     if(n>=5){
       String op=parts[2];op.toUpperCase();
-      if(op=="ACT")setSimActuator(parts[3],parts[4].toInt()!=0,true);
+      if(op=="ACT")setSimActuator(parts[3],parts[4].toInt()!=0,false);
     }
     return;
   }
@@ -616,25 +628,25 @@ static void handleCommand(String c) {
 
   if(upper=="PING") sendLine("PONG");
   else if(upper=="HELLO|CARLAB|1" || upper.startsWith("SIM|")) handleSimCommand(c);
-  else if(upper.startsWith("WEB|PING|")) {
-    sendWebLine("BRIDGE|ESP_FORWARD|"+c.substring(4));
+  else if(upper.startsWith("W|P|")) {
     sendSimulatorLine(c);
   }
-  else if(upper.startsWith("WEB|ACT|")) {
-    sendWebLine("BRIDGE|ESP_FORWARD|"+c.substring(4));
+  else if(upper.startsWith("W|A|")) {
     sendSimulatorLine(c);
   }
-  else if(upper=="WEB|SYNC?") {
+  else if(upper=="W|S") {
     sendSimulatorLine(c);
   }
-  else if(upper=="DIAG?") {
+  else if(upper.startsWith("WEB|PING|") || upper.startsWith("WEB|ACT|") || upper=="WEB|SYNC?") {
+    sendSimulatorLine(c);
+  }
+  else if(upper=="D?" || upper=="DIAG?") {
     uint32_t now=millis();
     long simAge=simLastRxMs?long(now-simLastRxMs):-1;
     long liveAge=simLastLiveMs?long(now-simLastLiveMs):-1;
     long hbAge=simLastHeartbeatMs?long(now-simLastHeartbeatMs):-1;
-    sendWebLine("DIAG|FW:"+String(FW_VERSION)+"|SIM:"+(simMode?String("1"):String("0"))+
-                "|SIM_AGE:"+String(simAge)+"|LIVE_AGE:"+String(liveAge)+"|HB_AGE:"+String(hbAge)+
-                "|SEQ:"+String(simLiveSeq)+"|CAN:"+String(canStarted?canRate:0)+"|KLINE:"+String(klineConnected?1:0));
+    sendWebLine("D1|"+String(simMode?1:0)+"|"+String(simAge)+"|"+String(liveAge));
+    sendWebLine("D2|"+String(hbAge)+"|"+String(simLiveSeq)+"|"+String(canStarted?canRate:0)+"|"+String(klineConnected?1:0));
   }
   else if(upper=="GET_SERIAL") {
     sendLine(deviceSerial.length() ? ("SERIAL:"+deviceSerial) : "SERIAL:UNSET");
