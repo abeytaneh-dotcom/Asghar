@@ -7,7 +7,8 @@
 // Prototype only: no Secure Boot / Flash Encryption yet.
 
 static constexpr const char* FW_VERSION = "1.0.0-test-c3";
-static constexpr const char* DEVICE_NAME = "KhanehRemap-OBD-C3";
+static constexpr const char* DEVICE_NAME_PREFIX = "KHANEH_REMAP_OBD";
+String bleDeviceName = "";
 
 static constexpr gpio_num_t CAN_TX = GPIO_NUM_4;
 static constexpr gpio_num_t CAN_RX = GPIO_NUM_5;
@@ -374,8 +375,16 @@ class CmdCallbacks : public NimBLECharacteristicCallbacks {
   }
 };
 
+static String hardwareSuffix() {
+  uint64_t mac = ESP.getEfuseMac();
+  char b[7];
+  snprintf(b, sizeof(b), "%06llX", (unsigned long long)(mac & 0xFFFFFFULL));
+  return String(b);
+}
+
 static void startBLE() {
-  NimBLEDevice::init(DEVICE_NAME);
+  bleDeviceName = String(DEVICE_NAME_PREFIX) + "_" + hardwareSuffix();
+  NimBLEDevice::init(bleDeviceName.c_str());
   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
   bleServer=NimBLEDevice::createServer();
   bleServer->setCallbacks(new ServerCallbacks());
