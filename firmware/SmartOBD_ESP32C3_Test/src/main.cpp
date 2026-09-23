@@ -6,7 +6,7 @@
 // Khaneh Remap SMART OBD - ESP32-C3 TEST firmware
 // Prototype only: no Secure Boot / Flash Encryption yet.
 
-static constexpr const char* FW_VERSION = "1.2.1-ascii-fix";
+static constexpr const char* FW_VERSION = "1.3.0-gatt-v2";
 static constexpr const char* DEVICE_NAME_PREFIX = "KhanehRemap-OBD-C3";
 String bleDeviceName = "";
 
@@ -20,6 +20,12 @@ static constexpr const char* BLE_SERVICE_UUID = "7f640101-7c7d-4f0a-8b6f-4f484f4
 static constexpr const char* BLE_CMD_UUID     = "7f640102-7c7d-4f0a-8b6f-4f484f4d4501";
 static constexpr const char* BLE_DATA_UUID    = "7f640103-7c7d-4f0a-8b6f-4f484f4d4501";
 
+// GATT v2 uses brand-new UUIDs to bypass Android/Chrome's cached attribute
+// handles from earlier firmware versions.
+static constexpr const char* BLE_V2_SERVICE_UUID = "7f640201-7c7d-4f0a-8b6f-4f484f4d4501";
+static constexpr const char* BLE_V2_CMD_UUID     = "7f640202-7c7d-4f0a-8b6f-4f484f4d4501";
+static constexpr const char* BLE_V2_DATA_UUID    = "7f640203-7c7d-4f0a-8b6f-4f484f4d4501";
+
 // CarLab v1.2 compatibility service. The simulator currently uses these UUIDs.
 static constexpr const char* SIM_SERVICE_UUID = "7f640001-7c7d-4f0a-8b6f-4f484f4d4501";
 static constexpr const char* SIM_CMD_UUID     = "7f640002-7c7d-4f0a-8b6f-4f484f4d4501";
@@ -27,6 +33,7 @@ static constexpr const char* SIM_STATUS_UUID  = "7f640003-7c7d-4f0a-8b6f-4f484f4
 static constexpr const char* SIM_EVENT_UUID   = "7f640004-7c7d-4f0a-8b6f-4f484f4d4501";
 
 NimBLECharacteristic* dataCh = nullptr;
+NimBLECharacteristic* dataV2Ch = nullptr;
 NimBLECharacteristic* simStatusCh = nullptr;
 NimBLECharacteristic* simEventCh = nullptr;
 NimBLEServer* bleServer = nullptr;
@@ -60,14 +67,20 @@ uint32_t simLiveSeq=0;
 
 static void setTextValue(NimBLECharacteristic* ch, const String& text) {
   if (!ch) return;
-  ch->setValue(reinterpret_cast<const uint8_t*>(text.c_str()), text.length());
+  // Use std::string explicitly so NimBLE cannot select the template overload
+  // for a pointer value (which would serialize a 32-bit pointer as 4 bytes).
+  std::string value(text.c_str(), text.length());
+  ch->setValue(value);
 }
 
 static void sendWebLine(const String& line) {
+  if (dataV2Ch) {
+    setTextValue(dataV2Ch, line);
+    dataV2Ch->notify();
+  }
+  // Keep legacy data characteristic alive for older clients.
   if (dataCh) {
     setTextValue(dataCh, line);
-    // notify() is safe with zero subscribers. Do not gate this with a single
-    // connection boolean because CarLab + phone can be connected together.
     dataCh->notify();
   }
 }
@@ -700,10 +713,9 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     bleClientConnected = true;
     // Put the serial in the readable characteristic immediately. This makes
     // activation robust even if the first notification is missed by Android.
-    if (dataCh) {
-      String id = deviceSerial.length() ? ("SERIAL:" + deviceSerial) : String("SERIAL:UNSET");
-      setTextValue(dataCh, id);
-    }
+    String id = deviceSerial.length() ? ("SERIAL:" + deviceSerial) : String("SERIAL:UNSET");
+    if (dataV2Ch) setTextValue(dataV2Ch, id);
+    if (dataCh) setTextValue(dataCh, id);
   }
 
   void onDisconnect(NimBLEServer* server) override {
@@ -749,6 +761,15 @@ static void startBLE() {
   setTextValue(dataCh, deviceSerial.length() ? ("SERIAL:"+deviceSerial) : String("SERIAL:UNSET"));
   service->start();
 
+  // Clean v2 service for current web client. New UUIDs force Android to
+  // rediscover the attribute table instead of reusing stale cached handles.
+  NimBLEService* v2=bleServer->createService(BLE_V2_SERVICE_UUID);
+  NimBLECharacteristic* cmdV2=v2->createCharacteristic(BLE_V2_CMD_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+  dataV2Ch=v2->createCharacteristic(BLE_V2_DATA_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+  cmdV2->setCallbacks(new CmdCallbacks());
+  setTextValue(dataV2Ch, deviceSerial.length() ? ("SERIAL:"+deviceSerial) : String("SERIAL:UNSET"));
+  v2->start();
+
   // Second service keeps CarLab v1.2 compatible without changing its file.
   NimBLEService* simSvc=bleServer->createService(SIM_SERVICE_UUID);
   NimBLECharacteristic* simCmd=simSvc->createCharacteristic(SIM_CMD_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
@@ -760,6 +781,7 @@ static void startBLE() {
   simSvc->start();
 
   NimBLEAdvertising* adv=NimBLEDevice::getAdvertising();
+  adv->addServiceUUID(BLE_V2_SERVICE_UUID);
   adv->addServiceUUID(BLE_SERVICE_UUID);
   adv->addServiceUUID(SIM_SERVICE_UUID);
   adv->setScanResponse(true);
