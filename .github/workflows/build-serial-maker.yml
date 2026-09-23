@@ -22,16 +22,27 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller pyserial qrcode pillow esptool
+          pip install -r SerialMaker/requirements.txt
 
-      - name: Build EXE
+      - name: Create app icon
+        shell: pwsh
+        run: python SerialMaker/make_icon.py
+
+      - name: Build Windows EXE
         shell: pwsh
         run: |
           cd SerialMaker
-          pyinstaller --noconfirm --onefile --windowed --name KhanehRemap-SerialMaker serial_maker.py
+          pyinstaller --noconfirm --clean --onefile --windowed --name KhanehRemap-SerialMaker --icon app.ico --add-data "app.ico;." --collect-all esptool --collect-all customtkinter serial_maker.py
+
+      - name: Smoke-check artifact
+        shell: pwsh
+        run: |
+          if (!(Test-Path "SerialMaker/dist/KhanehRemap-SerialMaker.exe")) { throw "EXE not found" }
+          Get-Item "SerialMaker/dist/KhanehRemap-SerialMaker.exe" | Format-List Name,Length,LastWriteTime
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KhanehRemap-SerialMaker
+          name: KhanehRemap-SerialMaker-v2
           path: SerialMaker/dist/KhanehRemap-SerialMaker.exe
+          if-no-files-found: error
