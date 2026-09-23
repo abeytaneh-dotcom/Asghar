@@ -398,13 +398,29 @@ static void handleSimCommand(const String& original) {
     simCanRate=rate.toInt();
     if (simCanRate<=0) simCanRate=500;
     sendLine("SIM:CANRATE,"+String(simCanRate));
+  } else if (group=="LIVE") {
+    // Compact live snapshot from CarLab:
+    // SIM|LIVE|rpm|speed|ect|fuel|vbat
+    int a1=c.indexOf('|',4);
+    int a2=c.indexOf('|',a1+1);
+    int a3=c.indexOf('|',a2+1);
+    int a4=c.indexOf('|',a3+1);
+    int a5=c.indexOf('|',a4+1);
+    if(a1>0&&a2>0&&a3>0&&a4>0&&a5>0){
+      simRpm=c.substring(a1+1,a2).toFloat();
+      simSpeed=c.substring(a2+1,a3).toFloat();
+      simEct=c.substring(a3+1,a4).toFloat();
+      simFuel=c.substring(a4+1,a5).toFloat();
+      simVbat=c.substring(a5+1).toFloat();
+      publishSimTelemetry();
+    }
   } else if (group=="SET") {
     float n=val.toFloat();
-    if (key=="RPM") simRpm=n;
-    else if (key=="SPEED") simSpeed=n;
-    else if (key=="ECT") simEct=n;
-    else if (key=="FUEL") simFuel=n;
-    else if (key=="VBAT") simVbat=n;
+    if (key=="RPM") { simRpm=n; sendLine("RPM:"+String((int)simRpm)); }
+    else if (key=="SPEED") { simSpeed=n; sendLine("SPEED:"+String((int)simSpeed)); }
+    else if (key=="ECT") { simEct=n; sendLine("ECT:"+String((int)simEct)); }
+    else if (key=="FUEL") { simFuel=n; sendLine("FUEL:"+String(simFuel,1)); }
+    else if (key=="VBAT") { simVbat=n; sendLine("VOLT:"+String(simVbat,2)); }
   } else if (group=="ACT") {
     bool on=val.toInt()!=0;
     if (key=="IGNITION") simIgnition=on;
@@ -416,6 +432,7 @@ static void handleSimCommand(const String& original) {
     publishSimTelemetry();
   } else if (group=="HEARTBEAT") {
     sendLine("SIM:HEARTBEAT,OK");
+    if (simMode) publishSimTelemetry();
   }
 }
 
