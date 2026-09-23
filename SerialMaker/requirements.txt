@@ -1,0 +1,5 @@
+pyserial
+qrcode
+pillow
+esptool
+pyinstaller
