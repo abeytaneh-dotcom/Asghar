@@ -6,7 +6,7 @@
 // Khaneh Remap SMART OBD - ESP32-C3 TEST firmware
 // Prototype only: no Secure Boot / Flash Encryption yet.
 
-static constexpr const char* FW_VERSION = "1.3.0-gatt-v2";
+static constexpr const char* FW_VERSION = "1.4.0-full-telemetry";
 static constexpr const char* DEVICE_NAME_PREFIX = "KhanehRemap-OBD-C3";
 String bleDeviceName = "";
 
@@ -59,8 +59,15 @@ bool simMode = false;
 String simProfile = "CAN_OBD2";
 int simCanRate = 500;
 float simRpm = 820, simSpeed = 0, simEct = 74, simFuel = 55, simVbat = 13.9;
+float simCoolantLevel=100, simTps=0, simMap=30, simIat=28, simLoad=0, simAdvance=8;
+float simInjectorMs=2.8, simMaf=0, simLambda=1.0, simAfr=14.7, simStft=0, simLtft=0;
+float simRail=300, simFuelPressure=300, simOilPressure=0, simBrakePressure=0, simSteer=0, simAmbient=24, simBrake=0;
+float simWheelFL=0, simWheelFR=0, simWheelRL=0, simWheelRR=0;
+String simGear="P";
 bool simIgnition = true, simEngine = true;
 bool simHeadlight=false, simFan=false, simHorn=false, simAc=false, simWiper=false, simFuelPump=false;
+uint32_t simActMaskExt=0;
+bool simCoolantAlarm=false;
 String simDtc = "";
 uint32_t simLastRxMs=0, simLastLiveMs=0, simLastHeartbeatMs=0;
 uint32_t simLiveSeq=0;
@@ -385,10 +392,71 @@ static uint8_t actuatorMask() {
   return m;
 }
 
+static int actuatorBit(String key) {
+  key.toUpperCase();
+  if(key=="HEADLIGHT")return 0;
+  if(key=="HIGHBEAM")return 1;
+  if(key=="AC")return 2;
+  if(key=="FAN")return 3;
+  if(key=="ABS")return 4;
+  if(key=="EPS")return 5;
+  if(key=="AIRBAG")return 6;
+  if(key=="LOCK")return 7;
+  if(key=="WIPER")return 8;
+  if(key=="HORN")return 9;
+  if(key=="FUELPUMP")return 10;
+  if(key=="INJECTORS")return 11;
+  if(key=="COIL")return 12;
+  if(key=="RADFAN1")return 13;
+  if(key=="RADFAN2")return 14;
+  if(key=="ACCLUTCH")return 15;
+  if(key=="STARTER")return 16;
+  if(key=="CHARGING")return 17;
+  if(key=="MIL")return 18;
+  if(key=="LEFTIND")return 19;
+  if(key=="RIGHTIND")return 20;
+  if(key=="FOG")return 21;
+  if(key=="REVERSE")return 22;
+  if(key=="BRAKELAMP")return 23;
+  if(key=="HANDBRAKE")return 24;
+  if(key=="IGNITION")return 25;
+  if(key=="ENGINE")return 26;
+  return -1;
+}
+
+static void updateSimCoolantAlarm(float level) {
+  simCoolantLevel=level;
+  bool low=(level<=15.0f);
+  if(low && !simCoolantAlarm){
+    simCoolantAlarm=true;
+    sendWebLine("ALARM:LOW_COOLANT,"+String(level,0));
+  } else if(!low && simCoolantAlarm && level>=25.0f){
+    simCoolantAlarm=false;
+    sendWebLine("COOLANT:OK");
+  }
+}
+
 static void publishSimTelemetry() {
-  // Keep BLE notifications below the default 20-byte ATT payload.
   sendWebLine("L1|"+String((int)simRpm)+"|"+String((int)simSpeed)+"|"+String((int)simEct));
+  delay(2);
   sendWebLine("L2|"+String((int)simFuel)+"|"+String(simVbat,1)+"|"+String(actuatorMask()));
+  delay(2);
+  sendWebLine("L3|"+String((int)simCoolantLevel)+"|"+String((int)simTps)+"|"+String((int)simMap)+"|"+String((int)simIat));
+  delay(2);
+  sendWebLine("L4|"+String((int)simLoad)+"|"+String((int)(simAdvance*10))+"|"+String((int)(simInjectorMs*10)));
+  delay(2);
+  sendWebLine("L5|"+String((int)(simMaf*10))+"|"+String((int)(simLambda*1000))+"|"+String((int)(simAfr*100)));
+  delay(2);
+  sendWebLine("L6|"+String((int)(simStft*10))+"|"+String((int)(simLtft*10))+"|"+String((int)simRail));
+  delay(2);
+  sendWebLine("L7|"+String((int)simFuelPressure)+"|"+String((int)(simOilPressure*10))+"|"+String((int)(simBrakePressure*10)));
+  delay(2);
+  sendWebLine("L8|"+String((int)simSteer)+"|"+String((int)simAmbient)+"|"+String((int)simBrake));
+  delay(2);
+  sendWebLine("L9|"+String((int)simWheelFL)+"|"+String((int)simWheelFR)+"|"+String((int)simWheelRL)+"|"+String((int)simWheelRR));
+  delay(2);
+  sendWebLine("LX|"+String(simActMaskExt));
+  sendWebLine("LG|"+simGear);
 }
 
 static void simDetect() {
@@ -423,7 +491,15 @@ static void setSimActuator(String key, bool on, bool publish=true) {
   else if (key=="AC") simAc=on;
   else if (key=="WIPER") simWiper=on;
   else if (key=="FUELPUMP") simFuelPump=on;
-  if (publish) sendWebLine("A|"+key+"|"+String(on?1:0));
+  int bit=actuatorBit(key);
+  if(bit>=0){
+    if(on)simActMaskExt|=(1UL<<bit);
+    else simActMaskExt&=~(1UL<<bit);
+  }
+  if (publish) {
+    sendWebLine("A|"+key+"|"+String(on?1:0));
+    sendWebLine("LX|"+String(simActMaskExt));
+  }
 }
 
 static void handleSimCommand(const String& original) {
@@ -448,11 +524,53 @@ static void handleSimCommand(const String& original) {
     simFuel=parts[1].toFloat();
     simVbat=parts[2].toFloat();
     int mask=parts[3].toInt();
-    simHeadlight=(mask&1)!=0;simFan=(mask&2)!=0;simHorn=(mask&4)!=0;
-    simAc=(mask&8)!=0;simWiper=(mask&16)!=0;simFuelPump=(mask&32)!=0;
+    setSimActuator("HEADLIGHT",(mask&1)!=0,false);
+    setSimActuator("FAN",(mask&2)!=0,false);
+    setSimActuator("HORN",(mask&4)!=0,false);
+    setSimActuator("AC",(mask&8)!=0,false);
+    setSimActuator("WIPER",(mask&16)!=0,false);
+    setSimActuator("FUELPUMP",(mask&32)!=0,false);
     simLastLiveMs=millis();
-    publishSimTelemetry();
+    sendWebLine("L2|"+String((int)simFuel)+"|"+String(simVbat,1)+"|"+String(actuatorMask()));
     return;
+  }
+  if(p0=="S3" && n>=5){
+    updateSimCoolantAlarm(parts[1].toFloat());
+    simTps=parts[2].toFloat();simMap=parts[3].toFloat();simIat=parts[4].toFloat();
+    simLastLiveMs=millis();
+    sendWebLine("L3|"+String((int)simCoolantLevel)+"|"+String((int)simTps)+"|"+String((int)simMap)+"|"+String((int)simIat));
+    return;
+  }
+  if(p0=="S4" && n>=4){
+    simLoad=parts[1].toFloat();simAdvance=parts[2].toFloat()/10.0f;simInjectorMs=parts[3].toFloat()/10.0f;
+    sendWebLine("L4|"+parts[1]+"|"+parts[2]+"|"+parts[3]);return;
+  }
+  if(p0=="S5" && n>=4){
+    simMaf=parts[1].toFloat()/10.0f;simLambda=parts[2].toFloat()/1000.0f;simAfr=parts[3].toFloat()/100.0f;
+    sendWebLine("L5|"+parts[1]+"|"+parts[2]+"|"+parts[3]);return;
+  }
+  if(p0=="S6" && n>=4){
+    simStft=parts[1].toFloat()/10.0f;simLtft=parts[2].toFloat()/10.0f;simRail=parts[3].toFloat();
+    sendWebLine("L6|"+parts[1]+"|"+parts[2]+"|"+parts[3]);return;
+  }
+  if(p0=="S7" && n>=4){
+    simFuelPressure=parts[1].toFloat();simOilPressure=parts[2].toFloat()/10.0f;simBrakePressure=parts[3].toFloat()/10.0f;
+    sendWebLine("L7|"+parts[1]+"|"+parts[2]+"|"+parts[3]);return;
+  }
+  if(p0=="S8" && n>=4){
+    simSteer=parts[1].toFloat();simAmbient=parts[2].toFloat();simBrake=parts[3].toFloat();
+    sendWebLine("L8|"+parts[1]+"|"+parts[2]+"|"+parts[3]);return;
+  }
+  if(p0=="S9" && n>=5){
+    simWheelFL=parts[1].toFloat();simWheelFR=parts[2].toFloat();simWheelRL=parts[3].toFloat();simWheelRR=parts[4].toFloat();
+    sendWebLine("L9|"+parts[1]+"|"+parts[2]+"|"+parts[3]+"|"+parts[4]);return;
+  }
+  if(p0=="SX" && n>=2){
+    simActMaskExt=(uint32_t)strtoul(parts[1].c_str(),nullptr,10);
+    sendWebLine("LX|"+String(simActMaskExt));return;
+  }
+  if(p0=="SG" && n>=2){
+    simGear=parts[1];sendWebLine("LG|"+simGear);return;
   }
   if(p0=="HB"){
     simLastHeartbeatMs=millis();
@@ -516,7 +634,33 @@ static void handleSimCommand(const String& original) {
     else if (key=="ECT") simEct=v;
     else if (key=="FUEL") simFuel=v;
     else if (key=="VBAT") simVbat=v;
+    else if (key=="COOLANTLEVEL") updateSimCoolantAlarm(v);
+    else if (key=="TPS") simTps=v;
+    else if (key=="MAP") simMap=v;
+    else if (key=="IAT") simIat=v;
+    else if (key=="LOAD") simLoad=v;
+    else if (key=="ADVANCE") simAdvance=v;
+    else if (key=="INJECTORMS") simInjectorMs=v;
+    else if (key=="MAF") simMaf=v;
+    else if (key=="LAMBDA") simLambda=v;
+    else if (key=="AFR") simAfr=v;
+    else if (key=="STFT") simStft=v;
+    else if (key=="LTFT") simLtft=v;
+    else if (key=="RAIL") simRail=v;
+    else if (key=="FUELPRESSURE") simFuelPressure=v;
+    else if (key=="OILPRESSURE") simOilPressure=v;
+    else if (key=="BRAKEPRESSURE") simBrakePressure=v;
+    else if (key=="STEER") simSteer=v;
+    else if (key=="AMBIENT") simAmbient=v;
+    else if (key=="BRAKE") simBrake=v;
+    else if (key=="GEAR") simGear=parts[3];
     simLiveSeq++; simLastLiveMs=millis(); publishSimTelemetry(); return;
+  }
+  if (group=="FAULT" && n>=4) {
+    String key=parts[2];key.toUpperCase();bool on=parts[3].toInt()!=0;
+    if(key=="NO_WATER") updateSimCoolantAlarm(on?0:100);
+    sendWebLine("FAULT|"+key+"|"+String(on?1:0));
+    return;
   }
   if (group=="ACT" && n>=4) {
     setSimActuator(parts[2],parts[3].toInt()!=0,true); return;
