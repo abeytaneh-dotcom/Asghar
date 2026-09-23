@@ -6,267 +6,537 @@ import android.bluetooth.*;
 import android.bluetooth.le.*;
 import android.content.*;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.graphics.*;
-import android.graphics.drawable.*;
+import android.graphics.drawable.GradientDrawable;
 import android.os.*;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.view.*;
 import android.widget.*;
-import java.io.*;
+
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 
 public class MainActivity extends Activity {
- static final UUID BLE_SERVICE=UUID.fromString("7f640101-7c7d-4f0a-8b6f-4f484f4d4501");
- static final UUID BLE_CMD=UUID.fromString("7f640102-7c7d-4f0a-8b6f-4f484f4d4501");
- static final UUID BLE_DATA=UUID.fromString("7f640103-7c7d-4f0a-8b6f-4f484f4d4501");
- static final UUID CCCD=UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
- final int BG=Color.rgb(3,10,18), PANEL=Color.rgb(8,21,34), CYAN=Color.rgb(0,184,255), BLUE=Color.rgb(0,105,255), RED=Color.rgb(255,45,60), GREEN=Color.rgb(35,230,125), AMBER=Color.rgb(255,174,24), MUTED=Color.rgb(155,174,192);
- LinearLayout root,body; TextView status,modeChip,rpmText,speedText,tempText,coolText,ecuText,fuelText,battText,logText;
- BluetoothGatt gatt; BluetoothGattCharacteristic cmdCh,dataCh; BluetoothLeScanner bleScanner; ScanCallback scanCallback;
- TextToSpeech tts; Handler h=new Handler(Looper.getMainLooper());
- boolean demo=true,alive=true,bleConnected=false; int rpm=900,speed=0,temp=88; boolean up=true;
- float fuel=48f,batt=13.8f; String protocol="NONE",coolantState="مناسب";
+    static final UUID BLE_SERVICE = UUID.fromString("7f640101-7c7d-4f0a-8b6f-4f484f4d4501");
+    static final UUID BLE_CMD     = UUID.fromString("7f640102-7c7d-4f0a-8b6f-4f484f4d4501");
+    static final UUID BLE_DATA    = UUID.fromString("7f640103-7c7d-4f0a-8b6f-4f484f4d4501");
+    static final UUID CCCD        = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 
- @Override public void onCreate(Bundle b){super.onCreate(b);getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);tts=new TextToSpeech(this,s->{if(s==TextToSpeech.SUCCESS)tts.setLanguage(new Locale("fa","IR"));});askBt();render("خانه");demoLoop();}
- void askBt(){
-  if(Build.VERSION.SDK_INT>=31){
-   ArrayList<String> p=new ArrayList<>();
-   if(checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)!=PackageManager.PERMISSION_GRANTED)p.add(Manifest.permission.BLUETOOTH_CONNECT);
-   if(checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)!=PackageManager.PERMISSION_GRANTED)p.add(Manifest.permission.BLUETOOTH_SCAN);
-   if(!p.isEmpty())requestPermissions(p.toArray(new String[0]),8);
-  }else if(Build.VERSION.SDK_INT>=23&&checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED){
-   requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION},9);
-  }
- }
- GradientDrawable box(int fill,int stroke,float r){GradientDrawable d=new GradientDrawable();d.setColor(fill);d.setCornerRadius(r);if(stroke!=0)d.setStroke(2,stroke);return d;}
- TextView txt(String s,int sp,int c){TextView v=new TextView(this);v.setText(s);v.setTextSize(sp);v.setTextColor(c);v.setGravity(Gravity.CENTER);v.setPadding(10,7,10,7);return v;}
- Button button(String s){Button b=new Button(this);b.setText(s);b.setTextSize(15);b.setTextColor(Color.WHITE);b.setAllCaps(false);b.setBackground(box(PANEL,CYAN,18));b.setPadding(5,3,5,3);return b;}
- void base(){root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);root.setPadding(6,4,6,5);setContentView(root);
-  LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);TextView brand=txt("خانه ریمپ   SMART OBD",18,Color.WHITE);brand.setGravity(Gravity.RIGHT);brand.setTypeface(null,Typeface.BOLD);head.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
-  modeChip=txt(demo?"● دمو":"● واقعی",15,demo?CYAN:GREEN);modeChip.setBackground(box(PANEL,demo?CYAN:GREEN,24));head.addView(modeChip);root.addView(head);
-  status=txt(demo?"● DEMO  •  ESP32_OBD":"● BLE  •  آماده اتصال ESP32-C3",12,demo?AMBER:GREEN);status.setGravity(Gravity.RIGHT);root.addView(status);
-  body=new LinearLayout(this);root.addView(body,new LinearLayout.LayoutParams(-1,0,1));
- }
- void render(String page){
-  if(page.equals("خانه")){
-    root=new LinearLayout(this);root.setBackgroundColor(BG);root.setPadding(0,0,0,0);setContentView(root);
-    body=root;dashboard(getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE);return;
-  }
-  base();if(page.equals("دیاگ"))diag();else if(page.equals("داده زنده"))live();else if(page.equals("اتصال"))connectPage();else settingsPage();nav();
-}
- void nav(){LinearLayout n=new LinearLayout(this);String[] a={"⌂ خانه","⚙ ECU","▤ گزارش","⚠ خطا","▥ تنظیمات"};for(String s:a){Button b=button(s);b.setOnClickListener(v->{if(s.contains("خانه"))render("خانه");else if(s.contains("خطا"))render("دیاگ");else if(s.contains("تنظیمات"))render("تنظیمات");else render("داده زنده");});n.addView(b,new LinearLayout.LayoutParams(0,55,1));}root.addView(n);}
- LinearLayout panel(){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setGravity(Gravity.CENTER);p.setPadding(8,8,8,8);p.setBackground(box(PANEL,Color.rgb(24,52,75),24));return p;}
- void dashboard(boolean land){
-  body.setOrientation(LinearLayout.VERTICAL);
-  body.removeAllViews();
-  body.addView(new ClusterView(this),new LinearLayout.LayoutParams(-1,-1));
- }
- TextView stat(LinearLayout row,String icon,String name,String value,int color){LinearLayout p=panel();p.addView(txt(icon,21,color));p.addView(txt(name,12,MUTED));TextView v=txt(value,18,color);v.setTypeface(null,Typeface.BOLD);p.addView(v);row.addView(p,new LinearLayout.LayoutParams(0,-1,1));return v;}
- class ClusterView extends View{
-  Paint p=new Paint(Paint.ANTI_ALIAS_FLAG); RectF r=new RectF(); Random rnd=new Random(4);
-  ClusterView(Context x){super(x);setLayerType(View.LAYER_TYPE_SOFTWARE,null);setOnClickListener(v->{});}
-  void tx(Canvas c,String s,float x,float y,float z,int col,Paint.Align al,boolean bold){p.setStyle(Paint.Style.FILL);p.setColor(col);p.setTextSize(z);p.setTextAlign(al);p.setTypeface(bold?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);p.clearShadowLayer();c.drawText(s,x,y,p);}
-  void rr(Canvas c,float l,float t,float x,float y,float rad,int fill,int stroke){p.setStyle(Paint.Style.FILL);p.setColor(fill);p.clearShadowLayer();c.drawRoundRect(l,t,x,y,rad,rad,p);if(stroke!=0){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);p.setColor(stroke);c.drawRoundRect(l,t,x,y,rad,rad,p);}}
-  void glowLine(Canvas c,float x1,float y1,float x2,float y2,int col,float sw){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(sw);p.setStrokeCap(Paint.Cap.ROUND);p.setColor(col);p.setShadowLayer(sw*2,0,0,col);c.drawLine(x1,y1,x2,y2,p);p.clearShadowLayer();}
-  void city(Canvas c,float l,float t,float x,float y){p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(4,15,28));c.drawRect(l,t,x,y,p);for(int i=0;i<22;i++){float bw=(x-l)/22f*.75f,bx=l+i*(x-l)/22f,bh=(25+(i*37)%85);p.setColor(Color.rgb(8,26,45));c.drawRect(bx,y-bh,bx+bw,y,p);p.setColor(i%3==0?Color.rgb(0,110,170):Color.rgb(18,55,76));for(int q=0;q<4;q++)c.drawRect(bx+4,y-bh+8+q*15,bx+7,y-bh+11+q*15,p);}p.setColor(Color.rgb(0,72,120));c.drawRect(l,y-2,x,y,p);}
-  void gauge(Canvas c,float cx,float cy,float rad,float val,boolean rpmg){
-    p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(1,8,15));p.setShadowLayer(25,0,0,Color.rgb(0,75,130));c.drawCircle(cx,cy,rad,p);p.clearShadowLayer();
-    p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(rad*.065f);r.set(cx-rad*.90f,cy-rad*.90f,cx+rad*.90f,cy+rad*.90f);p.setColor(Color.rgb(10,35,58));c.drawArc(r,140,260,false,p);
-    p.setShadowLayer(16,0,0,CYAN);p.setColor(CYAN);c.drawArc(r,140,Math.max(8,215*Math.min(1,val)),false,p);p.clearShadowLayer();p.setShadowLayer(14,0,0,RED);p.setColor(RED);c.drawArc(r,350,50,false,p);p.clearShadowLayer();
-    int max=rpmg?8:240,step=rpmg?1:30;p.setStrokeWidth(1.8f);
-    for(int v=0;v<=max;v+=step){float q=(float)v/max,an=(float)Math.toRadians(140+260*q);float x1=(float)(cx+Math.cos(an)*rad*.70),y1=(float)(cy+Math.sin(an)*rad*.70),x2=(float)(cx+Math.cos(an)*rad*.82),y2=(float)(cy+Math.sin(an)*rad*.82);p.setColor(Color.WHITE);c.drawLine(x1,y1,x2,y2,p);tx(c,""+v,(float)(cx+Math.cos(an)*rad*.57),(float)(cy+Math.sin(an)*rad*.57)+4,rad*.085f,Color.WHITE,Paint.Align.CENTER,false);}
-    tx(c,rpmg?""+rpm:""+speed,cx,cy+rad*.09f,rad*.31f,Color.WHITE,Paint.Align.CENTER,true);tx(c,rpmg?"RPM  x1000":"km/h",cx,cy+rad*.33f,rad*.105f,MUTED,Paint.Align.CENTER,true);
-  }
-  void car(Canvas c,float cx,float top,float s){
-    p.setStyle(Paint.Style.FILL);p.setShadowLayer(30,0,10,Color.rgb(0,95,210));p.setColor(Color.rgb(8,32,62));
-    Path b=new Path();b.moveTo(cx-82*s,top+69*s);b.quadTo(cx-72*s,top+39*s,cx-47*s,top+27*s);b.lineTo(cx-31*s,top+7*s);b.quadTo(cx,top-7*s,cx+31*s,top+7*s);b.lineTo(cx+47*s,top+27*s);b.quadTo(cx+72*s,top+39*s,cx+82*s,top+69*s);b.lineTo(cx+75*s,top+94*s);b.quadTo(cx,top+108*s,cx-75*s,top+94*s);b.close();c.drawPath(b,p);p.clearShadowLayer();
-    LinearGradient lg=new LinearGradient(cx-70*s,top,cx+70*s,top+100*s,Color.rgb(20,78,135),Color.rgb(1,10,22),Shader.TileMode.CLAMP);p.setShader(lg);c.drawPath(b,p);p.setShader(null);
-    p.setColor(Color.rgb(1,8,16));Path glass=new Path();glass.moveTo(cx-43*s,top+29*s);glass.lineTo(cx-27*s,top+9*s);glass.quadTo(cx,top+1*s,cx+27*s,top+9*s);glass.lineTo(cx+43*s,top+29*s);glass.close();c.drawPath(glass,p);
-    p.setColor(Color.rgb(0,205,255));p.setShadowLayer(18,0,0,CYAN);c.drawRoundRect(cx-69*s,top+48*s,cx-31*s,top+61*s,7*s,7*s,p);c.drawRoundRect(cx+31*s,top+48*s,cx+69*s,top+61*s,7*s,7*s,p);p.clearShadowLayer();
-    p.setColor(Color.rgb(0,5,10));c.drawRoundRect(cx-47*s,top+63*s,cx+47*s,top+86*s,8*s,8*s,p);p.setColor(Color.rgb(75,112,140));for(int i=-36;i<=36;i+=12)c.drawRoundRect(cx+i*s-2*s,top+66*s,cx+i*s+2*s,top+83*s,2*s,2*s,p);
-    p.setColor(Color.rgb(220,230,238));c.drawRoundRect(cx-25*s,top+87*s,cx+25*s,top+99*s,2*s,2*s,p);tx(c,"خانه ریمپ",cx,top+96*s,7*s,Color.rgb(7,22,36),Paint.Align.CENTER,true);
-    p.setColor(Color.rgb(1,5,9));c.drawRoundRect(cx-82*s,top+76*s,cx-64*s,top+105*s,7*s,7*s,p);c.drawRoundRect(cx+64*s,top+76*s,cx+82*s,top+105*s,7*s,7*s,p);
-  }
-  void stat(Canvas c,float l,float t,float x,float y,String ico,String name,String val,int col){rr(c,l,t,x,y,12,Color.rgb(5,22,35),Color.rgb(18,61,92));tx(c,ico,l+14,t+28,18,col,Paint.Align.LEFT,true);tx(c,name,x-10,t+22,11,MUTED,Paint.Align.RIGHT,false);tx(c,val,x-10,y-12,17,col,Paint.Align.RIGHT,true);}
-  void tile(Canvas c,float l,float t,float x,float y,String ico,String name,int col){rr(c,l,t,x,y,12,Color.rgb(4,19,32),Color.rgb(18,60,90));tx(c,ico,(l+x)/2,t+(y-t)*.42f,24,col,Paint.Align.CENTER,true);tx(c,name,(l+x)/2,y-12,12,Color.WHITE,Paint.Align.CENTER,true);}
-  protected void onDraw(Canvas c){super.onDraw(c);float w=getWidth(),h=getHeight();boolean land=w>h;c.drawColor(BG);
-   if(!land){
-    // Premium portrait cockpit: dense, readable and fills the useful screen.
-    float header=h*.052f; rr(c,8,7,w-8,header,16,Color.rgb(3,18,31),Color.rgb(12,65,98));
-    tx(c,"☰",27,header*.68f,25,Color.WHITE,Paint.Align.CENTER,true); tx(c,"خانه ریمپ",w*.50f,header*.42f,21,Color.WHITE,Paint.Align.CENTER,true); tx(c,"SMART OBD",w*.50f,header*.77f,14,CYAN,Paint.Align.CENTER,true);
-    rr(c,w-145,12,w-14,header-6,12,Color.rgb(4,27,44),CYAN); tx(c,"● ESP32_OBD",w-80,header*.42f,11,Color.WHITE,Paint.Align.CENTER,true); tx(c,demo?"DEMO":"LIVE",w-80,header*.72f,10,demo?AMBER:GREEN,Paint.Align.CENTER,true);
+    final int BG=Color.rgb(1,14,24), CARD=Color.rgb(9,34,52), CARD2=Color.rgb(10,39,58);
+    final int CYAN=Color.rgb(0,211,230), CYAN2=Color.rgb(0,157,184), RED=Color.rgb(255,74,96);
+    final int GREEN=Color.rgb(48,220,150), AMBER=Color.rgb(255,184,60), TEXT=Color.rgb(238,246,251);
+    final int MUTED=Color.rgb(132,156,173), LINE=Color.rgb(18,70,88);
 
-    float gy=h*.178f,rad=Math.min(w*.205f,h*.115f); gauge(c,w*.255f,gy,rad,Math.min(1,rpm/8000f),true); gauge(c,w*.745f,gy,rad,Math.min(1,speed/240f),false);
-    tx(c,"SPORT",w*.5f,h*.135f,12,MUTED,Paint.Align.CENTER,true); tx(c,"D",w*.5f,h*.185f,42,Color.WHITE,Paint.Align.CENTER,true); tx(c,"ECO",w*.5f,h*.212f,11,GREEN,Paint.Align.CENTER,true);
+    LinearLayout root, content, bottomNav;
+    TextView connectionPill, heroState, heroDevice, ecuState, ecuDetail, serialState;
+    TextView rpmVal, speedVal, ectVal, fuelVal, voltVal, coolantVal, dtcLog;
+    Switch demoSwitch, voiceSwitch;
+    TextToSpeech tts;
+    Handler h = new Handler(Looper.getMainLooper());
 
-    float sceneTop=h*.285f,sceneBot=h*.455f;
-    LinearGradient sky=new LinearGradient(0,sceneTop,0,sceneBot,Color.rgb(3,22,43),Color.rgb(1,7,14),Shader.TileMode.CLAMP);p.setShader(sky);p.setStyle(Paint.Style.FILL);c.drawRect(0,sceneTop,w,sceneBot,p);p.setShader(null); city(c,0,sceneTop,w,sceneBot);
-    Path road=new Path();road.moveTo(w*.04f,sceneBot);road.lineTo(w*.42f,sceneTop+h*.055f);road.lineTo(w*.58f,sceneTop+h*.055f);road.lineTo(w*.96f,sceneBot);road.close();p.setColor(Color.rgb(5,18,29));c.drawPath(road,p);
-    glowLine(c,w*.45f,sceneBot,w*.492f,sceneTop+h*.08f,CYAN,2); glowLine(c,w*.55f,sceneBot,w*.508f,sceneTop+h*.08f,CYAN,2); car(c,w/2,sceneTop+h*.016f,Math.max(1.45f,w/445f));
+    BluetoothGatt gatt;
+    BluetoothGattCharacteristic cmdCh, dataCh;
+    BluetoothLeScanner scanner;
+    ScanCallback scanCallback;
+    boolean bleConnected=false, serialVerified=false, demo=false, alive=true;
+    String page="connect", pendingSerial="", deviceSerial="", protocol="NONE", lastDeviceName="SMART OBD";
 
-    float sy=h*.466f,cw=(w-35)/4f,ch=h*.086f;
-    stat(c,7,sy,7+cw,sy+ch,"T","دمای آب",temp+" °C",RED); stat(c,14+cw,sy,14+2*cw,sy+ch,"F","سوخت",String.format(Locale.US,"%.0f %%",fuel),AMBER); stat(c,21+2*cw,sy,21+3*cw,sy+ch,"V","باتری",String.format(Locale.US,"%.1f V",batt),GREEN); stat(c,28+3*cw,sy,w-7,sy+ch,"P","سطح آب",coolantState,coolantState.equals("کمبود آب")?RED:GREEN);
+    int rpm=0, speed=0, ect=0;
+    float fuel=0, volt=0;
+    String coolant="--";
 
-    float sy2=sy+ch+7, cw2=(w-28)/3f, ch2=h*.072f;
-    stat(c,7,sy2,7+cw2,sy2+ch2,"A","فشار مانیفولد","35 kPa",CYAN); stat(c,14+cw2,sy2,14+2*cw2,sy2+ch2,"L","مصرف لحظه‌ای","7.2 L/100",AMBER); stat(c,21+2*cw2,sy2,w-7,sy2+ch2,"I","دمای ورودی","32 °C",Color.WHITE);
+    SharedPreferences prefs;
 
-    float ey=sy2+ch2+7; rr(c,7,ey,w-7,ey+h*.047f,14,Color.rgb(4,25,37),Color.rgb(24,105,94)); tx(c,"● موتور سالم",20,ey+h*.029f,13,GREEN,Paint.Align.LEFT,true); tx(c,"OBD-II  •  "+protocol,w-18,ey+h*.029f,11,Color.WHITE,Paint.Align.RIGHT,true);
-
-    float ty=ey+h*.057f,th=h*.075f,tw=(w-30)/4f; tile(c,6,ty,6+tw,ty+th,"ECU","دیاگ",BLUE); tile(c,12+tw,ty,12+2*tw,ty+th,"▥","داده زنده",AMBER); tile(c,18+2*tw,ty,18+3*tw,ty+th,"!","DTC",RED); tile(c,24+3*tw,ty,w-6,ty+th,"✓","تست عملگر",Color.rgb(160,80,255));
-
-    float iy=ty+th+8,ih=h*.066f,iw=(w-42)/6f; String[] ic={"A/C","فن","چراغ","ABS","AIR","ENG"}; int[] cc={CYAN,GREEN,BLUE,AMBER,RED,GREEN}; for(int i=0;i<6;i++){float x=6+i*(iw+6);rr(c,x,iy,x+iw,iy+ih,11,Color.rgb(4,22,34),Color.rgb(18,62,82));tx(c,ic[i],x+iw/2,iy+ih*.58f,13,cc[i],Paint.Align.CENTER,true);}
-
-    float ny=h-h*.075f; rr(c,0,ny,w,h,0,Color.rgb(2,12,22),0); glowLine(c,0,ny,w,ny,Color.rgb(0,90,145),1); String[] n={"⌂\\nخانه","▣\\nECU","▥\\nگزارش","⚙\\nتنظیمات"}; for(int i=0;i<4;i++){float cx=w*(i+.5f)/4;tx(c,n[i].split("\\\\n")[0],cx,ny+h*.028f,22,i==0?CYAN:MUTED,Paint.Align.CENTER,true);tx(c,n[i].split("\\\\n")[1],cx,ny+h*.055f,11,i==0?Color.WHITE:MUTED,Paint.Align.CENTER,false);}
-   }else{
-    float side=170;rr(c,0,0,side,h,0,Color.rgb(3,17,29),Color.rgb(16,56,83));tx(c,"خانه ریمپ",side/2,24,17,Color.WHITE,Paint.Align.CENTER,true);tx(c,"SMART OBD",side/2,43,12,CYAN,Paint.Align.CENTER,true);String[] menu={"⌂ داشبورد","▥ داده زنده","⚠ کد خطا","⚙ تست عملکرد","▣ تحلیل ECU","▤ گزارش","⚙ تنظیمات"};for(int i=0;i<menu.length;i++){float yy=55+i*38;rr(c,7,yy,side-7,yy+31,8,i==0?Color.rgb(0,67,120):Color.rgb(5,25,40),i==0?CYAN:Color.rgb(20,53,76));tx(c,menu[i],side-14,yy+21,12,Color.WHITE,Paint.Align.RIGHT,i==0);}
-    float x0=side+7,mw=w-side-14;rr(c,x0,6,w-7,40,9,Color.rgb(5,23,37),Color.rgb(20,60,86));tx(c,"● ESP32_OBD     "+protocol+"     "+(bleConnected?"BLE LIVE":"آماده"),x0+mw/2,28,12,GREEN,Paint.Align.CENTER,true);
-    float gy=h*.38f,rad=Math.min(h*.27f,mw*.19f);city(c,x0,45,w-7,h*.66f);gauge(c,x0+mw*.24f,gy,rad,Math.min(1,rpm/8000f),true);gauge(c,x0+mw*.76f,gy,rad,Math.min(1,speed/240f),false);car(c,x0+mw*.5f,gy-rad*.18f,.95f);tx(c,"D",x0+mw*.5f,gy-rad*.48f,22,Color.WHITE,Paint.Align.CENTER,true);
-    float sy=h*.68f,g=5,cw=(mw-3*g)/4;stat(c,x0,sy,x0+cw,h-7,"T","دمای آب",temp+" °C",RED);stat(c,x0+cw+g,sy,x0+2*cw+g,h-7,"F","سوخت","48 %",AMBER);stat(c,x0+2*(cw+g),sy,x0+3*cw+2*g,h-7,"V","باتری","13.8 V",GREEN);stat(c,x0+3*(cw+g),sy,w-7,h-7,"P","سطح آب","مناسب",GREEN);
-   }
-  }
-  public boolean onTouchEvent(android.view.MotionEvent e){if(e.getAction()!=MotionEvent.ACTION_UP)return true;float y=e.getY(),x=e.getX(),w=getWidth(),h=getHeight();if(w<=h&&y>h-80){if(x>w*.75f)render("تنظیمات");else if(x>w*.5f)render("داده زنده");else if(x>w*.25f)render("اتصال");return true;}if(w<=h&&y>520&&y<650){if(x>w*.5f)render("دیاگ");else render("داده زنده");return true;}return true;}
- } class GaugeView extends View{boolean r;Paint p=new Paint(1);GaugeView(Context c,boolean rpmGauge){super(c);r=rpmGauge;setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
-  protected void onDraw(Canvas c){super.onDraw(c);float w=getWidth(),hh=getHeight(),rad=Math.min(w,hh)*.40f,cx=w/2,cy=hh*.55f;p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(13);p.setStrokeCap(Paint.Cap.ROUND);p.setColor(Color.rgb(17,42,62));c.drawArc(cx-rad,cy-rad,cx+rad,cy+rad,140,260,false,p);p.setShadowLayer(18,0,0,CYAN);p.setColor(CYAN);float val=r?rpm/8000f:speed/240f;c.drawArc(cx-rad,cy-rad,cx+rad,cy+rad,140,260*Math.max(.02f,val),false,p);p.clearShadowLayer();p.setColor(RED);c.drawArc(cx-rad,cy-rad,cx+rad,cy+rad,350,50,false,p);p.setStyle(Paint.Style.FILL);p.setTextAlign(Paint.Align.CENTER);p.setTypeface(Typeface.DEFAULT_BOLD);p.setColor(Color.WHITE);p.setTextSize(rad*.43f);c.drawText(r?String.valueOf(rpm):String.valueOf(speed),cx,cy+rad*.12f,p);p.setTextSize(rad*.18f);p.setColor(MUTED);c.drawText(r?"RPM":"km/h",cx,cy+rad*.48f,p);p.setTextSize(rad*.15f);p.setColor(Color.WHITE);for(int i=0;i<=8;i++){double a=Math.toRadians(140+i*32.5);float x=(float)(cx+Math.cos(a)*rad*.72),y=(float)(cy+Math.sin(a)*rad*.72);c.drawText(r?""+i:""+i*30,x,y,p);}}
- }
- void diag(){body.setOrientation(LinearLayout.VERTICAL);body.addView(txt("دیاگ و کدهای خطا (DTC)",26,Color.WHITE));Button read=button("خواندن خطاهای ECU");Button clear=button("پاک کردن خطاها");logText=txt("در حالت واقعی پس از اتصال، پاسخ ECU اینجا نمایش داده می‌شود.",17,MUTED);read.setOnClickListener(v->send("READ_DTC"));clear.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("پاک کردن DTC").setMessage("پاک‌کردن خطا ممکن است Freeze Frame و Readiness را نیز پاک کند. ادامه؟").setNegativeButton("خیر",null).setPositiveButton("بله",(d,w)->send("CLEAR_DTC")).show());body.addView(read);body.addView(clear);body.addView(logText,new LinearLayout.LayoutParams(-1,0,1));}
- void live(){body.setOrientation(LinearLayout.VERTICAL);body.addView(txt("داده‌های زنده ECU",26,Color.WHITE));String[] x={"RPM","سرعت خودرو","دمای آب","سطح مخزن","وضعیت پروتکل","ولتاژ/سوخت در صورت پشتیبانی ECU"};for(String s:x){LinearLayout p=panel();p.addView(txt(s,18,MUTED));p.addView(txt("دریافت زنده / وابسته به پشتیبانی ECU",19,CYAN));body.addView(p,new LinearLayout.LayoutParams(-1,0,1));}}
- void connectPage(){
-  body.setOrientation(LinearLayout.VERTICAL);
-  body.addView(txt("اتصال به SMART OBD",26,Color.WHITE));
-  body.addView(txt(demo?"حالت دمو فعال است؛ برای اتصال واقعی، حالت واقعی را فعال کنید.":"BLE 5 • بدون Pair کردن • مخصوص ESP32-C3",16,demo?AMBER:GREEN));
-  Button mode=button(demo?"فعال کردن حالت واقعی":"بازگشت به حالت دمو");
-  mode.setOnClickListener(v->{demo=!demo;if(demo)disconnect();render("اتصال");});
-  body.addView(mode);
-  Button con=button(bleConnected?"قطع اتصال BLE":"جستجو و اتصال به ESP32-C3");
-  con.setEnabled(!demo);
-  con.setOnClickListener(v->{if(bleConnected){disconnect();render("اتصال");}else choose();});
-  body.addView(con);
-  Button redetect=button("تشخیص دوباره پروتکل خودرو");
-  redetect.setEnabled(!demo&&bleConnected);
-  redetect.setOnClickListener(v->send("REDETECT"));
-  body.addView(redetect);
-  body.addView(txt("نام دستگاه: KhanehRemap-OBD-C3\nCAN: تشخیص خودکار 500/250 kbps • K-Line: ISO9141/KWP2000",15,MUTED));
- }
- void settingsPage(){body.setOrientation(LinearLayout.VERTICAL);body.addView(txt("تنظیمات",27,Color.WHITE));Button sp=button("تست هشدار صوتی کمبود آب");sp.setOnClickListener(v->speak("هشدار، سطح آب خنک کننده پایین است"));body.addView(sp);Button bt=button("تنظیمات بلوتوث گوشی");bt.setOnClickListener(v->startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));body.addView(bt);body.addView(txt("BLE مخصوص ESP32-C3 • CAN 500/250 خودکار • K-Line • DTC • هشدار صوتی سطح آب\nچرخش صفحه: خودکار • عمودی و افقی رسپانسیو",16,MUTED));}
- void demoLoop(){h.postDelayed(new Runnable(){public void run(){if(!alive)return;if(demo){rpm+=up?180:-160;if(rpm>5200)up=false;if(rpm<850)up=true;speed=Math.max(0,(rpm-600)/34);temp=88+(rpm/900)%5;apply("RPM:"+rpm);apply("SPEED:"+speed);apply("ECT:"+temp);apply("COOLANT:OK");}invalidateGauges(root);h.postDelayed(this,500);}},500);}
- void invalidateGauges(View v){if(v instanceof GaugeView || v instanceof ClusterView)v.invalidate();if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)invalidateGauges(g.getChildAt(i));}}
- void choose(){
-  askBt();
-  BluetoothManager bm=(BluetoothManager)getSystemService(BLUETOOTH_SERVICE);
-  BluetoothAdapter a=bm==null?null:bm.getAdapter();
-  if(a==null){toast("بلوتوث در دسترس نیست");return;}
-  if(Build.VERSION.SDK_INT>=31&&checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)!=PackageManager.PERMISSION_GRANTED){askBt();return;}
-  if(!a.isEnabled()){startActivity(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE));return;}
-  bleScanner=a.getBluetoothLeScanner();
-  if(bleScanner==null){toast("BLE Scanner در دسترس نیست");return;}
-  ArrayList<BluetoothDevice> devices=new ArrayList<>(); ArrayList<String> names=new ArrayList<>();
-  if(status!=null){status.setText("در حال جستجوی SMART OBD…");status.setTextColor(AMBER);}
-  scanCallback=new ScanCallback(){
-   public void onScanResult(int callbackType,ScanResult result){
-    BluetoothDevice d=result.getDevice(); if(d==null)return;
-    String name=null; try{name=d.getName();}catch(Exception ignored){}
-    boolean ours=name!=null&&(name.contains("KhanehRemap")||name.contains("OBD-C3"));
-    if(!ours&&result.getScanRecord()!=null&&result.getScanRecord().getServiceUuids()!=null){
-     for(ParcelUuid u:result.getScanRecord().getServiceUuids())if(BLE_SERVICE.equals(u.getUuid()))ours=true;
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b);
+        getWindow().setStatusBarColor(BG);
+        getWindow().setNavigationBarColor(BG);
+        getWindow().getDecorView().setSystemUiVisibility(0);
+        prefs=getSharedPreferences("smartobd",MODE_PRIVATE);
+        pendingSerial=prefs.getString("serial","");
+        tts=new TextToSpeech(this,s->{ if(s==TextToSpeech.SUCCESS) tts.setLanguage(new Locale("fa","IR")); });
+        requestBluetoothPermissions();
+        render("connect");
+        demoLoop();
     }
-    if(ours&&!devices.contains(d)){devices.add(d);names.add((name==null?"SMART OBD":name)+"\n"+d.getAddress());}
-   }
-   public void onScanFailed(int errorCode){runOnUiThread(()->{toast("خطای جستجوی BLE: "+errorCode);if(status!=null)status.setText("جستجو ناموفق");});}
-  };
-  bleScanner.startScan(scanCallback);
-  h.postDelayed(()->{
-   try{bleScanner.stopScan(scanCallback);}catch(Exception ignored){}
-   if(devices.isEmpty()){if(status!=null)status.setText("SMART OBD پیدا نشد");toast("دستگاه پیدا نشد؛ ESP32-C3 روشن و نزدیک گوشی باشد.");return;}
-   new AlertDialog.Builder(this).setTitle("انتخاب SMART OBD").setItems(names.toArray(new String[0]),(dlg,i)->connect(devices.get(i))).show();
-  },5000);
- }
- void connect(BluetoothDevice d){
-  if(status!=null){status.setText("در حال اتصال BLE…");status.setTextColor(AMBER);}
-  try{
-   if(Build.VERSION.SDK_INT>=31&&checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)!=PackageManager.PERMISSION_GRANTED){askBt();return;}
-   gatt=d.connectGatt(this,false,new BluetoothGattCallback(){
-    @Override public void onConnectionStateChange(BluetoothGatt g,int st,int ns){
-     if(ns==BluetoothProfile.STATE_CONNECTED){
-      bleConnected=true; try{g.requestMtu(185);}catch(Exception ignored){}
-      g.discoverServices();
-      runOnUiThread(()->{if(status!=null){status.setText("● BLE متصل • در حال آماده‌سازی");status.setTextColor(GREEN);}});
-     }else if(ns==BluetoothProfile.STATE_DISCONNECTED){
-      bleConnected=false;cmdCh=null;dataCh=null;
-      runOnUiThread(()->{if(status!=null){status.setText("ارتباط BLE قطع شد");status.setTextColor(RED);}invalidateGauges(root);});
-     }
+
+    int dp(float n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
+    GradientDrawable bg(int fill,int stroke,float radius){
+        GradientDrawable d=new GradientDrawable();
+        d.setColor(fill); d.setCornerRadius(dp(radius));
+        if(stroke!=0)d.setStroke(dp(1),stroke);
+        return d;
     }
-    @Override public void onServicesDiscovered(BluetoothGatt g,int st){
-     BluetoothGattService svc=g.getService(BLE_SERVICE);
-     if(svc==null){runOnUiThread(()->toast("سرویس SMART OBD روی دستگاه پیدا نشد"));return;}
-     cmdCh=svc.getCharacteristic(BLE_CMD); dataCh=svc.getCharacteristic(BLE_DATA);
-     if(dataCh!=null){
-      g.setCharacteristicNotification(dataCh,true);
-      BluetoothGattDescriptor desc=dataCh.getDescriptor(CCCD);
-      if(desc!=null){desc.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);g.writeDescriptor(desc);}
-     }
-     runOnUiThread(()->{if(status!=null){status.setText("● LIVE • متصل به "+safeName(d));status.setTextColor(GREEN);}toast("SMART OBD متصل شد");});
-     h.postDelayed(()->send("STATUS"),450);
+    TextView text(String s,float sp,int color){
+        TextView v=new TextView(this);
+        v.setText(s); v.setTextSize(sp); v.setTextColor(color);
+        v.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+        v.setTextDirection(View.TEXT_DIRECTION_RTL);
+        v.setPadding(dp(8),dp(6),dp(8),dp(6));
+        return v;
     }
-    @Override public void onCharacteristicChanged(BluetoothGatt g,BluetoothGattCharacteristic ch){
-     if(BLE_DATA.equals(ch.getUuid())){
-      String line=new String(ch.getValue(),java.nio.charset.StandardCharsets.UTF_8).trim();
-      runOnUiThread(()->apply(line));
-     }
+    TextView title(String s,float sp){
+        TextView v=text(s,sp,TEXT);
+        v.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
+        return v;
     }
-   },BluetoothDevice.TRANSPORT_LE);
-  }catch(Exception e){toast("اتصال ناموفق: "+e.getMessage());}
- }
- String safeName(BluetoothDevice d){try{String n=d.getName();return n==null?"ESP32-C3":n;}catch(Exception e){return "ESP32-C3";}}
- void send(String s){
-  if(demo){if(logText!=null)logText.setText("دمو: "+s);return;}
-  if(!bleConnected||gatt==null||cmdCh==null){toast("ابتدا به SMART OBD متصل شوید");return;}
-  try{
-   cmdCh.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
-   cmdCh.setValue(s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-   if(!gatt.writeCharacteristic(cmdCh))toast("ارسال فرمان ناموفق بود");
-  }catch(Exception e){toast("ارسال ناموفق");}
- }
- void apply(String s){
-  try{
-   if(s==null)return; s=s.trim();
-   if(s.startsWith("RPM:"))rpm=Integer.parseInt(s.substring(4).trim());
-   else if(s.startsWith("SPEED:"))speed=Integer.parseInt(s.substring(6).trim());
-   else if(s.startsWith("ECT:")){temp=Integer.parseInt(s.substring(4).trim());if(tempText!=null)tempText.setText(temp+" °C");}
-   else if(s.startsWith("FUEL:")){fuel=Float.parseFloat(s.substring(5).trim());if(fuelText!=null)fuelText.setText(String.format(Locale.US,"%.0f %%",fuel));}
-   else if(s.startsWith("VOLT:")){batt=Float.parseFloat(s.substring(5).trim());if(battText!=null)battText.setText(String.format(Locale.US,"%.1f V",batt));}
-   else if(s.equals("COOLANT:OK")){coolantState="مناسب";if(coolText!=null){coolText.setText("مناسب");coolText.setTextColor(GREEN);}}
-   else if(s.startsWith("COOLANT:CHECK")){coolantState="در حال بررسی";if(coolText!=null){coolText.setText("بررسی");coolText.setTextColor(AMBER);}}
-   else if(s.startsWith("ALARM:LOW_COOLANT")){coolantState="کمبود آب";if(coolText!=null){coolText.setText("کمبود آب");coolText.setTextColor(RED);}speak("هشدار، سطح آب خنک کننده پایین است");}
-   else if(s.startsWith("ECU:CONNECTED")){
-    protocol=s.replace("ECU:CONNECTED,","");
-    if(ecuText!=null)ecuText.setText("متصل • "+protocol);
-    if(status!=null){status.setText("● LIVE • "+protocol);status.setTextColor(GREEN);}
-   }
-   else if(s.startsWith("STATUS,")){
-    int p=s.indexOf("PROTO:"); if(p>=0){int e=s.indexOf(",",p);protocol=s.substring(p+6,e<0?s.length():e);}
-    if(logText!=null)logText.append("\n"+s);
-   }
-   else if(s.startsWith("DTC:")){
-    if(logText!=null){
-     if(s.equals("DTC:NONE"))logText.setText("هیچ کد خطای فعالی گزارش نشد.");
-     else logText.setText("نتیجه ECU:\n"+s.substring(4).replace(",","\n"));
+    LinearLayout card(){
+        LinearLayout c=new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setPadding(dp(18),dp(16),dp(18),dp(16));
+        c.setBackground(bg(CARD,0,22));
+        return c;
     }
-   }
-   else if(s.startsWith("CLEAR_DTC:")&&logText!=null)logText.setText(s.equals("CLEAR_DTC:SENT")?"فرمان پاک‌کردن خطا ارسال شد.":"پاک‌کردن خطا انجام نشد: "+s);
-   else if(logText!=null)logText.append("\n"+s);
-  }catch(Exception ignored){}
-  invalidateGauges(root);
- }
- void speak(String s){if(tts!=null)tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"alarm");}
- void disconnect(){
-  try{if(bleScanner!=null&&scanCallback!=null)bleScanner.stopScan(scanCallback);}catch(Exception ignored){}
-  try{if(gatt!=null){gatt.disconnect();gatt.close();}}catch(Exception ignored){}
-  gatt=null;cmdCh=null;dataCh=null;bleConnected=false;protocol="NONE";
- }
- void toast(String s){Toast.makeText(this,s==null?"خطا":s,Toast.LENGTH_SHORT).show();}
- @Override public void onConfigurationChanged(Configuration c){super.onConfigurationChanged(c);render("خانه");}
- @Override protected void onDestroy(){alive=false;disconnect();if(tts!=null){tts.stop();tts.shutdown();}super.onDestroy();}
+    Button outlineButton(String s){
+        Button b=new Button(this);
+        b.setText(s); b.setAllCaps(false); b.setTextSize(17); b.setTextColor(CYAN);
+        b.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        b.setBackground(bg(Color.TRANSPARENT,CYAN2,18));
+        b.setPadding(dp(10),0,dp(10),0);
+        return b;
+    }
+    Button solidButton(String s){
+        Button b=new Button(this);
+        b.setText(s); b.setAllCaps(false); b.setTextSize(16); b.setTextColor(Color.WHITE);
+        b.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        b.setBackground(bg(Color.rgb(0,125,150),0,18));
+        return b;
+    }
+
+    void render(String p){
+        page=p;
+        root=new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(BG);
+        root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        setContentView(root);
+
+        header();
+        ScrollView sc=new ScrollView(this);
+        sc.setFillViewport(true);
+        content=new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(16),dp(14),dp(16),dp(18));
+        sc.addView(content,new ScrollView.LayoutParams(-1,-2));
+        root.addView(sc,new LinearLayout.LayoutParams(-1,0,1));
+
+        if("connect".equals(p)) connectionPage();
+        else if("diag".equals(p)) diagPage();
+        else if("live".equals(p)) livePage();
+        else dashboardPage();
+
+        nav();
+    }
+
+    void header(){
+        LinearLayout hbox=new LinearLayout(this);
+        hbox.setOrientation(LinearLayout.VERTICAL);
+        hbox.setPadding(dp(20),dp(20),dp(20),dp(12));
+
+        LinearLayout top=new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+
+        connectionPill=text(serialVerified?"● OBD متصل":"● قطع OBD",14,serialVerified?GREEN:RED);
+        connectionPill.setGravity(Gravity.CENTER);
+        connectionPill.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        connectionPill.setBackground(bg(serialVerified?Color.rgb(15,53,48):Color.rgb(54,27,37),0,28));
+        top.addView(connectionPill,new LinearLayout.LayoutParams(dp(140),dp(48)));
+
+        LinearLayout brand=new LinearLayout(this);
+        brand.setOrientation(LinearLayout.VERTICAL);
+        brand.setGravity(Gravity.RIGHT);
+        TextView n=title("خانه ریمپ",25); n.setGravity(Gravity.RIGHT);
+        TextView sub=title("SMART OBD",14); sub.setTextColor(CYAN); sub.setGravity(Gravity.RIGHT);
+        brand.addView(n);brand.addView(sub);
+        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(0,-2,1);bp.setMargins(dp(12),0,dp(12),0);
+        top.addView(brand,bp);
+
+        HexLogo logo=new HexLogo(this);
+        top.addView(logo,new LinearLayout.LayoutParams(dp(62),dp(62)));
+
+        hbox.addView(top);
+        View line=new View(this);line.setBackgroundColor(Color.rgb(14,65,78));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(1));lp.setMargins(0,dp(18),0,0);
+        hbox.addView(line,lp);
+        root.addView(hbox);
+    }
+
+    void connectionPage(){
+        TextView t=title("اتصال و تنظیمات",28); t.setGravity(Gravity.RIGHT);content.addView(t);
+        TextView st=text("مدیریت ارتباط BLE، سریال دستگاه و تجربه رانندگی",14,MUTED);st.setGravity(Gravity.RIGHT);
+        LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,-2);sp.setMargins(0,0,0,dp(18));content.addView(st,sp);
+
+        LinearLayout hero=card();
+        hero.setPadding(dp(20),dp(20),dp(20),dp(18));
+
+        LinearLayout hr=new LinearLayout(this);hr.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout hi=new LinearLayout(this);hi.setOrientation(LinearLayout.VERTICAL);
+        heroState=title(serialVerified?"متصل و فعال":"بدون اتصال",27);heroState.setGravity(Gravity.RIGHT);
+        String shown=pendingSerial.isEmpty()?"سریال ثبت نشده":pendingSerial;
+        heroDevice=title(shown,15);heroDevice.setTextColor(serialVerified?GREEN:RED);heroDevice.setGravity(Gravity.RIGHT);
+        hi.addView(heroState);hi.addView(heroDevice);
+        hr.addView(hi,new LinearLayout.LayoutParams(0,-2,1));
+
+        TextView bolt=title("⌁",38);bolt.setGravity(Gravity.CENTER);bolt.setTextColor(serialVerified?GREEN:RED);
+        bolt.setBackground(bg(Color.rgb(39,40,62),0,44));
+        hr.addView(bolt,new LinearLayout.LayoutParams(dp(88),dp(88)));
+        hero.addView(hr);
+
+        serialState=text(serialVerified?"سریال دستگاه تأیید شده است":"برای شروع، سریال دستگاه را وارد و به ESP32-C3 متصل شوید",13,MUTED);
+        serialState.setGravity(Gravity.RIGHT);hero.addView(serialState);
+
+        Button connect=outlineButton(serialVerified?"قطع اتصال":"اتصال به OBD");
+        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(56));cp.setMargins(0,dp(12),0,0);
+        hero.addView(connect,cp);
+        connect.setOnClickListener(v->{ if(bleConnected) disconnect(); else beginActivation(); render("connect"); });
+
+        LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(-1,-2);hp.setMargins(0,0,0,dp(16));content.addView(hero,hp);
+
+        LinearLayout ecu=card();
+        TextView et=text("شناسایی خودکار ECU",16,MUTED);ecu.addView(et);
+        ecuState=title(serialVerified?(protocol.equals("NONE")?"در حال شناسایی…":"ECU متصل"):"هنوز شناسایی نشده",21);ecu.addView(ecuState);
+        ecuDetail=text(serialVerified?"تشخیص خودکار CAN 500/250 و K-Line":"تشخیص خودکار • OBD-II • بعد از تأیید سریال",13,CYAN);
+        ecu.addView(ecuDetail);
+        LinearLayout.LayoutParams ep=new LinearLayout.LayoutParams(-1,-2);ep.setMargins(0,0,0,dp(16));content.addView(ecu,ep);
+
+        LinearLayout demoCard=card();demoCard.setOrientation(LinearLayout.HORIZONTAL);demoCard.setGravity(Gravity.CENTER_VERTICAL);
+        demoSwitch=new Switch(this);demoSwitch.setChecked(demo);demoSwitch.setOnCheckedChangeListener((b,c)->{demo=c;if(demo){serialVerified=false;disconnect();}render("connect");});
+        demoCard.addView(demoSwitch,new LinearLayout.LayoutParams(dp(95),-2));
+        TextView dl=title("حالت دمو بدون خودرو",18);demoCard.addView(dl,new LinearLayout.LayoutParams(0,-2,1));
+        LinearLayout.LayoutParams dp1=new LinearLayout.LayoutParams(-1,-2);dp1.setMargins(0,0,0,dp(16));content.addView(demoCard,dp1);
+
+        LinearLayout voice=card();voice.setOrientation(LinearLayout.HORIZONTAL);voice.setGravity(Gravity.CENTER_VERTICAL);
+        voiceSwitch=new Switch(this);voiceSwitch.setChecked(prefs.getBoolean("voice",true));voiceSwitch.setOnCheckedChangeListener((b,c)->prefs.edit().putBoolean("voice",c).apply());
+        voice.addView(voiceSwitch,new LinearLayout.LayoutParams(dp(95),-2));
+        TextView vl=title("هشدار صوتی پارامترهای بحرانی",18);voice.addView(vl,new LinearLayout.LayoutParams(0,-2,1));
+        content.addView(voice);
+
+        TextView foot=text("نسخه حرفه‌ای 2.4  •  طراحی اختصاصی خانه ریمپ",12,Color.rgb(71,96,112));foot.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(-1,-2);fp.setMargins(0,dp(26),0,dp(12));content.addView(foot,fp);
+    }
+
+    void beginActivation(){
+        if(demo){toast("ابتدا حالت دمو را خاموش کنید");return;}
+        if(!hasBlePermissions()){requestBluetoothPermissions();return;}
+        if(pendingSerial==null||pendingSerial.trim().isEmpty()){
+            askSerialThenScan();
+        } else {
+            scanAndConnect();
+        }
+    }
+
+    void askSerialThenScan(){
+        final EditText in=new EditText(this);
+        in.setHint("مثال: KR-26-000001");
+        in.setSingleLine(true);
+        in.setTextColor(TEXT);in.setHintTextColor(MUTED);
+        in.setTextDirection(View.TEXT_DIRECTION_LTR);
+        in.setBackground(bg(Color.rgb(7,29,44),CYAN2,12));
+        in.setPadding(dp(14),dp(8),dp(14),dp(8));
+        LinearLayout wrap=new LinearLayout(this);wrap.setPadding(dp(18),0,dp(18),0);wrap.addView(in,new LinearLayout.LayoutParams(-1,dp(52)));
+        AlertDialog d=new AlertDialog.Builder(this)
+                .setTitle("سریال SMART OBD")
+                .setMessage("سریال روی لیبل دستگاه را وارد کنید. فعلاً فعال‌سازی فقط با سریال انجام می‌شود.")
+                .setView(wrap)
+                .setNegativeButton("انصراف",null)
+                .setPositiveButton("ادامه",null).create();
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            String s=in.getText().toString().trim().toUpperCase(Locale.US);
+            if(!validSerial(s)){in.setError("سریال معتبر نیست");return;}
+            pendingSerial=s;d.dismiss();scanAndConnect();
+        }));
+        d.show();
+    }
+
+    boolean validSerial(String s){return s!=null&&s.matches("[A-Z0-9_-]{8,32}");}
+
+    void scanAndConnect(){
+        BluetoothManager bm=(BluetoothManager)getSystemService(BLUETOOTH_SERVICE);
+        BluetoothAdapter a=bm==null?null:bm.getAdapter();
+        if(a==null){toast("بلوتوث این گوشی در دسترس نیست");return;}
+        if(!a.isEnabled()){startActivity(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE));return;}
+        scanner=a.getBluetoothLeScanner();
+        if(scanner==null){toast("BLE در دسترس نیست");return;}
+
+        if(heroState!=null)heroState.setText("در حال جستجو…");
+        if(serialState!=null)serialState.setText("ESP32-C3 روشن و نزدیک گوشی باشد");
+        final ArrayList<BluetoothDevice> found=new ArrayList<>();
+        final ArrayList<String> labels=new ArrayList<>();
+
+        scanCallback=new ScanCallback(){
+            @Override public void onScanResult(int type,ScanResult r){
+                BluetoothDevice d=r.getDevice();if(d==null)return;
+                String n=safeName(d);
+                boolean ours=n.toLowerCase(Locale.US).contains("khanehremap")||n.toLowerCase(Locale.US).contains("obd");
+                if(!ours&&r.getScanRecord()!=null&&r.getScanRecord().getServiceUuids()!=null){
+                    for(ParcelUuid u:r.getScanRecord().getServiceUuids())if(BLE_SERVICE.equals(u.getUuid())){ours=true;break;}
+                }
+                if(ours&&!found.contains(d)){found.add(d);labels.add(n+"\n"+d.getAddress());}
+            }
+            @Override public void onScanFailed(int e){runOnUiThread(()->{toast("خطای جستجوی BLE: "+e);render("connect");});}
+        };
+        scanner.startScan(scanCallback);
+        h.postDelayed(()->{
+            try{scanner.stopScan(scanCallback);}catch(Exception ignored){}
+            if(found.isEmpty()){toast("SMART OBD پیدا نشد");render("connect");return;}
+            if(found.size()==1){connectGatt(found.get(0));return;}
+            new AlertDialog.Builder(this).setTitle("انتخاب SMART OBD").setItems(labels.toArray(new String[0]),(d,i)->connectGatt(found.get(i))).show();
+        },4500);
+    }
+
+    void connectGatt(BluetoothDevice d){
+        lastDeviceName=safeName(d);
+        if(heroState!=null)heroState.setText("در حال اتصال…");
+        try{
+            gatt=d.connectGatt(this,false,gattCallback,BluetoothDevice.TRANSPORT_LE);
+        }catch(Exception e){toast("اتصال BLE ناموفق: "+e.getMessage());render("connect");}
+    }
+
+    final BluetoothGattCallback gattCallback=new BluetoothGattCallback(){
+        @Override public void onConnectionStateChange(BluetoothGatt g,int status,int newState){
+            if(newState==BluetoothProfile.STATE_CONNECTED){
+                bleConnected=true;
+                try{g.requestMtu(185);}catch(Exception ignored){}
+                g.discoverServices();
+                runOnUiThread(()->{if(connectionPill!=null){connectionPill.setText("● BLE متصل");connectionPill.setTextColor(AMBER);}});
+            }else if(newState==BluetoothProfile.STATE_DISCONNECTED){
+                bleConnected=false;serialVerified=false;cmdCh=null;dataCh=null;
+                runOnUiThread(()->render(page));
+            }
+        }
+        @Override public void onServicesDiscovered(BluetoothGatt g,int status){
+            BluetoothGattService s=g.getService(BLE_SERVICE);
+            if(s==null){runOnUiThread(()->{toast("سرویس SMART OBD روی ESP32 پیدا نشد");disconnect();});return;}
+            cmdCh=s.getCharacteristic(BLE_CMD); dataCh=s.getCharacteristic(BLE_DATA);
+            if(cmdCh==null||dataCh==null){runOnUiThread(()->{toast("Firmware دستگاه با اپ سازگار نیست");disconnect();});return;}
+            enableNotify(g,dataCh);
+            h.postDelayed(()->sendRaw("GET_SERIAL"),650);
+            runOnUiThread(()->{if(heroState!=null)heroState.setText("بررسی سریال…");});
+        }
+        @Override public void onCharacteristicChanged(BluetoothGatt g,BluetoothGattCharacteristic c){
+            handleBleValue(c.getValue());
+        }
+        @Override public void onCharacteristicChanged(BluetoothGatt g,BluetoothGattCharacteristic c,byte[] value){
+            handleBleValue(value);
+        }
+    };
+
+    void enableNotify(BluetoothGatt g,BluetoothGattCharacteristic c){
+        try{
+            g.setCharacteristicNotification(c,true);
+            BluetoothGattDescriptor d=c.getDescriptor(CCCD);
+            if(d!=null){
+                if(Build.VERSION.SDK_INT>=33)g.writeDescriptor(d,BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                else{d.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);g.writeDescriptor(d);}
+            }
+        }catch(Exception ignored){}
+    }
+
+    void handleBleValue(byte[] v){
+        String line=new String(v,StandardCharsets.UTF_8).trim();
+        runOnUiThread(()->applyLine(line));
+    }
+
+    void applyLine(String s){
+        if(s==null||s.isEmpty())return;
+        try{
+            if(s.startsWith("SERIAL:SET,")){deviceSerial=s.substring("SERIAL:SET,".length()).trim();verifySerial(deviceSerial);return;}
+            if(s.startsWith("SERIAL:")){
+                deviceSerial=s.substring(7).trim().toUpperCase(Locale.US);
+                if("UNSET".equals(deviceSerial)){
+                    if(validSerial(pendingSerial)){
+                        new AlertDialog.Builder(this)
+                                .setTitle("ثبت سریال روی دستگاه")
+                                .setMessage("این ESP32 هنوز سریال ندارد.\nسریال "+pendingSerial+" برای همیشه روی این دستگاه ثبت شود؟")
+                                .setNegativeButton("خیر",(d,w)->disconnect())
+                                .setPositiveButton("ثبت",(d,w)->sendRaw("SET_SERIAL:"+pendingSerial))
+                                .show();
+                    }else{toast("ESP32 بدون سریال است");disconnect();}
+                }else verifySerial(deviceSerial);
+                return;
+            }
+
+            if(!serialVerified)return;
+            if(s.startsWith("RPM:"))rpm=Integer.parseInt(s.substring(4).trim());
+            else if(s.startsWith("SPEED:"))speed=Integer.parseInt(s.substring(6).trim());
+            else if(s.startsWith("ECT:"))ect=Integer.parseInt(s.substring(4).trim());
+            else if(s.startsWith("FUEL:"))fuel=Float.parseFloat(s.substring(5).trim());
+            else if(s.startsWith("VOLT:"))volt=Float.parseFloat(s.substring(5).trim());
+            else if(s.equals("COOLANT:OK"))coolant="مناسب";
+            else if(s.startsWith("COOLANT:CHECK"))coolant="در حال بررسی";
+            else if(s.startsWith("ALARM:LOW_COOLANT")){coolant="کمبود آب";if(prefs.getBoolean("voice",true))speak("هشدار، سطح آب خنک کننده پایین است");}
+            else if(s.startsWith("ECU:CONNECTED")){protocol=s.replace("ECU:CONNECTED,","");}
+            else if(s.startsWith("DTC:")){if(dtcLog!=null)dtcLog.setText(s.equals("DTC:NONE")?"هیچ خطای فعالی گزارش نشد":s.substring(4).replace(",","\n"));}
+            else if(s.startsWith("CLEAR_DTC:")){if(dtcLog!=null)dtcLog.setText(s.equals("CLEAR_DTC:SENT")?"فرمان پاک‌کردن خطا ارسال شد":"پاک‌کردن خطا انجام نشد");}
+            updateVisibleData();
+        }catch(Exception ignored){}
+    }
+
+    void verifySerial(String actual){
+        String want=pendingSerial==null?"":pendingSerial.trim().toUpperCase(Locale.US);
+        if(want.equals(actual)){
+            serialVerified=true;
+            prefs.edit().putString("serial",actual).apply();
+            if(connectionPill!=null){connectionPill.setText("● OBD متصل");connectionPill.setTextColor(GREEN);}
+            toast("سریال تأیید شد • دستگاه فعال است");
+            sendRaw("STATUS");
+            h.postDelayed(()->sendRaw("REDETECT"),350);
+            render(page);
+        }else{
+            serialVerified=false;
+            new AlertDialog.Builder(this)
+                    .setTitle("عدم تطابق سریال")
+                    .setMessage("سریال واردشده:\n"+want+"\n\nسریال ESP32:\n"+actual+"\n\nاین دستگاه اجازه فعالیت با این سریال را ندارد.")
+                    .setPositiveButton("تغییر سریال",(d,w)->{prefs.edit().remove("serial").apply();pendingSerial="";disconnect();render("connect");})
+                    .setNegativeButton("بستن",(d,w)->disconnect()).show();
+        }
+    }
+
+    void sendRaw(String s){
+        if(gatt==null||cmdCh==null)return;
+        try{
+            byte[] b=s.getBytes(StandardCharsets.UTF_8);
+            if(Build.VERSION.SDK_INT>=33)gatt.writeCharacteristic(cmdCh,b,BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+            else{cmdCh.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);cmdCh.setValue(b);gatt.writeCharacteristic(cmdCh);}
+        }catch(Exception ignored){}
+    }
+    void send(String s){
+        if(demo){toast("حالت دمو");return;}
+        if(!serialVerified){toast("ابتدا سریال دستگاه را تأیید و متصل شوید");return;}
+        sendRaw(s);
+    }
+
+    void diagPage(){
+        sectionTitle("عیب‌یابی","خواندن و پاک‌کردن کدهای خطای ECU");
+        LinearLayout c=card();
+        dtcLog=title(serialVerified?"آماده خواندن خطا":"ابتدا دستگاه را متصل کنید",18);
+        c.addView(dtcLog);
+        Button read=solidButton("خواندن DTC");
+        read.setOnClickListener(v->send("READ_DTC"));
+        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(54));rp.setMargins(0,dp(16),0,dp(10));c.addView(read,rp);
+        Button clear=outlineButton("پاک کردن خطاها");
+        clear.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("پاک کردن DTC").setMessage("در صورت اطمینان ادامه دهید.").setNegativeButton("انصراف",null).setPositiveButton("پاک کردن",(d,w)->send("CLEAR_DTC")).show());
+        c.addView(clear,new LinearLayout.LayoutParams(-1,dp(54)));
+        content.addView(c);
+    }
+
+    void livePage(){
+        sectionTitle("داده زنده","پارامترهای دریافتی از ECU و سنسور دستگاه");
+        rpmVal=metric("RPM","دور موتور",rpm+" rpm",CYAN);
+        speedVal=metric("SPD","سرعت",speed+" km/h",TEXT);
+        ectVal=metric("ECT","دمای آب",(ect==0?"--":ect+" °C"),RED);
+        fuelVal=metric("FUEL","سطح سوخت",(fuel==0?"--":String.format(Locale.US,"%.0f %%",fuel)),AMBER);
+        voltVal=metric("V","ولتاژ",(volt==0?"--":String.format(Locale.US,"%.2f V",volt)),GREEN);
+        coolantVal=metric("H2O","سطح آب",coolant,coolant.equals("کمبود آب")?RED:GREEN);
+    }
+
+    void dashboardPage(){
+        sectionTitle("داشبورد","SMART OBD خانه ریمپ");
+        LinearLayout s=card();
+        TextView big=title(serialVerified?"خودرو آنلاین":"OBD آفلاین",28);big.setTextColor(serialVerified?GREEN:RED);s.addView(big);
+        s.addView(text("سریال: "+(pendingSerial.isEmpty()?"ثبت نشده":pendingSerial),15,MUTED));
+        s.addView(text("پروتکل: "+protocol,15,CYAN));
+        LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(-1,-2);pp.setMargins(0,0,0,dp(14));content.addView(s,pp);
+        rpmVal=metric("RPM","دور موتور",rpm+" rpm",CYAN);
+        speedVal=metric("SPD","سرعت",speed+" km/h",TEXT);
+        ectVal=metric("ECT","دمای آب",(ect==0?"--":ect+" °C"),RED);
+        coolantVal=metric("H2O","سطح آب",coolant,coolant.equals("کمبود آب")?RED:GREEN);
+    }
+
+    void sectionTitle(String a,String b){
+        TextView t=title(a,28);content.addView(t);
+        TextView s=text(b,14,MUTED);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,dp(18));content.addView(s,p);
+    }
+
+    TextView metric(String icon,String name,String value,int color){
+        LinearLayout c=card();c.setOrientation(LinearLayout.HORIZONTAL);c.setGravity(Gravity.CENTER_VERTICAL);
+        TextView ic=title(icon,16);ic.setGravity(Gravity.CENTER);ic.setTextColor(color);ic.setBackground(bg(Color.rgb(20,48,67),0,32));
+        c.addView(ic,new LinearLayout.LayoutParams(dp(64),dp(64)));
+        LinearLayout v=new LinearLayout(this);v.setOrientation(LinearLayout.VERTICAL);
+        TextView n=text(name,14,MUTED);TextView val=title(value,22);val.setTextColor(color);
+        v.addView(n);v.addView(val);c.addView(v,new LinearLayout.LayoutParams(0,-2,1));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,dp(12));content.addView(c,p);
+        return val;
+    }
+
+    void updateVisibleData(){
+        if(rpmVal!=null)rpmVal.setText(rpm+" rpm");
+        if(speedVal!=null)speedVal.setText(speed+" km/h");
+        if(ectVal!=null)ectVal.setText(ect==0?"--":ect+" °C");
+        if(fuelVal!=null)fuelVal.setText(fuel==0?"--":String.format(Locale.US,"%.0f %%",fuel));
+        if(voltVal!=null)voltVal.setText(volt==0?"--":String.format(Locale.US,"%.2f V",volt));
+        if(coolantVal!=null){coolantVal.setText(coolant);coolantVal.setTextColor(coolant.equals("کمبود آب")?RED:GREEN);}
+        if(ecuState!=null)ecuState.setText(serialVerified?(protocol.equals("NONE")?"در حال شناسایی…":"ECU متصل"):"هنوز شناسایی نشده");
+        if(ecuDetail!=null)ecuDetail.setText(serialVerified?"پروتکل: "+protocol:"تشخیص خودکار • بعد از تأیید سریال");
+    }
+
+    void nav(){
+        bottomNav=new LinearLayout(this);
+        bottomNav.setGravity(Gravity.CENTER);
+        bottomNav.setBackgroundColor(Color.rgb(2,24,36));
+        String[][] tabs={{"connect","⌁","اتصال"},{"diag","⌕","عیب‌یابی"},{"live","≋","داده زنده"},{"dash","▣","داشبورد"}};
+        for(String[] t:tabs){
+            LinearLayout b=new LinearLayout(this);b.setOrientation(LinearLayout.VERTICAL);b.setGravity(Gravity.CENTER);b.setPadding(dp(2),dp(6),dp(2),dp(4));
+            TextView i=title(t[1],25);i.setGravity(Gravity.CENTER);i.setTextColor(page.equals(t[0])?CYAN:MUTED);
+            TextView n=text(t[2],12,page.equals(t[0])?CYAN:MUTED);n.setGravity(Gravity.CENTER);
+            b.addView(i);b.addView(n);
+            String target=t[0];b.setOnClickListener(v->render(target));
+            bottomNav.addView(b,new LinearLayout.LayoutParams(0,dp(82),1));
+        }
+        root.addView(bottomNav);
+    }
+
+    void demoLoop(){
+        h.postDelayed(new Runnable(){public void run(){
+            if(!alive)return;
+            if(demo){
+                rpm=900+(int)((Math.sin(System.currentTimeMillis()/900.0)+1)*1500);
+                speed=Math.max(0,(rpm-900)/28);ect=89;fuel=58;volt=13.9f;coolant="مناسب";protocol="DEMO";
+                updateVisibleData();
+            }
+            h.postDelayed(this,700);
+        }},700);
+    }
+
+    void requestBluetoothPermissions(){
+        if(Build.VERSION.SDK_INT>=31){
+            ArrayList<String> q=new ArrayList<>();
+            if(checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)!=PackageManager.PERMISSION_GRANTED)q.add(Manifest.permission.BLUETOOTH_SCAN);
+            if(checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)!=PackageManager.PERMISSION_GRANTED)q.add(Manifest.permission.BLUETOOTH_CONNECT);
+            if(!q.isEmpty())requestPermissions(q.toArray(new String[0]),10);
+        }else if(Build.VERSION.SDK_INT>=23&&checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED){
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION},11);
+        }
+    }
+    boolean hasBlePermissions(){
+        return Build.VERSION.SDK_INT<31 || (checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)==PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED);
+    }
+    String safeName(BluetoothDevice d){
+        try{String n=d.getName();return n==null?"KhanehRemap-OBD-C3":n;}catch(Exception e){return "KhanehRemap-OBD-C3";}
+    }
+    void disconnect(){
+        try{if(scanner!=null&&scanCallback!=null&&hasBlePermissions())scanner.stopScan(scanCallback);}catch(Exception ignored){}
+        try{if(gatt!=null){gatt.disconnect();gatt.close();}}catch(Exception ignored){}
+        gatt=null;cmdCh=null;dataCh=null;bleConnected=false;serialVerified=false;deviceSerial="";protocol="NONE";
+    }
+    void speak(String s){if(tts!=null)tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"obd-alert");}
+    void toast(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}
+
+    @Override protected void onDestroy(){alive=false;disconnect();if(tts!=null){tts.stop();tts.shutdown();}super.onDestroy();}
+
+    class HexLogo extends View{
+        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+        HexLogo(Context c){super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
+        @Override protected void onDraw(Canvas c){
+            float w=getWidth(),h=getHeight(),cx=w/2,cy=h/2,r=Math.min(w,h)*.42f;
+            Path q=new Path();
+            for(int i=0;i<6;i++){double a=Math.toRadians(-90+i*60);float x=(float)(cx+r*Math.cos(a)),y=(float)(cy+r*Math.sin(a));if(i==0)q.moveTo(x,y);else q.lineTo(x,y);}
+            q.close();p.setStyle(Paint.Style.FILL);p.setColor(CYAN);p.setShadowLayer(dp(12),0,dp(4),Color.rgb(0,130,155));c.drawPath(q,p);p.clearShadowLayer();
+            p.setColor(Color.rgb(0,40,54));p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(dp(26));c.drawText("A",cx,cy+dp(9),p);
+        }
+    }
 }
