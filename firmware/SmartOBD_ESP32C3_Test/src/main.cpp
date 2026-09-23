@@ -30,8 +30,6 @@ bool lowCoolant = false;
 HardwareSerial KLine(1);
 Preferences prefs;
 String deviceSerial = "";
-Preferences prefs;
-String deviceSerial = "";
 
 static void sendLine(const String& s) {
   Serial.println(s);
@@ -299,47 +297,36 @@ static bool validSerial(const String& v) {
   return true;
 }
 
-static bool validSerial(const String& x) {
-  if (x.length() < 10 || x.length() > 24) return false;
-  int dashes = 0;
-  for (size_t i=0;i<x.length();i++) {
-    char c=x[i];
-    if (c=='-') { dashes++; continue; }
-    if (!((c>='A'&&c<='Z')||(c>='0'&&c<='9'))) return false;
-  }
-  return dashes>=2;
-}
+static void handleCommand(String c) {
+  c.trim();
+  String upper=c; upper.toUpperCase();
 
-static void handleCommand(String raw) {
-  raw.trim();
-  String c=raw;
-  c.toUpperCase();
-
-  if(c=="IDENTITY") {
-    sendLine("SERIAL:" + (deviceSerial.length()?deviceSerial:String("UNSET")));
+  if(upper=="PING") sendLine("PONG");
+  else if(upper=="GET_SERIAL") {
+    sendLine(deviceSerial.length() ? ("SERIAL:"+deviceSerial) : "SERIAL:UNSET");
   }
-  else if(c.startsWith("SET_SERIAL:")) {
-    String requested=raw.substring(String("SET_SERIAL:").length());
-    requested.trim();
-    requested.toUpperCase();
-    if(deviceSerial.length()) {
-      sendLine("SET_SERIAL:LOCKED,"+deviceSerial);
-    } else if(!validSerial(requested)) {
-      sendLine("SET_SERIAL:INVALID");
+  else if(upper.startsWith("SET_SERIAL:")) {
+    String candidate=c.substring(c.indexOf(':')+1);
+    candidate.trim(); candidate.toUpperCase();
+    if (!validSerial(candidate)) {
+      sendLine("SERIAL:INVALID");
+    } else if (deviceSerial.length() && deviceSerial != candidate) {
+      sendLine("SERIAL:LOCKED");
     } else {
-      deviceSerial=requested;
-      prefs.putString("serial",deviceSerial);
-      sendLine("SET_SERIAL:OK,"+deviceSerial);
+      prefs.begin("khanehremap", false);
+      prefs.putString("serial", candidate);
+      prefs.end();
+      deviceSerial=candidate;
+      sendLine("SERIAL:SET,"+deviceSerial);
     }
   }
-  else if(c=="PING") sendLine("PONG");
-  else if(c=="STATUS") {
+  else if(upper=="STATUS") {
     String proto = canStarted ? ("CAN"+String(canRate)) : (klineConnected ? "KLINE" : "NONE");
-    sendLine("STATUS,FW:"+String(FW_VERSION)+",PROTO:"+proto+",COOLANT:"+(lowCoolant?String("LOW"):String("OK"))+",SERIAL:"+(deviceSerial.length()?deviceSerial:String("UNSET")));
+    sendLine("STATUS,FW:"+String(FW_VERSION)+",PROTO:"+proto+",COOLANT:"+(lowCoolant?String("LOW"):String("OK")));
   }
-  else if(c=="REDETECT") detectProtocol();
-  else if(c=="READ_DTC") readDTC_CAN();
-  else if(c=="CLEAR_DTC") clearDTC_CAN();
+  else if(upper=="REDETECT") detectProtocol();
+  else if(upper=="READ_DTC") readDTC_CAN();
+  else if(upper=="CLEAR_DTC") clearDTC_CAN();
 }
 
 class CmdCallbacks : public NimBLECharacteristicCallbacks {
@@ -366,8 +353,6 @@ static void startBLE() {
 
 void setup() {
   Serial.begin(115200);
-  prefs.begin("smartobd", false);
-  deviceSerial=prefs.getString("serial", "");
   delay(250);
 
   prefs.begin("khanehremap", true);
@@ -378,7 +363,6 @@ void setup() {
   pinMode(KLINE_TX, OUTPUT); digitalWrite(KLINE_TX,HIGH);
   startBLE();
   sendLine("BOOT:SMART_OBD_C3");
-  sendLine("SERIAL:" + (deviceSerial.length()?deviceSerial:String("UNSET")));
   sendLine(deviceSerial.length()?("SERIAL:"+deviceSerial):"SERIAL:UNSET");
   sampleCoolant();
   detectProtocol();
