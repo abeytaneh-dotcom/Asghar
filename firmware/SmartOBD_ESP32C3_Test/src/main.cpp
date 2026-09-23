@@ -6,7 +6,7 @@
 // Khaneh Remap SMART OBD - ESP32-C3 TEST firmware
 // Prototype only: no Secure Boot / Flash Encryption yet.
 
-static constexpr const char* FW_VERSION = "1.0.0-test-c3";
+static constexpr const char* FW_VERSION = "1.1.0-bridge-diag";
 static constexpr const char* DEVICE_NAME_PREFIX = "KhanehRemap-OBD-C3";
 String bleDeviceName = "";
 
@@ -53,17 +53,35 @@ String simProfile = "CAN_OBD2";
 int simCanRate = 500;
 float simRpm = 820, simSpeed = 0, simEct = 74, simFuel = 55, simVbat = 13.9;
 bool simIgnition = true, simEngine = true;
+bool simHeadlight=false, simFan=false, simHorn=false, simAc=false, simWiper=false, simFuelPump=false;
 String simDtc = "";
+uint32_t simLastRxMs=0, simLastLiveMs=0, simLastHeartbeatMs=0;
+uint32_t simLiveSeq=0;
+
+static void sendWebLine(const String& line) {
+  if (dataCh) {
+    dataCh->setValue(line.c_str());
+    // notify() is safe with zero subscribers. Do not gate this with a single
+    // connection boolean because CarLab + phone can be connected together.
+    dataCh->notify();
+  }
+}
+
+static void sendSimulatorLine(const String& line) {
+  // USB CarLab receives this on Serial. BLE CarLab receives it on EVENT.
+  Serial.println(line);
+  if (simEventCh) {
+    simEventCh->setValue(line.c_str());
+    simEventCh->notify();
+  }
+}
 
 static void sendLine(const String& line) {
   Serial.println(line);
-  if (dataCh) {
-    dataCh->setValue(line.c_str());
-    if (bleClientConnected) dataCh->notify();
-  }
+  sendWebLine(line);
   if (simStatusCh) {
     simStatusCh->setValue(line.c_str());
-    if (bleClientConnected) simStatusCh->notify();
+    simStatusCh->notify();
   }
 }
 
@@ -342,12 +360,21 @@ static String simProtocol() {
   return "KLINE";
 }
 
+static String simProtocol() {
+  String p=simProfile; p.toUpperCase();
+  if (p=="CAN_OBD2") return "CAN"+String(simCanRate);
+  if (p=="SSAT_GENERIC") return "CAN"+String(simCanRate);
+  return "KLINE";
+}
+
 static void publishSimTelemetry() {
-  sendLine("RPM:"+String((int)simRpm));
-  sendLine("SPEED:"+String((int)simSpeed));
-  sendLine("ECT:"+String((int)simEct));
-  sendLine("FUEL:"+String(simFuel,1));
-  sendLine("VOLT:"+String(simVbat,2));
+  // One compact packet is much more reliable than five back-to-back GATT
+  // notifications, especially while CarLab and the phone are both connected.
+  String line="LIVE|"+String(simLiveSeq)+"|"+String((int)simRpm)+"|"+String((int)simSpeed)+"|"+
+              String(simEct,1)+"|"+String(simFuel,1)+"|"+String(simVbat,2)+"|"+
+              String(simHeadlight?1:0)+"|"+String(simFan?1:0)+"|"+String(simHorn?1:0)+"|"+
+              String(simAc?1:0)+"|"+String(simWiper?1:0)+"|"+String(simFuelPump?1:0);
+  sendWebLine(line);
 }
 
 static void simDetect() {
@@ -356,83 +383,148 @@ static void simDetect() {
     return;
   }
   String proto=simProtocol();
-  if (proto.startsWith("CAN")) sendLine("ECU:CONNECTED,CAN:"+String(simCanRate));
-  else sendLine("ECU:CONNECTED,KLINE:10400");
+  if (proto.startsWith("CAN")) sendLine("ECU:CONNECTED,CAN:"+String(simCanRate)+",SIM:1");
+  else sendLine("ECU:CONNECTED,KLINE:10400,SIM:1");
   publishSimTelemetry();
+}
+
+static int splitPipe(const String& input, String* parts, int maxParts) {
+  int count=0, start=0;
+  for (int i=0;i<=input.length() && count<maxParts;i++) {
+    if (i==input.length() || input[i]=='|') {
+      parts[count++]=input.substring(start,i);
+      start=i+1;
+    }
+  }
+  return count;
+}
+
+static void setSimActuator(String key, bool on, bool publish=true) {
+  key.toUpperCase();
+  if (key=="IGNITION") simIgnition=on;
+  else if (key=="ENGINE") simEngine=on;
+  else if (key=="HEADLIGHT") simHeadlight=on;
+  else if (key=="FAN") simFan=on;
+  else if (key=="HORN") simHorn=on;
+  else if (key=="AC") simAc=on;
+  else if (key=="WIPER") simWiper=on;
+  else if (key=="FUELPUMP") simFuelPump=on;
+  if (publish) sendWebLine("ACT|"+key+"|"+String(on?1:0));
 }
 
 static void handleSimCommand(const String& original) {
   String c=original; c.trim();
-  String upper=c; upper.toUpperCase();
+  String parts[16];
+  int n=splitPipe(c,parts,16);
+  if(n<1) return;
+  String p0=parts[0]; p0.toUpperCase();
 
-  if (upper=="HELLO|CARLAB|1") {
+  simLastRxMs=millis();
+
+  if (p0=="HELLO" && n>=3) {
     sendLine("SIM:HELLO,SMART_OBD_C3");
     return;
   }
-  if (upper=="SIM|MODE|ON") {
-    simMode=true;
-    sendLine("SIM:MODE,ON");
+  if (p0!="SIM" || n<2) return;
+
+  String group=parts[1]; group.toUpperCase();
+
+  if (group=="MODE" && n>=3) {
+    String mode=parts[2]; mode.toUpperCase();
+    simMode=(mode=="ON");
+    sendLine(simMode?"SIM:MODE,ON":"SIM:MODE,OFF");
     return;
   }
-  if (upper=="SIM|MODE|OFF") {
-    simMode=false;
-    sendLine("SIM:MODE,OFF");
-    return;
-  }
-  if (!upper.startsWith("SIM|")) return;
 
-  int p1=c.indexOf('|');
-  int p2=c.indexOf('|',p1+1);
-  int p3=c.indexOf('|',p2+1);
-  String group=(p2>p1)?c.substring(p1+1,p2):"";
-  String key=(p3>p2)?c.substring(p2+1,p3):((p2>=0)?c.substring(p2+1):"");
-  String val=(p3>=0)?c.substring(p3+1):"";
-  group.toUpperCase(); key.toUpperCase();
-
-  if (group=="ECU") {
-    simProfile=key.length()?key:val;
-    simProfile.toUpperCase();
+  if (group=="ECU" && n>=3) {
+    simProfile=parts[2]; simProfile.toUpperCase();
     sendLine("SIM:ECU,"+simProfile);
-  } else if (group=="CANRATE") {
-    String rate=key.length()?key:val;
-    simCanRate=rate.toInt();
-    if (simCanRate<=0) simCanRate=500;
+    return;
+  }
+
+  if (group=="CANRATE" && n>=3) {
+    simCanRate=parts[2].toInt(); if(simCanRate<=0)simCanRate=500;
     sendLine("SIM:CANRATE,"+String(simCanRate));
-  } else if (group=="LIVE") {
-    // Compact live snapshot from CarLab:
-    // SIM|LIVE|rpm|speed|ect|fuel|vbat
-    int a1=c.indexOf('|',4);
-    int a2=c.indexOf('|',a1+1);
-    int a3=c.indexOf('|',a2+1);
-    int a4=c.indexOf('|',a3+1);
-    int a5=c.indexOf('|',a4+1);
-    if(a1>0&&a2>0&&a3>0&&a4>0&&a5>0){
-      simRpm=c.substring(a1+1,a2).toFloat();
-      simSpeed=c.substring(a2+1,a3).toFloat();
-      simEct=c.substring(a3+1,a4).toFloat();
-      simFuel=c.substring(a4+1,a5).toFloat();
-      simVbat=c.substring(a5+1).toFloat();
-      publishSimTelemetry();
-    }
-  } else if (group=="SET") {
-    float n=val.toFloat();
-    if (key=="RPM") { simRpm=n; sendLine("RPM:"+String((int)simRpm)); }
-    else if (key=="SPEED") { simSpeed=n; sendLine("SPEED:"+String((int)simSpeed)); }
-    else if (key=="ECT") { simEct=n; sendLine("ECT:"+String((int)simEct)); }
-    else if (key=="FUEL") { simFuel=n; sendLine("FUEL:"+String(simFuel,1)); }
-    else if (key=="VBAT") { simVbat=n; sendLine("VOLT:"+String(simVbat,2)); }
-  } else if (group=="ACT") {
-    bool on=val.toInt()!=0;
-    if (key=="IGNITION") simIgnition=on;
-    else if (key=="ENGINE") simEngine=on;
-  } else if (group=="DTC") {
-    if (key=="ADD") simDtc=val;
-    else if (key=="CLEAR") simDtc="";
-  } else if (group=="CAN" && key=="SAMPLE") {
+    return;
+  }
+
+  // New compact bridge packet:
+  // SIM|SNAP|seq|rpm|speed|ect|fuel|vbat|headlight|fan|horn|ac|wiper|fuelpump
+  if (group=="SNAP" && n>=8) {
+    simLiveSeq=(uint32_t)parts[2].toInt();
+    simRpm=parts[3].toFloat();
+    simSpeed=parts[4].toFloat();
+    simEct=parts[5].toFloat();
+    simFuel=parts[6].toFloat();
+    simVbat=parts[7].toFloat();
+    if(n>8)setSimActuator("HEADLIGHT",parts[8].toInt()!=0,false);
+    if(n>9)setSimActuator("FAN",parts[9].toInt()!=0,false);
+    if(n>10)setSimActuator("HORN",parts[10].toInt()!=0,false);
+    if(n>11)setSimActuator("AC",parts[11].toInt()!=0,false);
+    if(n>12)setSimActuator("WIPER",parts[12].toInt()!=0,false);
+    if(n>13)setSimActuator("FUELPUMP",parts[13].toInt()!=0,false);
+    simLastLiveMs=millis();
     publishSimTelemetry();
-  } else if (group=="HEARTBEAT") {
-    sendLine("SIM:HEARTBEAT,OK");
-    if (simMode) publishSimTelemetry();
+    return;
+  }
+
+  // Backward compatibility with CarLab v1.3:
+  // SIM|LIVE|rpm|speed|ect|fuel|vbat
+  if (group=="LIVE" && n>=7) {
+    simLiveSeq++;
+    simRpm=parts[2].toFloat(); simSpeed=parts[3].toFloat(); simEct=parts[4].toFloat();
+    simFuel=parts[5].toFloat(); simVbat=parts[6].toFloat();
+    simLastLiveMs=millis();
+    publishSimTelemetry();
+    return;
+  }
+
+  if (group=="SET" && n>=4) {
+    String key=parts[2]; key.toUpperCase(); float v=parts[3].toFloat();
+    if (key=="RPM") simRpm=v;
+    else if (key=="SPEED") simSpeed=v;
+    else if (key=="ECT") simEct=v;
+    else if (key=="FUEL") simFuel=v;
+    else if (key=="VBAT") simVbat=v;
+    simLiveSeq++; simLastLiveMs=millis(); publishSimTelemetry();
+    return;
+  }
+
+  if (group=="ACT" && n>=4) {
+    String key=parts[2]; bool on=parts[3].toInt()!=0;
+    setSimActuator(key,on,true);
+    return;
+  }
+
+  if (group=="DTC" && n>=3) {
+    String op=parts[2];op.toUpperCase();
+    if(op=="ADD" && n>=4)simDtc=parts[3];
+    else if(op=="CLEAR")simDtc="";
+    return;
+  }
+
+  if (group=="CAN" && n>=3) {
+    String op=parts[2];op.toUpperCase();
+    if(op=="SAMPLE")publishSimTelemetry();
+    return;
+  }
+
+  if (group=="HEARTBEAT") {
+    simLastHeartbeatMs=millis();
+    sendWebLine("SIM:HEARTBEAT,OK");
+    return;
+  }
+
+  if (group=="WEB_ACK") {
+    String rest="";
+    for(int i=2;i<n;i++){if(i>2)rest+="|";rest+=parts[i];}
+    sendWebLine("BRIDGE|SIM_ACK|"+rest);
+    // When the simulator confirms an actuator, publish its final state.
+    if(n>=5){
+      String op=parts[2];op.toUpperCase();
+      if(op=="ACT")setSimActuator(parts[3],parts[4].toInt()!=0,true);
+    }
+    return;
   }
 }
 
@@ -535,6 +627,26 @@ static void handleCommand(String c) {
 
   if(upper=="PING") sendLine("PONG");
   else if(upper=="HELLO|CARLAB|1" || upper.startsWith("SIM|")) handleSimCommand(c);
+  else if(upper.startsWith("WEB|PING|")) {
+    sendWebLine("BRIDGE|ESP_FORWARD|"+c.substring(4));
+    sendSimulatorLine(c);
+  }
+  else if(upper.startsWith("WEB|ACT|")) {
+    sendWebLine("BRIDGE|ESP_FORWARD|"+c.substring(4));
+    sendSimulatorLine(c);
+  }
+  else if(upper=="WEB|SYNC?") {
+    sendSimulatorLine(c);
+  }
+  else if(upper=="DIAG?") {
+    uint32_t now=millis();
+    long simAge=simLastRxMs?long(now-simLastRxMs):-1;
+    long liveAge=simLastLiveMs?long(now-simLastLiveMs):-1;
+    long hbAge=simLastHeartbeatMs?long(now-simLastHeartbeatMs):-1;
+    sendWebLine("DIAG|FW:"+String(FW_VERSION)+"|SIM:"+(simMode?String("1"):String("0"))+
+                "|SIM_AGE:"+String(simAge)+"|LIVE_AGE:"+String(liveAge)+"|HB_AGE:"+String(hbAge)+
+                "|SEQ:"+String(simLiveSeq)+"|CAN:"+String(canStarted?canRate:0)+"|KLINE:"+String(klineConnected?1:0));
+  }
   else if(upper=="GET_SERIAL") {
     sendLine(deviceSerial.length() ? ("SERIAL:"+deviceSerial) : "SERIAL:UNSET");
   }
@@ -555,7 +667,8 @@ static void handleCommand(String c) {
   }
   else if(upper=="STATUS") {
     String proto = simMode ? simProtocol() : (canStarted ? ("CAN"+String(canRate)) : (klineConnected ? "KLINE" : "NONE"));
-    sendLine("STATUS,FW:"+String(FW_VERSION)+",PROTO:"+proto+",COOLANT:"+(lowCoolant?String("LOW"):String("OK"))+",SIM:"+(simMode?String("1"):String("0")));
+    sendLine("STATUS,FW:"+String(FW_VERSION)+",PROTO:"+proto+",COOLANT:"+(lowCoolant?String("LOW"):String("OK"))+
+             ",SIM:"+(simMode?String("1"):String("0"))+",SEQ:"+String(simLiveSeq));
     if (simMode) publishSimTelemetry();
   }
   else if(upper=="REDETECT") {
@@ -694,7 +807,12 @@ void loop() {
   }
 
   uint32_t now=millis();
-  if(now-lastPid>=700) { lastPid=now; if(simMode) publishSimTelemetry(); else sendPidData(); }
+  if(now-lastPid>=700) {
+    lastPid=now;
+    if(simMode) {
+      if(!simLastLiveMs || now-simLastLiveMs>650) publishSimTelemetry();
+    } else sendPidData();
+  }
   if(now-lastCoolant>=20000) { lastCoolant=now; sampleCoolant(); }
   delay(2);
 }
