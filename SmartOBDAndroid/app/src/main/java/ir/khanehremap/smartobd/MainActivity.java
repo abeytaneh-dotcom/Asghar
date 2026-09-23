@@ -191,20 +191,12 @@ public class MainActivity extends Activity {
                     if(dd!=null){dd.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);g.writeDescriptor(dd);}
                     runOnUiThread(()->{
                         waitingIdentity=true;
-                        send("IDENTITY");
+                        send("GET_SERIAL");
                         h.postDelayed(()->{
                             if(waitingIdentity&&connected){
-                                // Backward-compatible test mode for the current prototype firmware.
-                                String bound=prefs.getString("bound_addr","");
-                                String now=connectedDevice==null?"":connectedDevice.getAddress();
-                                if(bound.isEmpty()||bound.equals(now)){
-                                    prefs.edit().putString("activated_serial",pendingSerial).putString("bound_addr",now).apply();
-                                    deviceSerial=pendingSerial;
-                                    waitingIdentity=false;
-                                    activationOk(true);
-                                }else connectionFailed("این سریال قبلاً با یک دستگاه دیگر مچ شده است");
+                                connectionFailed("Firmware دستگاه پاسخ سریال نداد؛ Firmware سریال‌دار را روی ESP32-C3 نصب کنید");
                             }
-                        },1800);
+                        },2200);
                     });
                 }
                 @Override public void onCharacteristicChanged(BluetoothGatt g,BluetoothGattCharacteristic c){
@@ -221,9 +213,28 @@ public class MainActivity extends Activity {
         if(s==null||s.isEmpty())return;
         if(s.startsWith("SERIAL:")){
             waitingIdentity=false;
-            String got=normalizeSerial(s.substring(7));
+            String payload=s.substring(7).trim();
+            String got=normalizeSerial(payload);
             if(got.equals("UNSET")||got.isEmpty()){
+                waitingIdentity=true;
                 send("SET_SERIAL:"+pendingSerial);
+                return;
+            }
+            if(got.startsWith("SET,")){
+                deviceSerial=normalizeSerial(got.substring(4));
+                if(deviceSerial.equals(pendingSerial)){
+                    prefs.edit().putString("activated_serial",deviceSerial)
+                            .putString("bound_addr",connectedDevice==null?"":connectedDevice.getAddress()).apply();
+                    activationOk(false);
+                }else connectionFailed("سریال ذخیره‌شده با سریال واردشده مطابقت ندارد");
+                return;
+            }
+            if(got.equals("LOCKED")){
+                connectionFailed("این ESP32 قبلاً با سریال دیگری ثبت شده است");
+                return;
+            }
+            if(got.equals("INVALID")){
+                connectionFailed("فرمت سریال معتبر نیست");
                 return;
             }
             deviceSerial=got;
@@ -233,23 +244,6 @@ public class MainActivity extends Activity {
                         .putString("bound_addr",connectedDevice==null?"":connectedDevice.getAddress()).apply();
                 activationOk(false);
             }else connectionFailed("سریال دستگاه با سریال واردشده مطابقت ندارد");
-            return;
-        }
-        if(s.startsWith("SET_SERIAL:OK,")){
-            waitingIdentity=false;
-            deviceSerial=normalizeSerial(s.substring("SET_SERIAL:OK,".length()));
-            if(deviceSerial.equals(pendingSerial)){
-                prefs.edit().putString("activated_serial",deviceSerial)
-                        .putString("bound_addr",connectedDevice==null?"":connectedDevice.getAddress()).apply();
-                activationOk(false);
-            }
-            return;
-        }
-        if(s.startsWith("SET_SERIAL:LOCKED,")){
-            waitingIdentity=false;
-            deviceSerial=normalizeSerial(s.substring("SET_SERIAL:LOCKED,".length()));
-            if(deviceSerial.equals(pendingSerial)) activationOk(false);
-            else connectionFailed("این ESP32 با سریال دیگری ثبت شده است");
             return;
         }
 
@@ -283,7 +277,7 @@ public class MainActivity extends Activity {
     void activationOk(boolean legacy){
         waitingIdentity=false;
         connected=true;
-        proView.message=(legacy?"اتصال برقرار شد • مچ محلی سریال":"اتصال OBD با موفقیت برقرار شد");
+        proView.message="اتصال OBD با موفقیت برقرار شد • سریال تأیید شد";
         send("STATUS");
         h.postDelayed(()->send("REDETECT"),350);
         proView.invalidate();
