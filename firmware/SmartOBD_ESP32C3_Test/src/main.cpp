@@ -409,7 +409,10 @@ void setup() {
   sendLine("BOOT:SMART_OBD_C3");
   sendLine(deviceSerial.length()?("SERIAL:"+deviceSerial):"SERIAL:UNSET");
   sampleCoolant();
-  detectProtocol();
+
+  // Keep BLE responsive immediately after boot. ECU detection is started
+  // only after the web client sends REDETECT.
+  sendLine("ECU:READY");
   lastPid=millis();
   lastCoolant=millis();
 }
