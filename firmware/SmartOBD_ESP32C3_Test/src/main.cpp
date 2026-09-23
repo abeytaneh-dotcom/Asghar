@@ -7,7 +7,7 @@
 // Prototype only: no Secure Boot / Flash Encryption yet.
 
 static constexpr const char* FW_VERSION = "1.0.0-test-c3";
-static constexpr const char* DEVICE_NAME_PREFIX = "KHANEH_REMAP_OBD";
+static constexpr const char* DEVICE_NAME_PREFIX = "KhanehRemap-OBD-C3";
 String bleDeviceName = "";
 
 static constexpr gpio_num_t CAN_TX = GPIO_NUM_4;
@@ -20,7 +20,15 @@ static constexpr const char* BLE_SERVICE_UUID = "7f640101-7c7d-4f0a-8b6f-4f484f4
 static constexpr const char* BLE_CMD_UUID     = "7f640102-7c7d-4f0a-8b6f-4f484f4d4501";
 static constexpr const char* BLE_DATA_UUID    = "7f640103-7c7d-4f0a-8b6f-4f484f4d4501";
 
+// CarLab v1.2 compatibility service. The simulator currently uses these UUIDs.
+static constexpr const char* SIM_SERVICE_UUID = "7f640001-7c7d-4f0a-8b6f-4f484f4d4501";
+static constexpr const char* SIM_CMD_UUID     = "7f640002-7c7d-4f0a-8b6f-4f484f4d4501";
+static constexpr const char* SIM_STATUS_UUID  = "7f640003-7c7d-4f0a-8b6f-4f484f4d4501";
+static constexpr const char* SIM_EVENT_UUID   = "7f640004-7c7d-4f0a-8b6f-4f484f4d4501";
+
 NimBLECharacteristic* dataCh = nullptr;
+NimBLECharacteristic* simStatusCh = nullptr;
+NimBLECharacteristic* simEventCh = nullptr;
 NimBLEServer* bleServer = nullptr;
 
 struct BleCommand { char text[96]; };
@@ -38,11 +46,24 @@ HardwareSerial KLine(1);
 Preferences prefs;
 String deviceSerial = "";
 
-static void sendLine(const String& s) {
-  Serial.println(s);
+// Bench simulator state. These values are populated by KhanehRemap-CarLab.html
+// using short SIM|... commands over BLE or native USB Serial.
+bool simMode = false;
+String simProfile = "CAN_OBD2";
+int simCanRate = 500;
+float simRpm = 820, simSpeed = 0, simEct = 74, simFuel = 55, simVbat = 13.9;
+bool simIgnition = true, simEngine = true;
+String simDtc = "";
+
+static void sendLine(const String& line) {
+  Serial.println(line);
   if (dataCh) {
-    dataCh->setValue(s.c_str());
-    dataCh->notify();
+    dataCh->setValue(line.c_str());
+    if (bleClientConnected) dataCh->notify();
+  }
+  if (simStatusCh) {
+    simStatusCh->setValue(line.c_str());
+    if (bleClientConnected) simStatusCh->notify();
   }
 }
 
@@ -309,11 +330,101 @@ static bool validSerial(const String& v) {
   return true;
 }
 
+
+static String simProtocol() {
+  String p=simProfile; p.toUpperCase();
+  if (p=="CAN_OBD2") return "CAN"+String(simCanRate);
+  if (p=="SSAT_GENERIC") {
+    // SSAT profile in CarLab can represent either transport; when CAN rate is
+    // explicitly selected on the simulator we expose it as CAN for bench use.
+    return "CAN"+String(simCanRate);
+  }
+  return "KLINE";
+}
+
+static void publishSimTelemetry() {
+  sendLine("RPM:"+String((int)simRpm));
+  sendLine("SPEED:"+String((int)simSpeed));
+  sendLine("ECT:"+String((int)simEct));
+  sendLine("FUEL:"+String(simFuel,1));
+  sendLine("VOLT:"+String(simVbat,2));
+}
+
+static void simDetect() {
+  if (!simIgnition) {
+    sendLine("ECU:NOT_FOUND");
+    return;
+  }
+  String proto=simProtocol();
+  if (proto.startsWith("CAN")) sendLine("ECU:CONNECTED,CAN:"+String(simCanRate));
+  else sendLine("ECU:CONNECTED,KLINE:10400");
+  publishSimTelemetry();
+}
+
+static void handleSimCommand(const String& original) {
+  String c=original; c.trim();
+  String upper=c; upper.toUpperCase();
+
+  if (upper=="HELLO|CARLAB|1") {
+    sendLine("SIM:HELLO,SMART_OBD_C3");
+    return;
+  }
+  if (upper=="SIM|MODE|ON") {
+    simMode=true;
+    sendLine("SIM:MODE,ON");
+    return;
+  }
+  if (upper=="SIM|MODE|OFF") {
+    simMode=false;
+    sendLine("SIM:MODE,OFF");
+    return;
+  }
+  if (!upper.startsWith("SIM|")) return;
+
+  int p1=c.indexOf('|');
+  int p2=c.indexOf('|',p1+1);
+  int p3=c.indexOf('|',p2+1);
+  String group=(p2>p1)?c.substring(p1+1,p2):"";
+  String key=(p3>p2)?c.substring(p2+1,p3):((p2>=0)?c.substring(p2+1):"");
+  String val=(p3>=0)?c.substring(p3+1):"";
+  group.toUpperCase(); key.toUpperCase();
+
+  if (group=="ECU") {
+    simProfile=key.length()?key:val;
+    simProfile.toUpperCase();
+    sendLine("SIM:ECU,"+simProfile);
+  } else if (group=="CANRATE") {
+    String rate=key.length()?key:val;
+    simCanRate=rate.toInt();
+    if (simCanRate<=0) simCanRate=500;
+    sendLine("SIM:CANRATE,"+String(simCanRate));
+  } else if (group=="SET") {
+    float n=val.toFloat();
+    if (key=="RPM") simRpm=n;
+    else if (key=="SPEED") simSpeed=n;
+    else if (key=="ECT") simEct=n;
+    else if (key=="FUEL") simFuel=n;
+    else if (key=="VBAT") simVbat=n;
+  } else if (group=="ACT") {
+    bool on=val.toInt()!=0;
+    if (key=="IGNITION") simIgnition=on;
+    else if (key=="ENGINE") simEngine=on;
+  } else if (group=="DTC") {
+    if (key=="ADD") simDtc=val;
+    else if (key=="CLEAR") simDtc="";
+  } else if (group=="CAN" && key=="SAMPLE") {
+    publishSimTelemetry();
+  } else if (group=="HEARTBEAT") {
+    sendLine("SIM:HEARTBEAT,OK");
+  }
+}
+
 static void handleCommand(String c) {
   c.trim();
   String upper=c; upper.toUpperCase();
 
   if(upper=="PING") sendLine("PONG");
+  else if(upper=="HELLO|CARLAB|1" || upper.startsWith("SIM|")) handleSimCommand(c);
   else if(upper=="GET_SERIAL") {
     sendLine(deviceSerial.length() ? ("SERIAL:"+deviceSerial) : "SERIAL:UNSET");
   }
@@ -333,12 +444,22 @@ static void handleCommand(String c) {
     }
   }
   else if(upper=="STATUS") {
-    String proto = canStarted ? ("CAN"+String(canRate)) : (klineConnected ? "KLINE" : "NONE");
-    sendLine("STATUS,FW:"+String(FW_VERSION)+",PROTO:"+proto+",COOLANT:"+(lowCoolant?String("LOW"):String("OK")));
+    String proto = simMode ? simProtocol() : (canStarted ? ("CAN"+String(canRate)) : (klineConnected ? "KLINE" : "NONE"));
+    sendLine("STATUS,FW:"+String(FW_VERSION)+",PROTO:"+proto+",COOLANT:"+(lowCoolant?String("LOW"):String("OK"))+",SIM:"+(simMode?String("1"):String("0")));
+    if (simMode) publishSimTelemetry();
   }
-  else if(upper=="REDETECT") detectProtocol();
-  else if(upper=="READ_DTC") readDTC_CAN();
-  else if(upper=="CLEAR_DTC") clearDTC_CAN();
+  else if(upper=="REDETECT") {
+    if (simMode) simDetect();
+    else detectProtocol();
+  }
+  else if(upper=="READ_DTC") {
+    if (simMode) sendLine(simDtc.length()?("DTC:"+simDtc):"DTC:NONE");
+    else readDTC_CAN();
+  }
+  else if(upper=="CLEAR_DTC") {
+    if (simMode) { simDtc=""; sendLine("CLEAR_DTC:SENT"); }
+    else clearDTC_CAN();
+  }
 }
 
 class ServerCallbacks : public NimBLEServerCallbacks {
@@ -394,8 +515,20 @@ static void startBLE() {
   cmd->setCallbacks(new CmdCallbacks());
   dataCh->setValue(deviceSerial.length() ? ("SERIAL:"+deviceSerial).c_str() : "SERIAL:UNSET");
   service->start();
+
+  // Second service keeps CarLab v1.2 compatible without changing its file.
+  NimBLEService* simSvc=bleServer->createService(SIM_SERVICE_UUID);
+  NimBLECharacteristic* simCmd=simSvc->createCharacteristic(SIM_CMD_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+  simStatusCh=simSvc->createCharacteristic(SIM_STATUS_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+  simEventCh=simSvc->createCharacteristic(SIM_EVENT_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+  simCmd->setCallbacks(new CmdCallbacks());
+  simStatusCh->setValue("SIM:READY");
+  simEventCh->setValue("SIM:READY");
+  simSvc->start();
+
   NimBLEAdvertising* adv=NimBLEDevice::getAdvertising();
   adv->addServiceUUID(BLE_SERVICE_UUID);
+  adv->addServiceUUID(SIM_SERVICE_UUID);
   adv->setScanResponse(true);
   adv->setMinPreferred(0x06);
   adv->setMaxPreferred(0x12);
@@ -437,8 +570,17 @@ void loop() {
     }
   }
 
+  // CarLab can also drive the exact same bench protocol over native USB Serial.
+  static String usbLine="";
+  while (Serial.available()) {
+    char ch=(char)Serial.read();
+    if (ch=='\n' || ch=='\r') {
+      if (usbLine.length()) { handleCommand(usbLine); usbLine=""; }
+    } else if (usbLine.length()<120) usbLine+=ch;
+  }
+
   uint32_t now=millis();
-  if(now-lastPid>=1000) { lastPid=now; sendPidData(); }
+  if(now-lastPid>=700) { lastPid=now; if(simMode) publishSimTelemetry(); else sendPidData(); }
   if(now-lastCoolant>=20000) { lastCoolant=now; sampleCoolant(); }
   delay(2);
 }
