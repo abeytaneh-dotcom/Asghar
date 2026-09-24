@@ -43,6 +43,10 @@ public sealed class MainForm : Form
     LedLamp fanLowLed = null!;
     LedLamp fanHighLed = null!;
     LedLamp milLed = null!;
+    LedLamp immoLed = null!;
+    LedLamp oxygenLed = null!;
+    LedLamp ckpLed = null!;
+    LedLamp cmpLed = null!;
     TrackBar rpmSlider = null!;
     TrackBar throttleSlider = null!;
     TrackBar tempSlider = null!;
@@ -338,66 +342,177 @@ public sealed class MainForm : Form
     Control CreateDashboardPage()
     {
         var page = NewPage();
-        var top = new TableLayoutPanel { Dock = DockStyle.Top, Height = 178, ColumnCount = 6, RowCount = 1, Padding = new Padding(0, 0, 0, 10) };
+
+        var top = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 178,
+            ColumnCount = 6,
+            RowCount = 1,
+            Padding = new Padding(0, 0, 0, 10),
+            RightToLeft = RightToLeft.No
+        };
         for (int i = 0; i < 6; i++) top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16.666f));
         page.Controls.Add(top);
 
-        rpmCard = AddMetric(top, "دور موتور", "0", "RPM", Cyan, 0);
-        tempCard = AddMetric(top, "دمای آب", "0", "°C", Amber, 1);
-        tpsCard = AddMetric(top, "دریچه گاز", "0", "%", Green, 2);
-        mapCard = AddMetric(top, "فشار MAP", "0", "kPa", Purple, 3);
-        voltCard = AddMetric(top, "ولتاژ ECU", "0", "V", Cyan, 4);
-        currentCard = AddMetric(top, "جریان ECU", "0", "A", Amber, 5);
+        rpmCard = AddMetric(top, "دور موتور", "0", "RPM", Cyan, 5);
+        tempCard = AddMetric(top, "دمای آب", "0", "°C", Amber, 4);
+        tpsCard = AddMetric(top, "دریچه گاز", "0", "%", Green, 3);
+        mapCard = AddMetric(top, "فشار MAP", "0", "kPa", Purple, 2);
+        voltCard = AddMetric(top, "ولتاژ ECU", "0", "V", Cyan, 1);
+        currentCard = AddMetric(top, "جریان ECU", "0", "A", Amber, 0);
 
-        var center = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
-        center.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 66));
+        var center = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            RightToLeft = RightToLeft.No,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
         center.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
+        center.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 66));
         page.Controls.Add(center);
         center.BringToFront();
 
-        var signalCard = new RoundedPanel { Dock = DockStyle.Fill, Margin = new Padding(0, 6, 8, 0), BackColor = PanelBg, BorderColor = Border, Radius = 20, Padding = new Padding(18) };
-        center.Controls.Add(signalCard, 0, 0);
-
-        var signalTitle = SectionTitle("نمایش زنده خروجی‌های ECU");
-        signalCard.Controls.Add(signalTitle);
-
-        var lamps = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 190, FlowDirection = FlowDirection.RightToLeft, WrapContents = true, Padding = new Padding(8, 20, 8, 0) };
-        signalCard.Controls.Add(lamps);
-        lamps.BringToFront();
-
-        injectorLeds = Enumerable.Range(1, 6).Select(i => new LedLamp($"انژکتور {i}", Green)).ToArray();
-        coilLeds = Enumerable.Range(1, 6).Select(i => new LedLamp($"کوئل {i}", Cyan)).ToArray();
-        foreach (var l in injectorLeds.Concat(coilLeds)) lamps.Controls.Add(l);
-
-        var relays = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 105, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Padding = new Padding(8) };
-        signalCard.Controls.Add(relays);
-        fuelPumpLed = new LedLamp("پمپ بنزین", Amber);
-        fanLowLed = new LedLamp("فن کند", Cyan);
-        fanHighLed = new LedLamp("فن تند", Red);
-        milLed = new LedLamp("چراغ چک", Amber);
-        relays.Controls.AddRange(new Control[] { fuelPumpLed, fanLowLed, fanHighLed, milLed });
-
-        var controlsCard = new RoundedPanel { Dock = DockStyle.Fill, Margin = new Padding(8, 6, 0, 0), BackColor = PanelBg, BorderColor = Border, Radius = 20, Padding = new Padding(18) };
-        center.Controls.Add(controlsCard, 1, 0);
+        // Simulator controls stay inside their own fixed table cell.
+        // No child button is anchored to an un-laid-out right edge anymore.
+        var controlsCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 6, 8, 0),
+            BackColor = PanelBg,
+            BorderColor = Border,
+            Radius = 20,
+            Padding = new Padding(18),
+            RightToLeft = RightToLeft.Yes
+        };
+        center.Controls.Add(controlsCard, 0, 0);
         controlsCard.Controls.Add(SectionTitle("کنترل شبیه‌ساز"));
 
         rpmSlider = AddSlider(controlsCard, "دور موتور هدف", 0, 8000, 850, 80);
         throttleSlider = AddSlider(controlsCard, "دریچه گاز", 0, 100, 18, 168);
         tempSlider = AddSlider(controlsCard, "دمای آب", -20, 125, 88, 256);
 
-        var quick = ActionButton("▶  اجرای تست سریع", Green, 290, 52);
-        quick.Location = new Point(28, 360);
-        quick.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        quick.Click += (_, _) => { ShowPage("تست خودکار"); _ = RunAutoTest(); };
-        controlsCard.Controls.Add(quick);
+        var actions = new TableLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 132,
+            ColumnCount = 1,
+            RowCount = 2,
+            Padding = new Padding(8, 6, 8, 6),
+            BackColor = Color.Transparent,
+            RightToLeft = RightToLeft.Yes
+        };
+        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        controlsCard.Controls.Add(actions);
 
-        var fault = ActionButton("⚠  تزریق خطای آزمایشی", Red, 290, 48);
-        fault.Location = new Point(28, 424);
-        fault.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        var quick = ActionButton("▶  اجرای تست سریع", Green, 100, 52);
+        quick.Dock = DockStyle.Fill;
+        quick.Margin = new Padding(4);
+        quick.Click += (_, _) => { ShowPage("تست خودکار"); _ = RunAutoTest(); };
+        actions.Controls.Add(quick, 0, 0);
+
+        var fault = ActionButton("⚠  تزریق خطای آزمایشی", Red, 100, 52);
+        fault.Dock = DockStyle.Fill;
+        fault.Margin = new Padding(4);
         fault.Click += (_, _) => AddDemoDtc();
-        controlsCard.Controls.Add(fault);
+        actions.Controls.Add(fault, 0, 1);
+
+        // Live ECU outputs.
+        var signalCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(8, 6, 0, 0),
+            BackColor = PanelBg,
+            BorderColor = Border,
+            Radius = 20,
+            Padding = new Padding(16),
+            RightToLeft = RightToLeft.Yes
+        };
+        center.Controls.Add(signalCard, 1, 0);
+        signalCard.Controls.Add(SectionTitle("نمایش زنده خروجی‌ها و سنسورهای ECU"));
+
+        injectorLeds = Enumerable.Range(1, 6)
+            .Select(i => new LedLamp($"انژکتور {i}", Green, "INJ", "پالس", "خاموش"))
+            .ToArray();
+
+        coilLeds = Enumerable.Range(1, 6)
+            .Select(i => new LedLamp($"کوئل {i}", Cyan, "⚡", "جرقه", "خاموش"))
+            .ToArray();
+
+        fuelPumpLed = new LedLamp("پمپ بنزین", Amber, "⛽", "فعال", "خاموش");
+        fanLowLed = new LedLamp("فن کند", Cyan, "FAN", "فعال", "خاموش");
+        fanHighLed = new LedLamp("فن تند", Red, "FAN+", "فعال", "خاموش");
+        milLed = new LedLamp("چراغ چک", Amber, "MIL", "روشن", "خاموش");
+        immoLed = new LedLamp("چراغ ایمو", Red, "IMMO", "قفل", "آزاد");
+        oxygenLed = new LedLamp("سنسور اکسیژن", Purple, "O₂", "فعال", "سرد");
+        ckpLed = new LedLamp("سنسور دور", Cyan, "CKP", "سیگنال", "قطع");
+        cmpLed = new LedLamp("میل‌سوپاپ", Green, "CMP", "سیگنال", "قطع");
+
+        var statusGrid = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 3,
+            ColumnCount = 1,
+            Padding = new Padding(0, 4, 0, 0),
+            Margin = Padding.Empty,
+            BackColor = Color.Transparent,
+            RightToLeft = RightToLeft.Yes
+        };
+        statusGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333f));
+        statusGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333f));
+        statusGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.334f));
+        signalCard.Controls.Add(statusGrid);
+        statusGrid.BringToFront();
+
+        statusGrid.Controls.Add(MakeLampGroup("انژکتورها", injectorLeds), 0, 0);
+        statusGrid.Controls.Add(MakeLampGroup("کویل‌ها", coilLeds), 0, 1);
+        statusGrid.Controls.Add(MakeLampGroup("شبکه سنسورها و عملگرها",
+            new[] { fuelPumpLed, fanLowLed, fanHighLed, milLed, immoLed, oxygenLed, ckpLed, cmpLed }), 0, 2);
 
         return page;
+    }
+
+    Control MakeLampGroup(string title, IEnumerable<LedLamp> lamps)
+    {
+        var group = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(2, 3, 2, 3),
+            BackColor = Color.Transparent,
+            RightToLeft = RightToLeft.Yes
+        };
+
+        var groupTitle = new Label
+        {
+            Text = title,
+            Dock = DockStyle.Top,
+            Height = 28,
+            ForeColor = TextMuted,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            TextAlign = ContentAlignment.MiddleRight
+        };
+        group.Controls.Add(groupTitle);
+
+        var flow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            AutoScroll = true,
+            Padding = new Padding(4, 2, 4, 2),
+            Margin = Padding.Empty,
+            BackColor = Color.Transparent,
+            RightToLeft = RightToLeft.Yes
+        };
+        group.Controls.Add(flow);
+        flow.BringToFront();
+
+        foreach (var lamp in lamps) flow.Controls.Add(lamp);
+        return group;
     }
 
     MetricCard AddMetric(TableLayoutPanel top, string title, string value, string unit, Color accent, int column)
@@ -409,11 +524,40 @@ public sealed class MainForm : Form
 
     TrackBar AddSlider(Control host, string title, int min, int max, int value, int y)
     {
-        var label = new Label { Text = $"{title}: {value}", ForeColor = TextMain, Font = new Font("Segoe UI", 10, FontStyle.Bold), AutoSize = false, Size = new Size(300, 28), Location = new Point(25, y), TextAlign = ContentAlignment.MiddleRight };
+        var label = new Label
+        {
+            Text = $"{title}: {value}",
+            ForeColor = TextMain,
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            AutoSize = false,
+            Height = 28,
+            Location = new Point(25, y),
+            TextAlign = ContentAlignment.MiddleRight
+        };
+
+        var tr = new TrackBar
+        {
+            Minimum = min,
+            Maximum = max,
+            Value = value,
+            TickStyle = TickStyle.None,
+            Height = 44,
+            Location = new Point(22, y + 32),
+            RightToLeft = RightToLeft.No
+        };
+
+        void Fit()
+        {
+            int w = Math.Max(150, host.ClientSize.Width - 50);
+            label.Width = w;
+            tr.Width = w;
+        }
+
         host.Controls.Add(label);
-        var tr = new TrackBar { Minimum = min, Maximum = max, Value = value, TickStyle = TickStyle.None, Size = new Size(300, 44), Location = new Point(22, y + 32), RightToLeft = RightToLeft.No };
-        tr.ValueChanged += (_, _) => label.Text = $"{title}: {tr.Value}";
         host.Controls.Add(tr);
+        host.Resize += (_, _) => Fit();
+        tr.ValueChanged += (_, _) => label.Text = $"{title}: {tr.Value}";
+        Fit();
         return tr;
     }
 
@@ -770,6 +914,10 @@ public sealed class MainForm : Form
         fuelPumpLed.SetState(true);
         fanLowLed.SetState(temp >= 92);
         fanHighLed.SetState(temp >= 103);
+        immoLed.SetState(rpm < 100);           // red only when immobilizer is blocking start
+        oxygenLed.SetState(rpm > 650 && temp > 55);
+        ckpLed.SetState(rpm > 100);
+        cmpLed.SetState(rpm > 100);
 
         scope.Rpm = rpm;
         scope.Phase = phase;
@@ -901,15 +1049,25 @@ public sealed class LedLamp : UserControl
 {
     readonly string caption;
     readonly Color onColor;
+    readonly string icon;
+    readonly string onText;
+    readonly string offText;
     bool state;
 
-    public LedLamp(string caption, Color onColor)
+    public LedLamp(string caption, Color onColor, string icon = "●", string onText = "فعال", string offText = "خاموش")
     {
         this.caption = caption;
         this.onColor = onColor;
-        Size = new Size(128, 78);
-        Margin = new Padding(7);
+        this.icon = icon;
+        this.onText = onText;
+        this.offText = offText;
+
+        Size = new Size(102, 94);
+        MinimumSize = new Size(96, 90);
+        Margin = new Padding(5);
         DoubleBuffered = true;
+        BackColor = Color.Transparent;
+        Cursor = Cursors.Default;
     }
 
     public void SetState(bool on)
@@ -922,18 +1080,62 @@ public sealed class LedLamp : UserControl
     protected override void OnPaint(PaintEventArgs e)
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        var c = new Point(Width / 2, 24);
-        var lamp = new Rectangle(c.X - 11, c.Y - 11, 22, 22);
+
+        var card = new Rectangle(1, 1, Width - 3, Height - 3);
+        using var cardPath = Rounded(card, 13);
+        using var cardBrush = new SolidBrush(state ? Color.FromArgb(24, onColor) : Color.FromArgb(22, 31, 45));
+        using var borderPen = new Pen(state ? Color.FromArgb(125, onColor) : Color.FromArgb(50, 66, 86), 1.2f);
+        e.Graphics.FillPath(cardBrush, cardPath);
+        e.Graphics.DrawPath(borderPen, cardPath);
+
+        int cx = Width / 2;
+        int cy = 25;
+
         if (state)
         {
-            using var glow = new SolidBrush(Color.FromArgb(55, onColor));
-            e.Graphics.FillEllipse(glow, c.X - 21, c.Y - 21, 42, 42);
+            using var glow = new SolidBrush(Color.FromArgb(38, onColor));
+            e.Graphics.FillEllipse(glow, cx - 24, cy - 22, 48, 48);
         }
-        using var b = new SolidBrush(state ? onColor : Color.FromArgb(68, 78, 92));
-        e.Graphics.FillEllipse(b, lamp);
-        using var pen = new Pen(state ? ControlPaint.Light(onColor) : Color.FromArgb(100, 110, 125), 2);
-        e.Graphics.DrawEllipse(pen, lamp);
-        TextRenderer.DrawText(e.Graphics, caption, new Font("Segoe UI", 9, FontStyle.Bold), new Rectangle(2, 48, Width - 4, 24), state ? Color.White : Color.FromArgb(151, 166, 184), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+
+        using (var iconBg = new SolidBrush(state ? Color.FromArgb(210, onColor) : Color.FromArgb(56, 70, 87)))
+            e.Graphics.FillEllipse(iconBg, cx - 17, cy - 17, 34, 34);
+
+        var iconRect = new Rectangle(cx - 20, cy - 17, 40, 34);
+        TextRenderer.DrawText(
+            e.Graphics,
+            icon,
+            new Font(icon.Length <= 2 ? "Segoe UI Symbol" : "Segoe UI", icon.Length <= 2 ? 11f : 7.5f, FontStyle.Bold),
+            iconRect,
+            state ? Color.FromArgb(5, 15, 22) : Color.FromArgb(190, 202, 216),
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+
+        TextRenderer.DrawText(
+            e.Graphics,
+            caption,
+            new Font("Segoe UI", 8.4f, FontStyle.Bold),
+            new Rectangle(4, 48, Width - 8, 22),
+            state ? Color.White : Color.FromArgb(182, 194, 208),
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+        TextRenderer.DrawText(
+            e.Graphics,
+            state ? onText : offText,
+            new Font("Segoe UI", 7.4f, FontStyle.Regular),
+            new Rectangle(4, 70, Width - 8, 17),
+            state ? onColor : Color.FromArgb(117, 132, 151),
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+    }
+
+    static GraphicsPath Rounded(Rectangle r, int radius)
+    {
+        var p = new GraphicsPath();
+        int d = radius * 2;
+        p.AddArc(r.X, r.Y, d, d, 180, 90);
+        p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+        p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        p.CloseFigure();
+        return p;
     }
 }
 
