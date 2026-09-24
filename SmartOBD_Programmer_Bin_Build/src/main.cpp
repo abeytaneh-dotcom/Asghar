@@ -20,7 +20,7 @@
 #include <NimBLEDevice.h>
 #include <Preferences.h>
 
-static const char* FW_VERSION = "3.0-tnm-pro";
+static const char* FW_VERSION = "3.1-programmer-pro";
 
 // Real-vehicle programming is intentionally compile-time gated.
 // Enable only after the board has the corresponding automotive transceiver
