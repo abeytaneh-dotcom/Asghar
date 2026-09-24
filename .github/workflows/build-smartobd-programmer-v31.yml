@@ -1,0 +1,44 @@
+name: Build SmartOBD Programmer Pro ESP32-C3 BIN
+on:
+  push:
+    branches:
+      - smartobd-programmer-v3-1-build
+    paths:
+      - 'SmartOBD_Programmer_Bin_Build/**'
+      - '.github/workflows/build-smartobd-programmer-v31.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: SmartOBD_Programmer_Bin_Build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install platformio
+      - run: pio run -e esp32-c3
+      - name: Create FULL image
+        shell: bash
+        run: |
+          set -eux
+          BUILD=".pio/build/esp32-c3"
+          PKG="$HOME/.platformio/packages/framework-arduinoespressif32"
+          python "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" --chip esp32c3 merge_bin -o "$BUILD/KhanehRemap-SmartOBD-Programmer-Pro-v3.1-FULL.bin" \
+            0x0 "$BUILD/bootloader.bin" \
+            0x8000 "$BUILD/partitions.bin" \
+            0xe000 "$PKG/tools/partitions/boot_app0.bin" \
+            0x10000 "$BUILD/firmware.bin"
+          cp "$BUILD/firmware.bin" "$BUILD/KhanehRemap-SmartOBD-Programmer-Pro-v3.1-APP.bin"
+          sha256sum "$BUILD/KhanehRemap-SmartOBD-Programmer-Pro-v3.1-FULL.bin" "$BUILD/KhanehRemap-SmartOBD-Programmer-Pro-v3.1-APP.bin" > "$BUILD/SHA256SUMS.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartOBD-Programmer-Pro-v3.1-BIN
+          path: |
+            SmartOBD_Programmer_Bin_Build/.pio/build/esp32-c3/KhanehRemap-SmartOBD-Programmer-Pro-v3.1-FULL.bin
+            SmartOBD_Programmer_Bin_Build/.pio/build/esp32-c3/KhanehRemap-SmartOBD-Programmer-Pro-v3.1-APP.bin
+            SmartOBD_Programmer_Bin_Build/.pio/build/esp32-c3/bootloader.bin
+            SmartOBD_Programmer_Bin_Build/.pio/build/esp32-c3/partitions.bin
+            SmartOBD_Programmer_Bin_Build/.pio/build/esp32-c3/SHA256SUMS.txt
