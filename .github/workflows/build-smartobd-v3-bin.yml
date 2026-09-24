@@ -1,0 +1,48 @@
+name: Build SmartOBD ESP32-C3 BIN
+on:
+  push:
+    branches:
+      - smartobd-bin-v3-0-build
+    paths:
+      - 'SmartOBD_Bin_Build/**'
+      - '.github/workflows/build-smartobd-v3-bin.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: SmartOBD_Bin_Build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build firmware
+        run: pio run -e esp32-c3
+      - name: Create single FULL image
+        shell: bash
+        run: |
+          set -eux
+          BUILD=".pio/build/esp32-c3"
+          PKG="$HOME/.platformio/packages/framework-arduinoespressif32"
+          python "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" --chip esp32c3 merge_bin -o "$BUILD/KhanehRemap-SmartOBD-TNM-Pro-v3.0-FULL.bin" \
+            0x0 "$BUILD/bootloader.bin" \
+            0x8000 "$BUILD/partitions.bin" \
+            0xe000 "$PKG/tools/partitions/boot_app0.bin" \
+            0x10000 "$BUILD/firmware.bin"
+          cp "$BUILD/firmware.bin" "$BUILD/KhanehRemap-SmartOBD-TNM-Pro-v3.0-APP.bin"
+          sha256sum "$BUILD/KhanehRemap-SmartOBD-TNM-Pro-v3.0-FULL.bin" "$BUILD/KhanehRemap-SmartOBD-TNM-Pro-v3.0-APP.bin" > "$BUILD/SHA256SUMS.txt"
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartOBD-ESP32C3-v3.0-BIN
+          path: |
+            SmartOBD_Bin_Build/.pio/build/esp32-c3/KhanehRemap-SmartOBD-TNM-Pro-v3.0-FULL.bin
+            SmartOBD_Bin_Build/.pio/build/esp32-c3/KhanehRemap-SmartOBD-TNM-Pro-v3.0-APP.bin
+            SmartOBD_Bin_Build/.pio/build/esp32-c3/bootloader.bin
+            SmartOBD_Bin_Build/.pio/build/esp32-c3/partitions.bin
+            SmartOBD_Bin_Build/.pio/build/esp32-c3/SHA256SUMS.txt
