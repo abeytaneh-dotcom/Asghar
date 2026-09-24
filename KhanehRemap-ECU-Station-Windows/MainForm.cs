@@ -36,6 +36,21 @@ public sealed class MainForm : Form
     MetricCard mapCard = null!;
     MetricCard voltCard = null!;
     MetricCard currentCard = null!;
+
+    MiniGaugeCard dashRpm = null!;
+    MiniGaugeCard dashWater = null!;
+    MiniGaugeCard dashIntake = null!;
+    MiniGaugeCard dashBattery = null!;
+    MiniGaugeCard dashOxygen = null!;
+    MiniGaugeCard dashThrottle = null!;
+    MiniGaugeCard dashMap = null!;
+    RichTextBox dashboardLog = null!;
+    Label dashPowerB = null!;
+    Label dashPowerIgn = null!;
+    Label dashPower5 = null!;
+    Label dashPowerGnd = null!;
+    Label dashPowerRpm = null!;
+    Label dashPowerBus = null!;
     ScopeControl scope = null!;
     LedLamp[] injectorLeds = Array.Empty<LedLamp>();
     LedLamp[] coilLeds = Array.Empty<LedLamp>();
@@ -64,11 +79,11 @@ public sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "خانه ریمپ | ECU Station";
+        Text = "نرم افزار تست ECU | خانه ریمپ";
         BackColor = Bg;
         ForeColor = TextMain;
         Font = new Font("Segoe UI", 10f);
-        MinimumSize = new Size(1180, 760);
+        MinimumSize = new Size(1240, 760);
         WindowState = FormWindowState.Maximized;
         StartPosition = FormStartPosition.CenterScreen;
         RightToLeft = RightToLeft.Yes;
@@ -77,162 +92,157 @@ public sealed class MainForm : Form
 
         BuildShell();
         BuildPages();
-        ShowPage("شروع");
+
+        // نسخه نمایشی از ابتدا با داده‌های شبیه‌سازی‌شده فعال است.
+        demoMode = true;
+        connectionLabel.Text = "● ارتباط با ECU برقرار است  |  DEMO";
+        connectionLabel.ForeColor = Green;
+        ecuLabel.Text = "ECU: M7.4.4 / ME7.4.4 — DEMO";
+        demoBadge.Text = "● حالت دمو فعال";
+        demoBadge.ForeColor = Cyan;
+        ShowPage("داشبورد");
 
         demoTimer.Tick += (_, _) => TickDemo();
+        demoTimer.Start();
         FormClosing += (_, _) => demoTimer.Stop();
     }
 
     void BuildShell()
     {
-        // Root layout is deliberately LTR so RTL text never mirrors/overlaps the sidebar.
-        // This fixes the left-side content sliding underneath the navigation panel.
-        var root = new TableLayoutPanel
+        var root = new Panel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty,
             BackColor = Bg,
-            RightToLeft = RightToLeft.No
+            Padding = Padding.Empty,
+            Margin = Padding.Empty
         };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 235));
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(root);
 
-        var sidebar = new Panel
+        var topBar = new RoundedPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 88,
+            BackColor = Color.FromArgb(5, 18, 30),
+            BorderColor = Color.FromArgb(13, 75, 105),
+            Radius = 12,
+            Padding = new Padding(8),
+            Margin = Padding.Empty
+        };
+        root.Controls.Add(topBar);
+
+        var topLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            BackColor = Color.FromArgb(12, 18, 28),
-            Padding = new Padding(12),
-            RightToLeft = RightToLeft.Yes
+            ColumnCount = 3,
+            RowCount = 1,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            RightToLeft = RightToLeft.No
         };
-        root.Controls.Add(sidebar, 0, 0);
+        topLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 365));
+        topLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        topLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250));
+        topLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        topBar.Controls.Add(topLayout);
 
-        var brand = new Panel { Dock = DockStyle.Top, Height = 116, BackColor = Color.Transparent, RightToLeft = RightToLeft.Yes };
-        sidebar.Controls.Add(brand);
-
-        var logo = new Label
+        var brand = new BrandControl
         {
-            Text = "⚡",
-            Font = new Font("Segoe UI Emoji", 27, FontStyle.Bold),
-            ForeColor = Cyan,
-            AutoSize = false,
-            Size = new Size(54, 54),
-            Location = new Point(157, 14),
-            TextAlign = ContentAlignment.MiddleCenter
+            Dock = DockStyle.Fill,
+            Margin = new Padding(4, 2, 8, 2),
+            Title = "نرم افزار تست ECU",
+            Subtitle = "عیب‌یابی و تست کامل واحد کنترل موتور"
         };
-        brand.Controls.Add(logo);
-
-        var title = new Label
-        {
-            Text = "خانه ریمپ",
-            Font = new Font("Segoe UI", 16, FontStyle.Bold),
-            ForeColor = TextMain,
-            AutoSize = false,
-            Size = new Size(145, 34),
-            Location = new Point(12, 15),
-            TextAlign = ContentAlignment.MiddleRight
-        };
-        brand.Controls.Add(title);
-
-        var sub = new Label
-        {
-            Text = "ECU STATION",
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
-            ForeColor = Cyan,
-            AutoSize = false,
-            Size = new Size(145, 25),
-            Location = new Point(12, 49),
-            TextAlign = ContentAlignment.MiddleRight
-        };
-        brand.Controls.Add(sub);
-
-        demoBadge = new Label
-        {
-            Text = "● آماده",
-            ForeColor = TextMuted,
-            BackColor = PanelBg,
-            AutoSize = false,
-            Size = new Size(199, 28),
-            Location = new Point(12, 82),
-            TextAlign = ContentAlignment.MiddleCenter
-        };
-        brand.Controls.Add(demoBadge);
+        topLayout.Controls.Add(brand, 0, 0);
 
         var nav = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
+            FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             AutoScroll = true,
-            Padding = new Padding(0, 8, 0, 0),
-            RightToLeft = RightToLeft.Yes
+            BackColor = Color.Transparent,
+            Padding = new Padding(4, 3, 4, 3),
+            Margin = Padding.Empty,
+            RightToLeft = RightToLeft.No
         };
-        sidebar.Controls.Add(nav);
-        nav.BringToFront();
+        topLayout.Controls.Add(nav, 1, 0);
 
-        AddNav(nav, "شروع", "⌂", "شروع");
-        AddNav(nav, "داشبورد", "◉", "داشبورد");
-        AddNav(nav, "تست خودکار", "✓", "تست خودکار");
-        AddNav(nav, "داده زنده", "≋", "داده زنده");
-        AddNav(nav, "اسیلوسکوپ", "⌁", "اسیلوسکوپ");
-        AddNav(nav, "دیاگ", "⚠", "دیاگ");
-        AddNav(nav, "پروگرامر", "⬢", "پروگرامر");
-        AddNav(nav, "تنظیمات", "⚙", "تنظیمات");
+        AddNav(nav, "داشبورد", "⌂", "داشبورد");
+        AddNav(nav, "تست خودکار", "⌁", "تست عملکردها");
+        AddNav(nav, "داده زنده", "◌", "نمایش سنسورها");
+        AddNav(nav, "پروگرامر", "⚙", "تنظیمات و ابزارها");
+        AddNav(nav, "دیاگ", "▤", "گزارش و لاگ");
+        AddNav(nav, "شروع", "?", "راهنما");
 
-        var main = new Panel
+        var connectionBox = new RoundedPanel
         {
             Dock = DockStyle.Fill,
-            BackColor = Bg,
-            RightToLeft = RightToLeft.Yes,
-            Padding = Padding.Empty,
-            Margin = Padding.Empty
+            Margin = new Padding(8, 8, 6, 8),
+            BackColor = Color.FromArgb(5, 28, 35),
+            BorderColor = Color.FromArgb(13, 84, 95),
+            Radius = 13,
+            Padding = new Padding(12)
         };
-        root.Controls.Add(main, 1, 0);
+        topLayout.Controls.Add(connectionBox, 2, 0);
 
-        var header = new Panel
+        var connectionDot = new Panel
         {
-            Dock = DockStyle.Top,
-            Height = 74,
-            BackColor = Color.FromArgb(14, 21, 31),
-            Padding = new Padding(24, 12, 24, 10),
-            RightToLeft = RightToLeft.Yes
+            Size = new Size(36, 36),
+            Location = new Point(18, 16),
+            BackColor = Green
         };
-        main.Controls.Add(header);
-
-        ecuLabel = new Label
+        connectionDot.Paint += (_, e) =>
         {
-            Text = "ECU: انتخاب نشده",
-            Dock = DockStyle.Right,
-            Width = 340,
-            Font = new Font("Segoe UI", 12, FontStyle.Bold),
-            ForeColor = TextMain,
-            TextAlign = ContentAlignment.MiddleRight
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.Clear(connectionBox.BackColor);
+            using var glow = new SolidBrush(Color.FromArgb(60, Green));
+            using var core = new SolidBrush(Green);
+            e.Graphics.FillEllipse(glow, 0, 0, 36, 36);
+            e.Graphics.FillEllipse(core, 8, 8, 20, 20);
         };
-        header.Controls.Add(ecuLabel);
+        connectionBox.Controls.Add(connectionDot);
 
         connectionLabel = new Label
         {
-            Text = "○ دستگاه متصل نیست",
-            Dock = DockStyle.Left,
-            Width = 300,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = Red,
-            TextAlign = ContentAlignment.MiddleLeft
+            Text = "● ارتباط با ECU برقرار است",
+            ForeColor = Green,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            AutoSize = false,
+            Location = new Point(60, 12),
+            Size = new Size(168, 28),
+            TextAlign = ContentAlignment.MiddleRight
         };
-        header.Controls.Add(connectionLabel);
+        connectionBox.Controls.Add(connectionLabel);
+
+        ecuLabel = new Label
+        {
+            Text = "ECU: DEMO",
+            ForeColor = TextMain,
+            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+            AutoSize = false,
+            Location = new Point(60, 40),
+            Size = new Size(168, 24),
+            TextAlign = ContentAlignment.MiddleRight
+        };
+        connectionBox.Controls.Add(ecuLabel);
+
+        demoBadge = new Label
+        {
+            Visible = false,
+            Text = "● حالت دمو فعال",
+            ForeColor = Cyan
+        };
+        connectionBox.Controls.Add(demoBadge);
 
         contentHost = new Panel
         {
             Dock = DockStyle.Fill,
             BackColor = Bg,
-            Padding = new Padding(18),
+            Padding = new Padding(8, 8, 8, 8),
             RightToLeft = RightToLeft.Yes
         };
-        main.Controls.Add(contentHost);
+        root.Controls.Add(contentHost);
         contentHost.BringToFront();
     }
 
@@ -240,11 +250,15 @@ public sealed class MainForm : Form
     {
         var b = new NavButton
         {
-            Width = 202,
-            Height = 48,
-            Margin = new Padding(0, 3, 0, 3),
-            Text = $"  {icon}   {text}",
-            Tag = key
+            Width = 138,
+            Height = 72,
+            Margin = new Padding(3, 0, 3, 0),
+            Text = $"{icon}\n{text}",
+            Tag = key,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Padding = Padding.Empty,
+            RightToLeft = RightToLeft.Yes,
+            Font = new Font("Segoe UI", 9.2f, FontStyle.Bold)
         };
         b.Click += (_, _) => ShowPage((string)b.Tag!);
         host.Controls.Add(b);
