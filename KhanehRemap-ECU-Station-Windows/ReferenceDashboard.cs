@@ -48,8 +48,21 @@ public sealed class ReferenceDashboard : UserControl
         Padding = new Padding(2);
 
         Build();
-        timer.Tick += (_, _) => TickDemo();
-        timer.Start();
+        timer.Tick += (_, _) =>
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            try { TickDemo(); } catch { timer.Stop(); }
+        };
+        HandleCreated += (_, _) =>
+        {
+            if (!DesignMode && !timer.Enabled) timer.Start();
+        };
+        VisibleChanged += (_, _) =>
+        {
+            if (IsDisposed) return;
+            if (Visible && IsHandleCreated && !timer.Enabled) timer.Start();
+            else if (!Visible && timer.Enabled) timer.Stop();
+        };
         Disposed += (_, _) => timer.Stop();
     }
 
@@ -717,17 +730,28 @@ public sealed class RefPanel : Panel
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
-        var r=new Rectangle(0,0,Width-1,Height-1);
-        using var path=Round(r,Radius);
-        using var pen=new Pen(BorderColor,1);
-        e.Graphics.DrawPath(pen,path);
+        if (Width < 3 || Height < 3) return;
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var r = new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1));
+        using var path = Round(r, Radius);
+        if (path.PointCount == 0) return;
+        using var pen = new Pen(BorderColor, 1);
+        e.Graphics.DrawPath(pen, path);
     }
-    static GraphicsPath Round(Rectangle r,int rad)
+    static GraphicsPath Round(Rectangle r, int rad)
     {
-        var p=new GraphicsPath(); int d=Math.Min(rad*2,Math.Min(r.Width,r.Height));
-        p.AddArc(r.X,r.Y,d,d,180,90); p.AddArc(r.Right-d,r.Y,d,d,270,90);
-        p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90); p.AddArc(r.X,r.Bottom-d,d,d,90,90); p.CloseFigure(); return p;
+        var p = new GraphicsPath();
+        if (r.Width <= 1 || r.Height <= 1) return p;
+        int d = Math.Max(2, Math.Min(rad * 2, Math.Min(r.Width, r.Height)));
+        if (d >= r.Width) d = Math.Max(2, r.Width - 1);
+        if (d >= r.Height) d = Math.Max(2, r.Height - 1);
+        if (d < 2) return p;
+        p.AddArc(r.X, r.Y, d, d, 180, 90);
+        p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+        p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        p.CloseFigure();
+        return p;
     }
 }
 
@@ -740,17 +764,34 @@ public sealed class RefChannel : Control
     public RefChannel(string caption,Color accent){Caption=caption;Accent=accent;DoubleBuffered=true;BackColor=Color.Transparent;}
     protected override void OnPaint(PaintEventArgs e)
     {
-        e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
-        var r=new Rectangle(5,3,Width-10,30);
-        using var path=Round(r,8);
-        using var bg=new SolidBrush(active?Color.FromArgb(18,70,90):Color.FromArgb(17,43,58));
-        using var pen=new Pen(active?Accent:Color.FromArgb(60,85,100),1.2f);
-        e.Graphics.FillPath(bg,path); e.Graphics.DrawPath(pen,path);
-        TextRenderer.DrawText(e.Graphics,Caption,new Font("Segoe UI",8.5f,FontStyle.Bold),r,active?Color.White:Color.FromArgb(170,190,205),TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);
-        using var dot=new SolidBrush(active?Accent:Color.FromArgb(50,70,82));
-        e.Graphics.FillEllipse(dot,Width/2-5,39,10,10);
+        if (Width < 16 || Height < 16) return;
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var r = new Rectangle(5, 3, Math.Max(4, Width - 10), Math.Min(30, Math.Max(4, Height - 20)));
+        using var path = Round(r, 8);
+        using var bg = new SolidBrush(active ? Color.FromArgb(18,70,90) : Color.FromArgb(17,43,58));
+        using var pen = new Pen(active ? Accent : Color.FromArgb(60,85,100), 1.2f);
+        if (path.PointCount > 0)
+        {
+            e.Graphics.FillPath(bg, path);
+            e.Graphics.DrawPath(pen, path);
+        }
+        TextRenderer.DrawText(e.Graphics, Caption, new Font("Segoe UI",8.5f,FontStyle.Bold), r, active ? Color.White : Color.FromArgb(170,190,205), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        using var dot = new SolidBrush(active ? Accent : Color.FromArgb(50,70,82));
+        int dy = Math.Min(Height - 12, 39);
+        e.Graphics.FillEllipse(dot, Width/2 - 5, dy, 10, 10);
     }
-    static GraphicsPath Round(Rectangle r,int rad){var p=new GraphicsPath();int d=rad*2;p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.Right-d,r.Y,d,d,270,90);p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.X,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;}
+    static GraphicsPath Round(Rectangle r, int rad)
+    {
+        var p = new GraphicsPath();
+        if (r.Width <= 2 || r.Height <= 2) return p;
+        int d = Math.Max(2, Math.Min(rad * 2, Math.Min(r.Width - 1, r.Height - 1)));
+        p.AddArc(r.X, r.Y, d, d, 180, 90);
+        p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+        p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        p.CloseFigure();
+        return p;
+    }
 }
 
 public sealed class RefGauge : Control
@@ -762,6 +803,7 @@ public sealed class RefGauge : Control
     public void SetValue(string v){value=v;Invalidate();}
     protected override void OnPaint(PaintEventArgs e)
     {
+        if (Width < 8 || Height < 8) return;
         e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
         e.Graphics.Clear(BackColor);
         using var border=new Pen(Color.FromArgb(25,79,103),1); e.Graphics.DrawRectangle(border,0,0,Width-1,Height-1);
@@ -786,6 +828,7 @@ public sealed class RefVehicleHealth : Control
     public RefVehicleHealth(){DoubleBuffered=true;BackColor=Color.Transparent;}
     protected override void OnPaint(PaintEventArgs e)
     {
+        if (Width < 8 || Height < 8) return;
         e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
         using var glow=new SolidBrush(Color.FromArgb(45,0,235,122));
         e.Graphics.FillEllipse(glow,Width*.18f,Height*.40f,Width*.30f,Height*.34f);
@@ -810,6 +853,7 @@ public sealed class RefIcon : Control
     public RefIcon(){DoubleBuffered=true;BackColor=Color.Transparent;}
     protected override void OnPaint(PaintEventArgs e)
     {
+        if (Width < 8 || Height < 8) return;
         e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
         using var glow=new SolidBrush(Color.FromArgb(30,Accent));
         e.Graphics.FillEllipse(glow,1,1,Width-2,Height-2);
@@ -925,6 +969,7 @@ public sealed class BrandControl : Control
 
     protected override void OnPaint(PaintEventArgs e)
     {
+        if (Width < 20 || Height < 20) return;
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
         Color cyan = Color.FromArgb(0, 212, 255);
