@@ -37,20 +37,6 @@ public sealed class MainForm : Form
     MetricCard voltCard = null!;
     MetricCard currentCard = null!;
 
-    MiniGaugeCard dashRpm = null!;
-    MiniGaugeCard dashWater = null!;
-    MiniGaugeCard dashIntake = null!;
-    MiniGaugeCard dashBattery = null!;
-    MiniGaugeCard dashOxygen = null!;
-    MiniGaugeCard dashThrottle = null!;
-    MiniGaugeCard dashMap = null!;
-    RichTextBox dashboardLog = null!;
-    Label dashPowerB = null!;
-    Label dashPowerIgn = null!;
-    Label dashPower5 = null!;
-    Label dashPowerGnd = null!;
-    Label dashPowerRpm = null!;
-    Label dashPowerBus = null!;
     ScopeControl scope = null!;
     LedLamp[] injectorLeds = Array.Empty<LedLamp>();
     LedLamp[] coilLeds = Array.Empty<LedLamp>();
