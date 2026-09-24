@@ -443,14 +443,14 @@ public sealed class MainForm : Form
             .Select(i => new LedLamp($"کوئل {i}", Cyan, "⚡", "جرقه", "خاموش"))
             .ToArray();
 
-        fuelPumpLed = new LedLamp("پمپ بنزین", Amber, "⛽", "فعال", "خاموش");
-        fanLowLed = new LedLamp("فن کند", Cyan, "FAN", "فعال", "خاموش");
-        fanHighLed = new LedLamp("فن تند", Red, "FAN+", "فعال", "خاموش");
-        milLed = new LedLamp("چراغ چک", Amber, "MIL", "روشن", "خاموش");
-        immoLed = new LedLamp("چراغ ایمو", Red, "IMMO", "قفل", "آزاد");
-        oxygenLed = new LedLamp("سنسور اکسیژن", Purple, "O₂", "فعال", "سرد");
-        ckpLed = new LedLamp("سنسور دور", Cyan, "CKP", "سیگنال", "قطع");
-        cmpLed = new LedLamp("میل‌سوپاپ", Green, "CMP", "سیگنال", "قطع");
+        fuelPumpLed = new LedLamp("پمپ بنزین", Amber, "fuelpump", "فعال", "خاموش");
+        fanLowLed = new LedLamp("فن کند", Cyan, "fan", "فعال", "خاموش");
+        fanHighLed = new LedLamp("فن تند", Red, "fanfast", "فعال", "خاموش");
+        milLed = new LedLamp("چراغ چک", Amber, "mil", "روشن", "خاموش");
+        immoLed = new LedLamp("چراغ ایمو", Red, "immo", "قفل", "آزاد");
+        oxygenLed = new LedLamp("سنسور اکسیژن", Purple, "oxygen", "فعال", "سرد");
+        ckpLed = new LedLamp("سنسور دور", Cyan, "ckp", "سیگنال", "قطع");
+        cmpLed = new LedLamp("میل‌سوپاپ", Green, "cmp", "سیگنال", "قطع");
 
         var statusGrid = new TableLayoutPanel
         {
@@ -774,33 +774,368 @@ public sealed class MainForm : Form
     Control CreateProgrammerPage()
     {
         var page = NewPage();
-        var card = FullCard(page, "پروگرامر ECU", "Bench / CAN / K-Line / JTAG / SWD / GPT — شبیه‌سازی رابط کاربری");
+        var card = FullCard(
+            page,
+            "محیط پروگرامر ECU",
+            "محیط کاری فارسی برای شناسایی، خواندن، بکاپ، نوشتن و وریفای — طراحی مستقل با الهام از گردش‌کار پروگرامرهای حرفه‌ای");
 
-        var warning = new RoundedPanel { BackColor = Color.FromArgb(45, 35, 20), BorderColor = Amber, Radius = 16, Location = new Point(28, 100), Size = new Size(1040, 78), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-        warning.Controls.Add(new Label { Text = "⚠ حالت دمو: هیچ عملیات خواندن/نوشتن واقعی روی ECU انجام نمی‌شود.", Dock = DockStyle.Fill, ForeColor = Amber, Font = new Font("Segoe UI", 11, FontStyle.Bold), TextAlign = ContentAlignment.MiddleCenter });
+        var warning = new RoundedPanel
+        {
+            BackColor = Color.FromArgb(45, 35, 20),
+            BorderColor = Amber,
+            Radius = 16,
+            Location = new Point(28, 94),
+            Size = new Size(1040, 58),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        warning.Controls.Add(new Label
+        {
+            Text = "⚠ حالت دمو فعال است؛ هیچ فرمان واقعی به ECU ارسال نمی‌شود.",
+            Dock = DockStyle.Fill,
+            ForeColor = Amber,
+            Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
+            TextAlign = ContentAlignment.MiddleCenter
+        });
         card.Controls.Add(warning);
 
-        string[] labels = { "ECU انتخابی", "روش اتصال", "ولتاژ پروگرام", "حافظه هدف" };
-        string[] vals = { "Bosch ME7.4.4 (Demo)", "Bench / K-Line", "13.50 V", "FLASH + EEPROM" };
-        for (int i = 0; i < labels.Length; i++)
+        var work = new TableLayoutPanel
         {
-            var p = new RoundedPanel { BackColor = Panel2, BorderColor = Border, Radius = 14, Size = new Size(245, 90), Location = new Point(28 + i * 260, 205) };
-            p.Controls.Add(new Label { Text = labels[i], ForeColor = TextMuted, Font = new Font("Segoe UI", 9), Dock = DockStyle.Top, Height = 34, TextAlign = ContentAlignment.BottomCenter });
-            p.Controls.Add(new Label { Text = vals[i], ForeColor = TextMain, Font = new Font("Segoe UI", 11, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter });
-            card.Controls.Add(p);
+            Location = new Point(28, 166),
+            Size = new Size(1040, 420),
+            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+            ColumnCount = 3,
+            RowCount = 1,
+            RightToLeft = RightToLeft.No,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            BackColor = Color.Transparent
+        };
+        work.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24));
+        work.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
+        work.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
+        card.Controls.Add(work);
+
+        // Left: operations.
+        var operations = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 0, 7, 0),
+            BackColor = Panel2,
+            BorderColor = Border,
+            Radius = 16,
+            Padding = new Padding(12),
+            RightToLeft = RightToLeft.Yes
+        };
+        work.Controls.Add(operations, 0, 0);
+        operations.Controls.Add(new Label
+        {
+            Text = "عملیات",
+            Dock = DockStyle.Top,
+            Height = 34,
+            ForeColor = TextMain,
+            Font = new Font("Segoe UI", 12, FontStyle.Bold),
+            TextAlign = ContentAlignment.MiddleRight
+        });
+
+        var opFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoScroll = true,
+            Padding = new Padding(0, 8, 0, 0),
+            RightToLeft = RightToLeft.Yes
+        };
+        operations.Controls.Add(opFlow);
+        opFlow.BringToFront();
+
+        Button Op(string text, Color color, string operation)
+        {
+            var b = ActionButton(text, color, 210, 44);
+            b.Margin = new Padding(3, 4, 3, 4);
+            b.Click += async (_, _) => await RunProgrammerDemo(operation);
+            return b;
         }
 
-        progStatus = new Label { Text = "آماده", ForeColor = TextMuted, Font = new Font("Segoe UI", 11, FontStyle.Bold), Location = new Point(30, 345), Size = new Size(1035, 35), TextAlign = ContentAlignment.MiddleCenter, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+        opFlow.Controls.Add(Op("🔎 شناسایی ECU", Cyan, "IDENTIFY"));
+        opFlow.Controls.Add(Op("⬇ خواندن حافظه", Cyan, "READ"));
+        opFlow.Controls.Add(Op("▣ تهیه نسخه پشتیبان", Purple, "BACKUP"));
+
+        var openFile = ActionButton("📂 باز کردن فایل", PanelBg, 210, 44);
+        openFile.ForeColor = TextMain;
+        openFile.Margin = new Padding(3, 4, 3, 4);
+        openFile.Click += (_, _) => MessageBox.Show(
+            "در نسخه دمو فایل واقعی روی ECU نوشته نمی‌شود.\nاین دکمه در نسخه سخت‌افزاری برای انتخاب فایل Flash/EEPROM استفاده خواهد شد.",
+            "باز کردن فایل",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+        opFlow.Controls.Add(openFile);
+
+        opFlow.Controls.Add(Op("⬆ نوشتن برنامه", Amber, "WRITE"));
+        opFlow.Controls.Add(Op("✓ وریفای / مقایسه", Green, "VERIFY"));
+        opFlow.Controls.Add(Op("↻ پاک کردن بافر", Color.FromArgb(72, 89, 111), "CLEAR"));
+        opFlow.Controls.Add(Op("■ قطع اضطراری", Red, "EMERGENCY OFF"));
+
+        // Center: buffer / status.
+        var centerPane = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(7, 0, 7, 0),
+            BackColor = Panel2,
+            BorderColor = Border,
+            Radius = 16,
+            Padding = new Padding(12),
+            RightToLeft = RightToLeft.Yes
+        };
+        work.Controls.Add(centerPane, 1, 0);
+
+        var centerHeader = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 74,
+            ColumnCount = 4,
+            RightToLeft = RightToLeft.No,
+            Margin = Padding.Empty
+        };
+        for (int i = 0; i < 4; i++) centerHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        centerPane.Controls.Add(centerHeader);
+
+        centerHeader.Controls.Add(ProgrammerInfoTile("ارتباط", "Bench / K-Line", Cyan), 0, 0);
+        centerHeader.Controls.Add(ProgrammerInfoTile("ولتاژ ECU", "13.50 V", Green), 1, 0);
+        centerHeader.Controls.Add(ProgrammerInfoTile("جریان", "0.74 A", Amber), 2, 0);
+        centerHeader.Controls.Add(ProgrammerInfoTile("حافظه", "FLASH + EEPROM", Purple), 3, 0);
+
+        var tabs = new TabControl
+        {
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            RightToLeft = RightToLeft.Yes,
+            RightToLeftLayout = true
+        };
+        centerPane.Controls.Add(tabs);
+        tabs.BringToFront();
+
+        var bufferTab = new TabPage("بافر برنامه") { BackColor = Color.FromArgb(11, 18, 28), ForeColor = TextMain };
+        var logTab = new TabPage("گزارش عملیات") { BackColor = Color.FromArgb(11, 18, 28), ForeColor = TextMain };
+        var wiringTab = new TabPage("راهنمای اتصال") { BackColor = Color.FromArgb(11, 18, 28), ForeColor = TextMain };
+        tabs.TabPages.AddRange(new[] { bufferTab, logTab, wiringTab });
+
+        var hexBox = new RichTextBox
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(7, 13, 21),
+            ForeColor = Color.FromArgb(164, 225, 238),
+            BorderStyle = BorderStyle.None,
+            ReadOnly = true,
+            Font = new Font("Consolas", 10),
+            RightToLeft = RightToLeft.No,
+            Text =
+@"00000000  2E 7A 91 00 10 4F 20 11  7C A0 55 18 02 00 80 FF
+00000010  10 21 83 44 00 00 5A C1  19 A4 7E 2B 10 30 90 0D
+00000020  42 4F 53 43 48 20 4D 45  37 2E 34 2E 34 00 00 00
+00000030  31 30 33 37 33 39 38 31  30 30 00 00 20 26 09 24
+00000040  FF FF 00 11 36 90 41 22  18 02 C0 7A 61 09 30 5F
+00000050  01 04 0A 10 12 1E 2A 30  40 50 60 70 80 90 A0 B0
+
+                   نمایش دمو — داده بالا نمونه ساختگی است"
+        };
+        bufferTab.Controls.Add(hexBox);
+
+        var log = new RichTextBox
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(7, 13, 21),
+            ForeColor = TextMuted,
+            BorderStyle = BorderStyle.None,
+            ReadOnly = true,
+            Font = new Font("Segoe UI", 9.5f),
+            RightToLeft = RightToLeft.Yes,
+            Text =
+@"[آماده] سخت‌افزار در حالت دمو
+[ایمنی] خروجی‌های واقعی غیرفعال هستند
+[ECU] Bosch ME7.4.4 - Demo Profile
+[ارتباط] Bench / K-Line
+[حافظه] Flash + EEPROM
+[وضعیت] آماده اجرای عملیات شبیه‌سازی"
+        };
+        logTab.Controls.Add(log);
+
+        wiringTab.Controls.Add(new Label
+        {
+            Dock = DockStyle.Fill,
+            Text =
+@"راهنمای اتصال پروفایل انتخابی
+
+• برق اصلی ECU:  +12V کنترل‌شده
+• زمین ECU:      GND
+• روش ارتباط:    K-Line / Bench
+• مسیر پروگرام:  بر اساس پروفایل ECU
+• حفاظت:         کنترل جریان و قطع اضطراری
+
+در نسخه واقعی، تصویر سوکت ECU و پین‌های موردنیاز همین‌جا نمایش داده می‌شوند.",
+            ForeColor = TextMain,
+            Font = new Font("Segoe UI", 10.5f),
+            Padding = new Padding(18),
+            TextAlign = ContentAlignment.TopRight
+        });
+
+        // Right: ECU/profile selector.
+        var selector = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(7, 0, 0, 0),
+            BackColor = Panel2,
+            BorderColor = Border,
+            Radius = 16,
+            Padding = new Padding(12),
+            RightToLeft = RightToLeft.Yes
+        };
+        work.Controls.Add(selector, 2, 0);
+        selector.Controls.Add(new Label
+        {
+            Text = "انتخاب ECU / پروفایل",
+            Dock = DockStyle.Top,
+            Height = 34,
+            ForeColor = TextMain,
+            Font = new Font("Segoe UI", 12, FontStyle.Bold),
+            TextAlign = ContentAlignment.MiddleRight
+        });
+
+        var search = new TextBox
+        {
+            Dock = DockStyle.Top,
+            Height = 34,
+            BackColor = Color.FromArgb(11, 18, 28),
+            ForeColor = TextMain,
+            BorderStyle = BorderStyle.FixedSingle,
+            Font = new Font("Segoe UI", 10),
+            PlaceholderText = "جستجوی ECU، خودرو یا سازنده...",
+            RightToLeft = RightToLeft.Yes
+        };
+        selector.Controls.Add(search);
+        search.BringToFront();
+
+        var tree = new TreeView
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(11, 18, 28),
+            ForeColor = TextMain,
+            BorderStyle = BorderStyle.None,
+            Font = new Font("Segoe UI", 9.5f),
+            HideSelection = false,
+            FullRowSelect = true,
+            RightToLeft = RightToLeft.Yes,
+            RightToLeftLayout = true,
+            ItemHeight = 28
+        };
+        selector.Controls.Add(tree);
+        tree.BringToFront();
+
+        var bosch = tree.Nodes.Add("Bosch");
+        bosch.Nodes.Add("ME7.4.4 — پژو 206");
+        bosch.Nodes.Add("ME7.4.5");
+        bosch.Nodes.Add("ME7.4.9");
+        bosch.Nodes.Add("ME17 — Bench/GPT");
+
+        var valeo = tree.Nodes.Add("Valeo / Sagem");
+        valeo.Nodes.Add("J34P");
+        valeo.Nodes.Add("S2000");
+        valeo.Nodes.Add("4PL");
+
+        var siemens = tree.Nodes.Add("Siemens / Continental");
+        siemens.Nodes.Add("SIM2K");
+        siemens.Nodes.Add("CIM");
+        siemens.Nodes.Add("Continental قدیمی");
+
+        var other = tree.Nodes.Add("سایر");
+        other.Nodes.Add("Delphi");
+        other.Nodes.Add("Denso");
+        other.Nodes.Add("Marelli");
+        bosch.Expand();
+
+        tree.AfterSelect += (_, e) =>
+        {
+            if (e.Node.Nodes.Count == 0)
+            {
+                ecuLabel.Text = $"ECU: {e.Node.Text} (DEMO)";
+                progStatus.Text = $"پروفایل انتخاب شد: {e.Node.Text}";
+                progStatus.ForeColor = Cyan;
+            }
+        };
+
+        search.TextChanged += (_, _) =>
+        {
+            string q = search.Text.Trim();
+            if (string.IsNullOrWhiteSpace(q)) return;
+
+            foreach (TreeNode root in tree.Nodes)
+            foreach (TreeNode child in root.Nodes)
+                if (child.Text.Contains(q, StringComparison.OrdinalIgnoreCase))
+                {
+                    tree.SelectedNode = child;
+                    child.EnsureVisible();
+                    return;
+                }
+        };
+
+        // Bottom status / progress.
+        progStatus = new Label
+        {
+            Text = "آماده — یک ECU را انتخاب کنید یا شناسایی خودکار را بزنید",
+            ForeColor = TextMuted,
+            Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
+            Location = new Point(30, 596),
+            Size = new Size(1035, 30),
+            TextAlign = ContentAlignment.MiddleCenter,
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+        };
         card.Controls.Add(progStatus);
-        progProgress = new ProgressBar { Minimum = 0, Maximum = 100, Location = new Point(30, 390), Size = new Size(1035, 30), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+
+        progProgress = new ProgressBar
+        {
+            Minimum = 0,
+            Maximum = 100,
+            Value = 0,
+            Location = new Point(30, 630),
+            Size = new Size(1035, 22),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+        };
         card.Controls.Add(progProgress);
 
-        var read = ActionButton("⬇ شبیه‌سازی READ", Cyan, 245, 56); read.Location = new Point(28, 455); read.Click += async (_, _) => await RunProgrammerDemo("READ"); card.Controls.Add(read);
-        var backup = ActionButton("▣ BACKUP", Purple, 245, 56); backup.Location = new Point(288, 455); backup.Click += async (_, _) => await RunProgrammerDemo("BACKUP"); card.Controls.Add(backup);
-        var write = ActionButton("⬆ شبیه‌سازی WRITE", Amber, 245, 56); write.Location = new Point(548, 455); write.Click += async (_, _) => await RunProgrammerDemo("WRITE"); card.Controls.Add(write);
-        var verify = ActionButton("✓ VERIFY", Green, 245, 56); verify.Location = new Point(808, 455); verify.Click += async (_, _) => await RunProgrammerDemo("VERIFY"); card.Controls.Add(verify);
-
         return page;
+    }
+
+    Control ProgrammerInfoTile(string title, string value, Color accent)
+    {
+        var tile = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(3),
+            BackColor = Color.FromArgb(18, 29, 43),
+            BorderColor = Color.FromArgb(44, 61, 80),
+            Radius = 12
+        };
+
+        tile.Controls.Add(new Label
+        {
+            Text = title,
+            Dock = DockStyle.Top,
+            Height = 26,
+            ForeColor = TextMuted,
+            Font = new Font("Segoe UI", 8.5f),
+            TextAlign = ContentAlignment.BottomCenter
+        });
+
+        tile.Controls.Add(new Label
+        {
+            Text = value,
+            Dock = DockStyle.Fill,
+            ForeColor = accent,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            TextAlign = ContentAlignment.MiddleCenter
+        });
+
+        return tile;
     }
 
     async Task RunProgrammerDemo(string op)
@@ -809,11 +1144,33 @@ public sealed class MainForm : Form
         progProgress.Value = 0;
         for (int i = 0; i <= 100; i += 4)
         {
-            progStatus.Text = $"{op} — {i}%  |  DEMO";
+            string fa = op switch
+            {
+                "IDENTIFY" => "شناسایی ECU",
+                "READ" => "خواندن حافظه",
+                "BACKUP" => "تهیه نسخه پشتیبان",
+                "WRITE" => "نوشتن برنامه",
+                "VERIFY" => "وریفای / مقایسه",
+                "CLEAR" => "پاک کردن بافر",
+                "EMERGENCY OFF" => "قطع اضطراری",
+                _ => op
+            };
+            progStatus.Text = $"{fa} — {i}%  |  حالت دمو";
             progProgress.Value = i;
             await Task.Delay(45);
         }
-        progStatus.Text = $"✓ {op} شبیه‌سازی‌شده با موفقیت پایان یافت";
+        string done = op switch
+        {
+            "IDENTIFY" => "شناسایی ECU",
+            "READ" => "خواندن حافظه",
+            "BACKUP" => "تهیه نسخه پشتیبان",
+            "WRITE" => "نوشتن برنامه",
+            "VERIFY" => "وریفای / مقایسه",
+            "CLEAR" => "پاک کردن بافر",
+            "EMERGENCY OFF" => "قطع اضطراری",
+            _ => op
+        };
+        progStatus.Text = $"✓ {done} در حالت دمو با موفقیت پایان یافت";
         progStatus.ForeColor = Green;
     }
 
@@ -1049,21 +1406,21 @@ public sealed class LedLamp : UserControl
 {
     readonly string caption;
     readonly Color onColor;
-    readonly string icon;
+    readonly string iconType;
     readonly string onText;
     readonly string offText;
     bool state;
 
-    public LedLamp(string caption, Color onColor, string icon = "●", string onText = "فعال", string offText = "خاموش")
+    public LedLamp(string caption, Color onColor, string iconType = "dot", string onText = "فعال", string offText = "خاموش")
     {
         this.caption = caption;
         this.onColor = onColor;
-        this.icon = icon;
+        this.iconType = iconType;
         this.onText = onText;
         this.offText = offText;
 
-        Size = new Size(102, 94);
-        MinimumSize = new Size(96, 90);
+        Size = new Size(108, 98);
+        MinimumSize = new Size(100, 94);
         Margin = new Padding(5);
         DoubleBuffered = true;
         BackColor = Color.Transparent;
@@ -1089,41 +1446,159 @@ public sealed class LedLamp : UserControl
         e.Graphics.DrawPath(borderPen, cardPath);
 
         int cx = Width / 2;
-        int cy = 25;
+        int cy = 27;
 
         if (state)
         {
-            using var glow = new SolidBrush(Color.FromArgb(38, onColor));
-            e.Graphics.FillEllipse(glow, cx - 24, cy - 22, 48, 48);
+            using var glow = new SolidBrush(Color.FromArgb(35, onColor));
+            e.Graphics.FillEllipse(glow, cx - 25, cy - 24, 50, 50);
         }
 
-        using (var iconBg = new SolidBrush(state ? Color.FromArgb(210, onColor) : Color.FromArgb(56, 70, 87)))
-            e.Graphics.FillEllipse(iconBg, cx - 17, cy - 17, 34, 34);
+        using (var iconBg = new SolidBrush(state ? Color.FromArgb(215, onColor) : Color.FromArgb(48, 63, 82)))
+            e.Graphics.FillEllipse(iconBg, cx - 19, cy - 19, 38, 38);
 
-        var iconRect = new Rectangle(cx - 20, cy - 17, 40, 34);
-        TextRenderer.DrawText(
-            e.Graphics,
-            icon,
-            new Font(icon.Length <= 2 ? "Segoe UI Symbol" : "Segoe UI", icon.Length <= 2 ? 11f : 7.5f, FontStyle.Bold),
-            iconRect,
-            state ? Color.FromArgb(5, 15, 22) : Color.FromArgb(190, 202, 216),
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        DrawPictogram(e.Graphics, new Rectangle(cx - 15, cy - 15, 30, 30),
+            state ? Color.FromArgb(5, 15, 22) : Color.FromArgb(195, 208, 220));
 
         TextRenderer.DrawText(
             e.Graphics,
             caption,
             new Font("Segoe UI", 8.4f, FontStyle.Bold),
-            new Rectangle(4, 48, Width - 8, 22),
+            new Rectangle(4, 52, Width - 8, 22),
             state ? Color.White : Color.FromArgb(182, 194, 208),
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
         TextRenderer.DrawText(
             e.Graphics,
             state ? onText : offText,
-            new Font("Segoe UI", 7.4f, FontStyle.Regular),
-            new Rectangle(4, 70, Width - 8, 17),
+            new Font("Segoe UI", 7.4f),
+            new Rectangle(4, 75, Width - 8, 17),
             state ? onColor : Color.FromArgb(117, 132, 151),
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+    }
+
+    void DrawPictogram(Graphics g, Rectangle r, Color c)
+    {
+        using var p = new Pen(c, 2.1f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+        using var b = new SolidBrush(c);
+
+        float x = r.X, y = r.Y, w = r.Width, h = r.Height;
+
+        switch (iconType)
+        {
+            case "injector":
+                // Injector body + nozzle + electrical connector.
+                g.DrawRectangle(p, x + w * .25f, y + h * .20f, w * .42f, h * .36f);
+                g.DrawLine(p, x + w * .34f, y + h * .56f, x + w * .34f, y + h * .73f);
+                g.DrawLine(p, x + w * .58f, y + h * .56f, x + w * .58f, y + h * .73f);
+                g.DrawLine(p, x + w * .34f, y + h * .73f, x + w * .46f, y + h * .88f);
+                g.DrawLine(p, x + w * .58f, y + h * .73f, x + w * .46f, y + h * .88f);
+                g.DrawLine(p, x + w * .67f, y + h * .30f, x + w * .83f, y + h * .30f);
+                g.DrawLine(p, x + w * .83f, y + h * .30f, x + w * .83f, y + h * .47f);
+                g.FillEllipse(b, x + w * .42f, y + h * .89f, 3.2f, 3.2f);
+                break;
+
+            case "sparkplug":
+                // Spark plug porcelain + hex + electrode/spark.
+                g.DrawRectangle(p, x + w * .38f, y + h * .12f, w * .24f, h * .34f);
+                g.DrawLine(p, x + w * .32f, y + h * .46f, x + w * .68f, y + h * .46f);
+                g.DrawLine(p, x + w * .28f, y + h * .54f, x + w * .72f, y + h * .54f);
+                g.DrawLine(p, x + w * .39f, y + h * .54f, x + w * .39f, y + h * .78f);
+                g.DrawLine(p, x + w * .61f, y + h * .54f, x + w * .61f, y + h * .78f);
+                g.DrawLine(p, x + w * .39f, y + h * .78f, x + w * .55f, y + h * .78f);
+                g.DrawLine(p, x + w * .66f, y + h * .72f, x + w * .82f, y + h * .63f);
+                g.DrawLine(p, x + w * .82f, y + h * .63f, x + w * .74f, y + h * .82f);
+                break;
+
+            case "oxygen":
+                // O2 sensor body, threaded section and cable.
+                g.DrawEllipse(p, x + w * .28f, y + h * .18f, w * .34f, h * .34f);
+                g.DrawLine(p, x + w * .45f, y + h * .52f, x + w * .45f, y + h * .74f);
+                g.DrawLine(p, x + w * .35f, y + h * .61f, x + w * .55f, y + h * .61f);
+                g.DrawLine(p, x + w * .35f, y + h * .68f, x + w * .55f, y + h * .68f);
+                g.DrawLine(p, x + w * .45f, y + h * .18f, x + w * .70f, y + h * .08f);
+                g.DrawBezier(p, x + w * .70f, y + h * .08f, x + w * .90f, y + h * .08f, x + w * .82f, y + h * .32f, x + w * .94f, y + h * .36f);
+                g.DrawString("O₂", new Font("Segoe UI", 6.5f, FontStyle.Bold), b, x + w * .12f, y + h * .72f);
+                break;
+
+            case "fuelpump":
+                g.DrawRectangle(p, x + w * .24f, y + h * .26f, w * .36f, h * .48f);
+                g.DrawLine(p, x + w * .31f, y + h * .36f, x + w * .53f, y + h * .36f);
+                g.DrawArc(p, x + w * .52f, y + h * .30f, w * .25f, h * .30f, 270, 180);
+                g.DrawLine(p, x + w * .75f, y + h * .44f, x + w * .75f, y + h * .70f);
+                break;
+
+            case "fan":
+            case "fanfast":
+                g.DrawEllipse(p, x + w * .21f, y + h * .18f, w * .58f, h * .58f);
+                g.FillEllipse(b, x + w * .46f, y + h * .43f, w * .08f, h * .08f);
+                for (int i = 0; i < 4; i++)
+                {
+                    double a = i * Math.PI / 2;
+                    float sx = x + w * .50f + (float)Math.Cos(a) * w * .08f;
+                    float sy = y + h * .47f + (float)Math.Sin(a) * h * .08f;
+                    float ex = x + w * .50f + (float)Math.Cos(a + .50) * w * .24f;
+                    float ey = y + h * .47f + (float)Math.Sin(a + .50) * h * .24f;
+                    g.DrawLine(p, sx, sy, ex, ey);
+                }
+                if (iconType == "fanfast")
+                {
+                    g.DrawLine(p, x + w * .78f, y + h * .24f, x + w * .94f, y + h * .24f);
+                    g.DrawLine(p, x + w * .80f, y + h * .36f, x + w * .96f, y + h * .36f);
+                }
+                break;
+
+            case "mil":
+                // Engine silhouette.
+                var ep = new GraphicsPath();
+                ep.AddLines(new[]
+                {
+                    new PointF(x+w*.18f,y+h*.42f), new PointF(x+w*.30f,y+h*.42f),
+                    new PointF(x+w*.36f,y+h*.28f), new PointF(x+w*.64f,y+h*.28f),
+                    new PointF(x+w*.70f,y+h*.38f), new PointF(x+w*.83f,y+h*.38f),
+                    new PointF(x+w*.83f,y+h*.66f), new PointF(x+w*.70f,y+h*.66f),
+                    new PointF(x+w*.62f,y+h*.78f), new PointF(x+w*.32f,y+h*.78f),
+                    new PointF(x+w*.24f,y+h*.68f), new PointF(x+w*.18f,y+h*.68f)
+                });
+                ep.CloseFigure();
+                g.DrawPath(p, ep);
+                g.DrawLine(p, x+w*.40f, y+h*.28f, x+w*.40f, y+h*.17f);
+                g.DrawLine(p, x+w*.56f, y+h*.28f, x+w*.56f, y+h*.17f);
+                break;
+
+            case "immo":
+                // Key + lock/coil hint.
+                g.DrawEllipse(p, x + w * .16f, y + h * .28f, w * .28f, h * .28f);
+                g.DrawLine(p, x + w * .42f, y + h * .42f, x + w * .78f, y + h * .42f);
+                g.DrawLine(p, x + w * .66f, y + h * .42f, x + w * .66f, y + h * .58f);
+                g.DrawLine(p, x + w * .78f, y + h * .42f, x + w * .78f, y + h * .54f);
+                g.DrawArc(p, x + w * .50f, y + h * .12f, w * .30f, h * .24f, 180, 180);
+                break;
+
+            case "ckp":
+                // Crank sensor facing toothed wheel.
+                g.DrawRectangle(p, x + w * .12f, y + h * .28f, w * .25f, h * .36f);
+                g.DrawLine(p, x + w * .37f, y + h * .46f, x + w * .51f, y + h * .46f);
+                g.DrawArc(p, x + w * .48f, y + h * .20f, w * .35f, h * .55f, 65, 230);
+                for (int i=0;i<4;i++)
+                {
+                    float yy=y+h*(.28f+i*.12f);
+                    g.DrawLine(p,x+w*.74f,yy,x+w*.88f,yy);
+                }
+                break;
+
+            case "cmp":
+                // Cam sensor + cam lobe.
+                g.DrawRectangle(p, x + w * .12f, y + h * .28f, w * .24f, h * .36f);
+                g.DrawLine(p, x + w * .36f, y + h * .46f, x + w * .50f, y + h * .46f);
+                g.DrawEllipse(p, x + w * .52f, y + h * .29f, w * .28f, h * .34f);
+                g.DrawEllipse(p, x + w * .64f, y + h * .16f, w * .16f, h * .20f);
+                break;
+
+            default:
+                g.FillEllipse(b, x + w * .39f, y + h * .39f, w * .22f, h * .22f);
+                break;
+        }
     }
 
     static GraphicsPath Rounded(Rectangle r, int radius)
