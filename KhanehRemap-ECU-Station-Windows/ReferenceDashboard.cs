@@ -22,7 +22,7 @@ public sealed class ReferenceDashboard : UserControl
     static readonly Color Amber = Color.FromArgb(255, 181, 45);
     static readonly Color Purple = Color.FromArgb(180, 83, 255);
 
-    readonly Timer timer = new() { Interval = 140 };
+    readonly System.Windows.Forms.Timer timer = new() { Interval = 140 };
     double phase;
 
     RefGauge rpmGauge = null!;
@@ -907,5 +907,69 @@ public sealed class RefIcon : Control
                 e.Graphics.DrawLine(p,x+w*.65f,y+h*.43f,x+w*.82f,y+h*.43f);
                 break;
         }
+    }
+}
+
+
+public sealed class BrandControl : Control
+{
+    public string Title { get; set; } = "نرم افزار تست ECU";
+    public string Subtitle { get; set; } = "عیب‌یابی و تست کامل واحد کنترل موتور";
+
+    public BrandControl()
+    {
+        DoubleBuffered = true;
+        BackColor = Color.Transparent;
+        RightToLeft = RightToLeft.Yes;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+        Color cyan = Color.FromArgb(0, 212, 255);
+        Color text = Color.FromArgb(229, 240, 248);
+        Color muted = Color.FromArgb(145, 174, 195);
+
+        var chip = new Rectangle(12, 15, 58, 52);
+        using var glow = new SolidBrush(Color.FromArgb(28, cyan));
+        using var pen = new Pen(cyan, 2.2f);
+        e.Graphics.FillEllipse(glow, 4, 7, 74, 68);
+        e.Graphics.DrawRectangle(pen, chip);
+
+        for (int i = 0; i < 4; i++)
+        {
+            int yy = chip.Y + 8 + i * 11;
+            e.Graphics.DrawLine(pen, chip.X - 8, yy, chip.X, yy);
+            e.Graphics.DrawLine(pen, chip.Right, yy, chip.Right + 8, yy);
+        }
+        for (int i = 0; i < 3; i++)
+        {
+            int xx = chip.X + 12 + i * 14;
+            e.Graphics.DrawLine(pen, xx, chip.Y - 7, xx, chip.Y);
+            e.Graphics.DrawLine(pen, xx, chip.Bottom, xx, chip.Bottom + 7);
+        }
+
+        // Simple car silhouette inside the ECU-chip icon.
+        e.Graphics.DrawArc(pen, chip.X + 11, chip.Y + 17, 34, 19, 200, 140);
+        e.Graphics.DrawLine(pen, chip.X + 12, chip.Y + 31, chip.X + 45, chip.Y + 31);
+        e.Graphics.DrawEllipse(pen, chip.X + 16, chip.Y + 28, 7, 7);
+        e.Graphics.DrawEllipse(pen, chip.X + 35, chip.Y + 28, 7, 7);
+
+        TextRenderer.DrawText(
+            e.Graphics,
+            Title,
+            new Font("Segoe UI", 15.5f, FontStyle.Bold),
+            new Rectangle(86, 14, Width - 94, 34),
+            text,
+            TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+        TextRenderer.DrawText(
+            e.Graphics,
+            Subtitle,
+            new Font("Segoe UI", 8.6f, FontStyle.Regular),
+            new Rectangle(86, 46, Width - 94, 25),
+            muted,
+            TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
     }
 }
