@@ -355,178 +355,7 @@ public sealed class MainForm : Form
 
     Control CreateDashboardPage()
     {
-        var page = NewPage();
-
-        var top = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            Height = 178,
-            ColumnCount = 6,
-            RowCount = 1,
-            Padding = new Padding(0, 0, 0, 10),
-            RightToLeft = RightToLeft.No
-        };
-        for (int i = 0; i < 6; i++) top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16.666f));
-        page.Controls.Add(top);
-
-        rpmCard = AddMetric(top, "دور موتور", "0", "RPM", Cyan, 5);
-        tempCard = AddMetric(top, "دمای آب", "0", "°C", Amber, 4);
-        tpsCard = AddMetric(top, "دریچه گاز", "0", "%", Green, 3);
-        mapCard = AddMetric(top, "فشار MAP", "0", "kPa", Purple, 2);
-        voltCard = AddMetric(top, "ولتاژ ECU", "0", "V", Cyan, 1);
-        currentCard = AddMetric(top, "جریان ECU", "0", "A", Amber, 0);
-
-        var center = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            RightToLeft = RightToLeft.No,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        center.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
-        center.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 66));
-        page.Controls.Add(center);
-        center.BringToFront();
-
-        // Simulator controls stay inside their own fixed table cell.
-        // No child button is anchored to an un-laid-out right edge anymore.
-        var controlsCard = new RoundedPanel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(0, 6, 8, 0),
-            BackColor = PanelBg,
-            BorderColor = Border,
-            Radius = 20,
-            Padding = new Padding(18),
-            RightToLeft = RightToLeft.Yes
-        };
-        center.Controls.Add(controlsCard, 0, 0);
-        controlsCard.Controls.Add(SectionTitle("کنترل شبیه‌ساز"));
-
-        rpmSlider = AddSlider(controlsCard, "دور موتور هدف", 0, 8000, 850, 80);
-        throttleSlider = AddSlider(controlsCard, "دریچه گاز", 0, 100, 18, 168);
-        tempSlider = AddSlider(controlsCard, "دمای آب", -20, 125, 88, 256);
-
-        var actions = new TableLayoutPanel
-        {
-            Dock = DockStyle.Bottom,
-            Height = 132,
-            ColumnCount = 1,
-            RowCount = 2,
-            Padding = new Padding(8, 6, 8, 6),
-            BackColor = Color.Transparent,
-            RightToLeft = RightToLeft.Yes
-        };
-        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        controlsCard.Controls.Add(actions);
-
-        var quick = ActionButton("▶  اجرای تست سریع", Green, 100, 52);
-        quick.Dock = DockStyle.Fill;
-        quick.Margin = new Padding(4);
-        quick.Click += (_, _) => { ShowPage("تست خودکار"); _ = RunAutoTest(); };
-        actions.Controls.Add(quick, 0, 0);
-
-        var fault = ActionButton("⚠  تزریق خطای آزمایشی", Red, 100, 52);
-        fault.Dock = DockStyle.Fill;
-        fault.Margin = new Padding(4);
-        fault.Click += (_, _) => AddDemoDtc();
-        actions.Controls.Add(fault, 0, 1);
-
-        // Live ECU outputs.
-        var signalCard = new RoundedPanel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(8, 6, 0, 0),
-            BackColor = PanelBg,
-            BorderColor = Border,
-            Radius = 20,
-            Padding = new Padding(16),
-            RightToLeft = RightToLeft.Yes
-        };
-        center.Controls.Add(signalCard, 1, 0);
-        signalCard.Controls.Add(SectionTitle("نمایش زنده خروجی‌ها و سنسورهای ECU"));
-
-        injectorLeds = Enumerable.Range(1, 6)
-            .Select(i => new LedLamp($"انژکتور {i}", Green, "INJ", "پالس", "خاموش"))
-            .ToArray();
-
-        coilLeds = Enumerable.Range(1, 6)
-            .Select(i => new LedLamp($"کوئل {i}", Cyan, "⚡", "جرقه", "خاموش"))
-            .ToArray();
-
-        fuelPumpLed = new LedLamp("پمپ بنزین", Amber, "fuelpump", "فعال", "خاموش");
-        fanLowLed = new LedLamp("فن کند", Cyan, "fan", "فعال", "خاموش");
-        fanHighLed = new LedLamp("فن تند", Red, "fanfast", "فعال", "خاموش");
-        milLed = new LedLamp("چراغ چک", Amber, "mil", "روشن", "خاموش");
-        immoLed = new LedLamp("چراغ ایمو", Red, "immo", "قفل", "آزاد");
-        oxygenLed = new LedLamp("سنسور اکسیژن", Purple, "oxygen", "فعال", "سرد");
-        ckpLed = new LedLamp("سنسور دور", Cyan, "ckp", "سیگنال", "قطع");
-        cmpLed = new LedLamp("میل‌سوپاپ", Green, "cmp", "سیگنال", "قطع");
-
-        var statusGrid = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            RowCount = 3,
-            ColumnCount = 1,
-            Padding = new Padding(0, 4, 0, 0),
-            Margin = Padding.Empty,
-            BackColor = Color.Transparent,
-            RightToLeft = RightToLeft.Yes
-        };
-        statusGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333f));
-        statusGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333f));
-        statusGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.334f));
-        signalCard.Controls.Add(statusGrid);
-        statusGrid.BringToFront();
-
-        statusGrid.Controls.Add(MakeLampGroup("انژکتورها", injectorLeds), 0, 0);
-        statusGrid.Controls.Add(MakeLampGroup("کویل‌ها", coilLeds), 0, 1);
-        statusGrid.Controls.Add(MakeLampGroup("شبکه سنسورها و عملگرها",
-            new[] { fuelPumpLed, fanLowLed, fanHighLed, milLed, immoLed, oxygenLed, ckpLed, cmpLed }), 0, 2);
-
-        return page;
-    }
-
-    Control MakeLampGroup(string title, IEnumerable<LedLamp> lamps)
-    {
-        var group = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(2, 3, 2, 3),
-            BackColor = Color.Transparent,
-            RightToLeft = RightToLeft.Yes
-        };
-
-        var groupTitle = new Label
-        {
-            Text = title,
-            Dock = DockStyle.Top,
-            Height = 28,
-            ForeColor = TextMuted,
-            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-            TextAlign = ContentAlignment.MiddleRight
-        };
-        group.Controls.Add(groupTitle);
-
-        var flow = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            AutoScroll = true,
-            Padding = new Padding(4, 2, 4, 2),
-            Margin = Padding.Empty,
-            BackColor = Color.Transparent,
-            RightToLeft = RightToLeft.Yes
-        };
-        group.Controls.Add(flow);
-        flow.BringToFront();
-
-        foreach (var lamp in lamps) flow.Controls.Add(lamp);
-        return group;
+        return new ReferenceDashboard();
     }
 
     MetricCard AddMetric(TableLayoutPanel top, string title, string value, string unit, Color accent, int column)
@@ -1258,45 +1087,29 @@ public sealed class MainForm : Form
     void TickDemo()
     {
         if (!demoMode) return;
-        phase += 0.16;
+        phase += 0.14;
 
-        double rpm = Math.Max(0, rpmSlider.Value + Math.Sin(phase) * Math.Min(90, rpmSlider.Value * .04 + 8));
-        double temp = tempSlider.Value + Math.Sin(phase * .18) * .8;
-        double tps = Math.Clamp(throttleSlider.Value + Math.Sin(phase * .4) * 1.2, 0, 100);
-        double map = 30 + tps * .58 + Math.Sin(phase * .7) * 2.5;
-        double volt = 13.78 + Math.Sin(phase * .24) * .07;
-        double current = .55 + rpm / 8000.0 * .55 + (tps / 100.0) * .18 + Math.Sin(phase) * .03;
+        // صفحات مستقل دمو، انیمیشن خود را دارند.
+        // این بخش فقط داده‌های صفحه Live Data و Scope را به‌روزرسانی می‌کند.
+        double rpm = 850 + Math.Sin(phase) * 26;
+        double temp = 88 + Math.Sin(phase * .13) * .7;
+        double tps = 14 + Math.Sin(phase * .32) * 1.0;
+        double map = 33 + Math.Sin(phase * .27) * 1.5;
+        double volt = 12.4 + Math.Sin(phase * .21) * .05;
+        double current = .72 + Math.Sin(phase * .34) * .04;
+        double pulse = 4.8 + Math.Sin(phase * .2) * .3;
+        double dwell = 2.7 + Math.Sin(phase * .18) * .12;
 
-        rpmCard.SetValue($"{rpm:0}", "RPM");
-        tempCard.SetValue($"{temp:0.0}", "°C");
-        tpsCard.SetValue($"{tps:0.0}", "%");
-        mapCard.SetValue($"{map:0.0}", "kPa");
-        voltCard.SetValue($"{volt:0.00}", "V");
-        currentCard.SetValue($"{current:0.00}", "A");
-
-        double pulse = 2.1 + tps * .035 + rpm / 4000.0 * .35;
-        double dwell = 2.6 + Math.Sin(phase * .25) * .15;
-
-        for (int i = 0; i < injectorLeds.Length; i++)
-            injectorLeds[i].SetState(((int)(phase * 4 + i) % 6) < 2 && rpm > 100);
-        for (int i = 0; i < coilLeds.Length; i++)
-            coilLeds[i].SetState(((int)(phase * 3 + i * 2) % 8) < 2 && rpm > 100);
-
-        fuelPumpLed.SetState(true);
-        fanLowLed.SetState(temp >= 92);
-        fanHighLed.SetState(temp >= 103);
-        immoLed.SetState(rpm < 100);           // red only when immobilizer is blocking start
-        oxygenLed.SetState(rpm > 650 && temp > 55);
-        ckpLed.SetState(rpm > 100);
-        cmpLed.SetState(rpm > 100);
-
-        scope.Rpm = rpm;
-        scope.Phase = phase;
-        scope.Invalidate();
+        if (scope != null)
+        {
+            scope.Rpm = rpm;
+            scope.Phase = phase;
+            scope.Invalidate();
+        }
 
         if (liveGrid != null && liveGrid.Rows.Count >= 9)
         {
-            SetGrid(0, $"{rpm:0}", rpm > 0 ? "فعال" : "خاموش");
+            SetGrid(0, $"{rpm:0}", "فعال");
             SetGrid(1, $"{temp:0.0}", "نرمال");
             SetGrid(2, $"{tps:0.0}", "نرمال");
             SetGrid(3, $"{map:0.0}", "نرمال");
