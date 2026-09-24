@@ -36,6 +36,7 @@ public sealed class MainForm : Form
     MetricCard mapCard = null!;
     MetricCard voltCard = null!;
     MetricCard currentCard = null!;
+
     ScopeControl scope = null!;
     LedLamp[] injectorLeds = Array.Empty<LedLamp>();
     LedLamp[] coilLeds = Array.Empty<LedLamp>();
@@ -64,11 +65,11 @@ public sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "خانه ریمپ | ECU Station";
+        Text = "نرم افزار تست ECU | خانه ریمپ";
         BackColor = Bg;
         ForeColor = TextMain;
         Font = new Font("Segoe UI", 10f);
-        MinimumSize = new Size(1180, 760);
+        MinimumSize = new Size(1240, 760);
         WindowState = FormWindowState.Maximized;
         StartPosition = FormStartPosition.CenterScreen;
         RightToLeft = RightToLeft.Yes;
@@ -77,162 +78,157 @@ public sealed class MainForm : Form
 
         BuildShell();
         BuildPages();
-        ShowPage("شروع");
+
+        // نسخه نمایشی از ابتدا با داده‌های شبیه‌سازی‌شده فعال است.
+        demoMode = true;
+        connectionLabel.Text = "● ارتباط با ECU برقرار است  |  DEMO";
+        connectionLabel.ForeColor = Green;
+        ecuLabel.Text = "ECU: M7.4.4 / ME7.4.4 — DEMO";
+        demoBadge.Text = "● حالت دمو فعال";
+        demoBadge.ForeColor = Cyan;
+        ShowPage("داشبورد");
 
         demoTimer.Tick += (_, _) => TickDemo();
+        demoTimer.Start();
         FormClosing += (_, _) => demoTimer.Stop();
     }
 
     void BuildShell()
     {
-        // Root layout is deliberately LTR so RTL text never mirrors/overlaps the sidebar.
-        // This fixes the left-side content sliding underneath the navigation panel.
-        var root = new TableLayoutPanel
+        var root = new Panel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty,
             BackColor = Bg,
-            RightToLeft = RightToLeft.No
+            Padding = Padding.Empty,
+            Margin = Padding.Empty
         };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 235));
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(root);
 
-        var sidebar = new Panel
+        var topBar = new RoundedPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 88,
+            BackColor = Color.FromArgb(5, 18, 30),
+            BorderColor = Color.FromArgb(13, 75, 105),
+            Radius = 12,
+            Padding = new Padding(8),
+            Margin = Padding.Empty
+        };
+        root.Controls.Add(topBar);
+
+        var topLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            BackColor = Color.FromArgb(12, 18, 28),
-            Padding = new Padding(12),
-            RightToLeft = RightToLeft.Yes
+            ColumnCount = 3,
+            RowCount = 1,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            RightToLeft = RightToLeft.No
         };
-        root.Controls.Add(sidebar, 0, 0);
+        topLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 365));
+        topLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        topLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250));
+        topLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        topBar.Controls.Add(topLayout);
 
-        var brand = new Panel { Dock = DockStyle.Top, Height = 116, BackColor = Color.Transparent, RightToLeft = RightToLeft.Yes };
-        sidebar.Controls.Add(brand);
-
-        var logo = new Label
+        var brand = new BrandControl
         {
-            Text = "⚡",
-            Font = new Font("Segoe UI Emoji", 27, FontStyle.Bold),
-            ForeColor = Cyan,
-            AutoSize = false,
-            Size = new Size(54, 54),
-            Location = new Point(157, 14),
-            TextAlign = ContentAlignment.MiddleCenter
+            Dock = DockStyle.Fill,
+            Margin = new Padding(4, 2, 8, 2),
+            Title = "نرم افزار تست ECU",
+            Subtitle = "عیب‌یابی و تست کامل واحد کنترل موتور"
         };
-        brand.Controls.Add(logo);
-
-        var title = new Label
-        {
-            Text = "خانه ریمپ",
-            Font = new Font("Segoe UI", 16, FontStyle.Bold),
-            ForeColor = TextMain,
-            AutoSize = false,
-            Size = new Size(145, 34),
-            Location = new Point(12, 15),
-            TextAlign = ContentAlignment.MiddleRight
-        };
-        brand.Controls.Add(title);
-
-        var sub = new Label
-        {
-            Text = "ECU STATION",
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
-            ForeColor = Cyan,
-            AutoSize = false,
-            Size = new Size(145, 25),
-            Location = new Point(12, 49),
-            TextAlign = ContentAlignment.MiddleRight
-        };
-        brand.Controls.Add(sub);
-
-        demoBadge = new Label
-        {
-            Text = "● آماده",
-            ForeColor = TextMuted,
-            BackColor = PanelBg,
-            AutoSize = false,
-            Size = new Size(199, 28),
-            Location = new Point(12, 82),
-            TextAlign = ContentAlignment.MiddleCenter
-        };
-        brand.Controls.Add(demoBadge);
+        topLayout.Controls.Add(brand, 0, 0);
 
         var nav = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
+            FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             AutoScroll = true,
-            Padding = new Padding(0, 8, 0, 0),
-            RightToLeft = RightToLeft.Yes
+            BackColor = Color.Transparent,
+            Padding = new Padding(4, 3, 4, 3),
+            Margin = Padding.Empty,
+            RightToLeft = RightToLeft.No
         };
-        sidebar.Controls.Add(nav);
-        nav.BringToFront();
+        topLayout.Controls.Add(nav, 1, 0);
 
-        AddNav(nav, "شروع", "⌂", "شروع");
-        AddNav(nav, "داشبورد", "◉", "داشبورد");
-        AddNav(nav, "تست خودکار", "✓", "تست خودکار");
-        AddNav(nav, "داده زنده", "≋", "داده زنده");
-        AddNav(nav, "اسیلوسکوپ", "⌁", "اسیلوسکوپ");
-        AddNav(nav, "دیاگ", "⚠", "دیاگ");
-        AddNav(nav, "پروگرامر", "⬢", "پروگرامر");
-        AddNav(nav, "تنظیمات", "⚙", "تنظیمات");
+        AddNav(nav, "داشبورد", "⌂", "داشبورد");
+        AddNav(nav, "تست خودکار", "⌁", "تست عملکردها");
+        AddNav(nav, "داده زنده", "◌", "نمایش سنسورها");
+        AddNav(nav, "پروگرامر", "⚙", "تنظیمات و ابزارها");
+        AddNav(nav, "دیاگ", "▤", "گزارش و لاگ");
+        AddNav(nav, "شروع", "?", "راهنما");
 
-        var main = new Panel
+        var connectionBox = new RoundedPanel
         {
             Dock = DockStyle.Fill,
-            BackColor = Bg,
-            RightToLeft = RightToLeft.Yes,
-            Padding = Padding.Empty,
-            Margin = Padding.Empty
+            Margin = new Padding(8, 8, 6, 8),
+            BackColor = Color.FromArgb(5, 28, 35),
+            BorderColor = Color.FromArgb(13, 84, 95),
+            Radius = 13,
+            Padding = new Padding(12)
         };
-        root.Controls.Add(main, 1, 0);
+        topLayout.Controls.Add(connectionBox, 2, 0);
 
-        var header = new Panel
+        var connectionDot = new Panel
         {
-            Dock = DockStyle.Top,
-            Height = 74,
-            BackColor = Color.FromArgb(14, 21, 31),
-            Padding = new Padding(24, 12, 24, 10),
-            RightToLeft = RightToLeft.Yes
+            Size = new Size(36, 36),
+            Location = new Point(18, 16),
+            BackColor = Green
         };
-        main.Controls.Add(header);
-
-        ecuLabel = new Label
+        connectionDot.Paint += (_, e) =>
         {
-            Text = "ECU: انتخاب نشده",
-            Dock = DockStyle.Right,
-            Width = 340,
-            Font = new Font("Segoe UI", 12, FontStyle.Bold),
-            ForeColor = TextMain,
-            TextAlign = ContentAlignment.MiddleRight
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.Clear(connectionBox.BackColor);
+            using var glow = new SolidBrush(Color.FromArgb(60, Green));
+            using var core = new SolidBrush(Green);
+            e.Graphics.FillEllipse(glow, 0, 0, 36, 36);
+            e.Graphics.FillEllipse(core, 8, 8, 20, 20);
         };
-        header.Controls.Add(ecuLabel);
+        connectionBox.Controls.Add(connectionDot);
 
         connectionLabel = new Label
         {
-            Text = "○ دستگاه متصل نیست",
-            Dock = DockStyle.Left,
-            Width = 300,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = Red,
-            TextAlign = ContentAlignment.MiddleLeft
+            Text = "● ارتباط با ECU برقرار است",
+            ForeColor = Green,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            AutoSize = false,
+            Location = new Point(60, 12),
+            Size = new Size(168, 28),
+            TextAlign = ContentAlignment.MiddleRight
         };
-        header.Controls.Add(connectionLabel);
+        connectionBox.Controls.Add(connectionLabel);
+
+        ecuLabel = new Label
+        {
+            Text = "ECU: DEMO",
+            ForeColor = TextMain,
+            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+            AutoSize = false,
+            Location = new Point(60, 40),
+            Size = new Size(168, 24),
+            TextAlign = ContentAlignment.MiddleRight
+        };
+        connectionBox.Controls.Add(ecuLabel);
+
+        demoBadge = new Label
+        {
+            Visible = false,
+            Text = "● حالت دمو فعال",
+            ForeColor = Cyan
+        };
+        connectionBox.Controls.Add(demoBadge);
 
         contentHost = new Panel
         {
             Dock = DockStyle.Fill,
             BackColor = Bg,
-            Padding = new Padding(18),
+            Padding = new Padding(8, 8, 8, 8),
             RightToLeft = RightToLeft.Yes
         };
-        main.Controls.Add(contentHost);
+        root.Controls.Add(contentHost);
         contentHost.BringToFront();
     }
 
@@ -240,11 +236,15 @@ public sealed class MainForm : Form
     {
         var b = new NavButton
         {
-            Width = 202,
-            Height = 48,
-            Margin = new Padding(0, 3, 0, 3),
-            Text = $"  {icon}   {text}",
-            Tag = key
+            Width = 138,
+            Height = 72,
+            Margin = new Padding(3, 0, 3, 0),
+            Text = $"{icon}\n{text}",
+            Tag = key,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Padding = Padding.Empty,
+            RightToLeft = RightToLeft.Yes,
+            Font = new Font("Segoe UI", 9.2f, FontStyle.Bold)
         };
         b.Click += (_, _) => ShowPage((string)b.Tag!);
         host.Controls.Add(b);
@@ -341,178 +341,7 @@ public sealed class MainForm : Form
 
     Control CreateDashboardPage()
     {
-        var page = NewPage();
-
-        var top = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            Height = 178,
-            ColumnCount = 6,
-            RowCount = 1,
-            Padding = new Padding(0, 0, 0, 10),
-            RightToLeft = RightToLeft.No
-        };
-        for (int i = 0; i < 6; i++) top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16.666f));
-        page.Controls.Add(top);
-
-        rpmCard = AddMetric(top, "دور موتور", "0", "RPM", Cyan, 5);
-        tempCard = AddMetric(top, "دمای آب", "0", "°C", Amber, 4);
-        tpsCard = AddMetric(top, "دریچه گاز", "0", "%", Green, 3);
-        mapCard = AddMetric(top, "فشار MAP", "0", "kPa", Purple, 2);
-        voltCard = AddMetric(top, "ولتاژ ECU", "0", "V", Cyan, 1);
-        currentCard = AddMetric(top, "جریان ECU", "0", "A", Amber, 0);
-
-        var center = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            RightToLeft = RightToLeft.No,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        center.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
-        center.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 66));
-        page.Controls.Add(center);
-        center.BringToFront();
-
-        // Simulator controls stay inside their own fixed table cell.
-        // No child button is anchored to an un-laid-out right edge anymore.
-        var controlsCard = new RoundedPanel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(0, 6, 8, 0),
-            BackColor = PanelBg,
-            BorderColor = Border,
-            Radius = 20,
-            Padding = new Padding(18),
-            RightToLeft = RightToLeft.Yes
-        };
-        center.Controls.Add(controlsCard, 0, 0);
-        controlsCard.Controls.Add(SectionTitle("کنترل شبیه‌ساز"));
-
-        rpmSlider = AddSlider(controlsCard, "دور موتور هدف", 0, 8000, 850, 80);
-        throttleSlider = AddSlider(controlsCard, "دریچه گاز", 0, 100, 18, 168);
-        tempSlider = AddSlider(controlsCard, "دمای آب", -20, 125, 88, 256);
-
-        var actions = new TableLayoutPanel
-        {
-            Dock = DockStyle.Bottom,
-            Height = 132,
-            ColumnCount = 1,
-            RowCount = 2,
-            Padding = new Padding(8, 6, 8, 6),
-            BackColor = Color.Transparent,
-            RightToLeft = RightToLeft.Yes
-        };
-        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        controlsCard.Controls.Add(actions);
-
-        var quick = ActionButton("▶  اجرای تست سریع", Green, 100, 52);
-        quick.Dock = DockStyle.Fill;
-        quick.Margin = new Padding(4);
-        quick.Click += (_, _) => { ShowPage("تست خودکار"); _ = RunAutoTest(); };
-        actions.Controls.Add(quick, 0, 0);
-
-        var fault = ActionButton("⚠  تزریق خطای آزمایشی", Red, 100, 52);
-        fault.Dock = DockStyle.Fill;
-        fault.Margin = new Padding(4);
-        fault.Click += (_, _) => AddDemoDtc();
-        actions.Controls.Add(fault, 0, 1);
-
-        // Live ECU outputs.
-        var signalCard = new RoundedPanel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(8, 6, 0, 0),
-            BackColor = PanelBg,
-            BorderColor = Border,
-            Radius = 20,
-            Padding = new Padding(16),
-            RightToLeft = RightToLeft.Yes
-        };
-        center.Controls.Add(signalCard, 1, 0);
-        signalCard.Controls.Add(SectionTitle("نمایش زنده خروجی‌ها و سنسورهای ECU"));
-
-        injectorLeds = Enumerable.Range(1, 6)
-            .Select(i => new LedLamp($"انژکتور {i}", Green, "INJ", "پالس", "خاموش"))
-            .ToArray();
-
-        coilLeds = Enumerable.Range(1, 6)
-            .Select(i => new LedLamp($"کوئل {i}", Cyan, "⚡", "جرقه", "خاموش"))
-            .ToArray();
-
-        fuelPumpLed = new LedLamp("پمپ بنزین", Amber, "fuelpump", "فعال", "خاموش");
-        fanLowLed = new LedLamp("فن کند", Cyan, "fan", "فعال", "خاموش");
-        fanHighLed = new LedLamp("فن تند", Red, "fanfast", "فعال", "خاموش");
-        milLed = new LedLamp("چراغ چک", Amber, "mil", "روشن", "خاموش");
-        immoLed = new LedLamp("چراغ ایمو", Red, "immo", "قفل", "آزاد");
-        oxygenLed = new LedLamp("سنسور اکسیژن", Purple, "oxygen", "فعال", "سرد");
-        ckpLed = new LedLamp("سنسور دور", Cyan, "ckp", "سیگنال", "قطع");
-        cmpLed = new LedLamp("میل‌سوپاپ", Green, "cmp", "سیگنال", "قطع");
-
-        var statusGrid = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            RowCount = 3,
-            ColumnCount = 1,
-            Padding = new Padding(0, 4, 0, 0),
-            Margin = Padding.Empty,
-            BackColor = Color.Transparent,
-            RightToLeft = RightToLeft.Yes
-        };
-        statusGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333f));
-        statusGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333f));
-        statusGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.334f));
-        signalCard.Controls.Add(statusGrid);
-        statusGrid.BringToFront();
-
-        statusGrid.Controls.Add(MakeLampGroup("انژکتورها", injectorLeds), 0, 0);
-        statusGrid.Controls.Add(MakeLampGroup("کویل‌ها", coilLeds), 0, 1);
-        statusGrid.Controls.Add(MakeLampGroup("شبکه سنسورها و عملگرها",
-            new[] { fuelPumpLed, fanLowLed, fanHighLed, milLed, immoLed, oxygenLed, ckpLed, cmpLed }), 0, 2);
-
-        return page;
-    }
-
-    Control MakeLampGroup(string title, IEnumerable<LedLamp> lamps)
-    {
-        var group = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(2, 3, 2, 3),
-            BackColor = Color.Transparent,
-            RightToLeft = RightToLeft.Yes
-        };
-
-        var groupTitle = new Label
-        {
-            Text = title,
-            Dock = DockStyle.Top,
-            Height = 28,
-            ForeColor = TextMuted,
-            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-            TextAlign = ContentAlignment.MiddleRight
-        };
-        group.Controls.Add(groupTitle);
-
-        var flow = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            AutoScroll = true,
-            Padding = new Padding(4, 2, 4, 2),
-            Margin = Padding.Empty,
-            BackColor = Color.Transparent,
-            RightToLeft = RightToLeft.Yes
-        };
-        group.Controls.Add(flow);
-        flow.BringToFront();
-
-        foreach (var lamp in lamps) flow.Controls.Add(lamp);
-        return group;
+        return new ReferenceDashboard();
     }
 
     MetricCard AddMetric(TableLayoutPanel top, string title, string value, string unit, Color accent, int column)
@@ -1244,45 +1073,29 @@ public sealed class MainForm : Form
     void TickDemo()
     {
         if (!demoMode) return;
-        phase += 0.16;
+        phase += 0.14;
 
-        double rpm = Math.Max(0, rpmSlider.Value + Math.Sin(phase) * Math.Min(90, rpmSlider.Value * .04 + 8));
-        double temp = tempSlider.Value + Math.Sin(phase * .18) * .8;
-        double tps = Math.Clamp(throttleSlider.Value + Math.Sin(phase * .4) * 1.2, 0, 100);
-        double map = 30 + tps * .58 + Math.Sin(phase * .7) * 2.5;
-        double volt = 13.78 + Math.Sin(phase * .24) * .07;
-        double current = .55 + rpm / 8000.0 * .55 + (tps / 100.0) * .18 + Math.Sin(phase) * .03;
+        // صفحات مستقل دمو، انیمیشن خود را دارند.
+        // این بخش فقط داده‌های صفحه Live Data و Scope را به‌روزرسانی می‌کند.
+        double rpm = 850 + Math.Sin(phase) * 26;
+        double temp = 88 + Math.Sin(phase * .13) * .7;
+        double tps = 14 + Math.Sin(phase * .32) * 1.0;
+        double map = 33 + Math.Sin(phase * .27) * 1.5;
+        double volt = 12.4 + Math.Sin(phase * .21) * .05;
+        double current = .72 + Math.Sin(phase * .34) * .04;
+        double pulse = 4.8 + Math.Sin(phase * .2) * .3;
+        double dwell = 2.7 + Math.Sin(phase * .18) * .12;
 
-        rpmCard.SetValue($"{rpm:0}", "RPM");
-        tempCard.SetValue($"{temp:0.0}", "°C");
-        tpsCard.SetValue($"{tps:0.0}", "%");
-        mapCard.SetValue($"{map:0.0}", "kPa");
-        voltCard.SetValue($"{volt:0.00}", "V");
-        currentCard.SetValue($"{current:0.00}", "A");
-
-        double pulse = 2.1 + tps * .035 + rpm / 4000.0 * .35;
-        double dwell = 2.6 + Math.Sin(phase * .25) * .15;
-
-        for (int i = 0; i < injectorLeds.Length; i++)
-            injectorLeds[i].SetState(((int)(phase * 4 + i) % 6) < 2 && rpm > 100);
-        for (int i = 0; i < coilLeds.Length; i++)
-            coilLeds[i].SetState(((int)(phase * 3 + i * 2) % 8) < 2 && rpm > 100);
-
-        fuelPumpLed.SetState(true);
-        fanLowLed.SetState(temp >= 92);
-        fanHighLed.SetState(temp >= 103);
-        immoLed.SetState(rpm < 100);           // red only when immobilizer is blocking start
-        oxygenLed.SetState(rpm > 650 && temp > 55);
-        ckpLed.SetState(rpm > 100);
-        cmpLed.SetState(rpm > 100);
-
-        scope.Rpm = rpm;
-        scope.Phase = phase;
-        scope.Invalidate();
+        if (scope != null)
+        {
+            scope.Rpm = rpm;
+            scope.Phase = phase;
+            scope.Invalidate();
+        }
 
         if (liveGrid != null && liveGrid.Rows.Count >= 9)
         {
-            SetGrid(0, $"{rpm:0}", rpm > 0 ? "فعال" : "خاموش");
+            SetGrid(0, $"{rpm:0}", "فعال");
             SetGrid(1, $"{temp:0.0}", "نرمال");
             SetGrid(2, $"{tps:0.0}", "نرمال");
             SetGrid(3, $"{map:0.0}", "نرمال");
