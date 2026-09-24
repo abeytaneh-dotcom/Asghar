@@ -275,10 +275,10 @@ public sealed class ReferenceDashboard : UserControl
         var sensors = ActionCard("شبیه‌ساز سنسورها", "sensor", Purple, out var sensorBody);
         sensorBody.Controls.Add(CompactNumericList(new[]
         {
-            ("سنسور اکسیژن (mV)", 700, 0, 1000),
-            ("دمای آب (°C)", 90, -20, 130),
-            ("دمای هوا (°C)", 30, -20, 100),
-            ("دریچه گاز (%)", 15, 0, 100)
+            ("سنسور اکسیژن (mV)", 700m, 0m, 1000m),
+            ("دمای آب (°C)", 90m, -20m, 130m),
+            ("دمای هوا (°C)", 30m, -20m, 100m),
+            ("دریچه گاز (%)", 15m, 0m, 100m)
         }));
         grid.Controls.Add(sensors, 2, 1);
 
