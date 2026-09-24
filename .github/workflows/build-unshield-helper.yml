@@ -1,0 +1,26 @@
+name: Build unshield helper
+on:
+  push:
+    branches: [build-unshield-helper]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build unshield
+        shell: bash
+        run: |
+          set -eux
+          curl -L https://github.com/twogood/unshield/archive/refs/tags/1.6.2.tar.gz -o /tmp/unshield.tar.gz
+          tar -xzf /tmp/unshield.tar.gz -C /tmp
+          cd /tmp/unshield-1.6.2
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j2
+          mkdir -p "$GITHUB_WORKSPACE/unshield-out"
+          cp build/src/unshield "$GITHUB_WORKSPACE/unshield-out/"
+          cp build/lib/libunshield.so* "$GITHUB_WORKSPACE/unshield-out/" || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unshield-linux
+          path: unshield-out/
