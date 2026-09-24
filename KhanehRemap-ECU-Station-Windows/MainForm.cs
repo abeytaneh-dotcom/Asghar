@@ -68,7 +68,7 @@ public sealed class MainForm : Form
         WindowState = FormWindowState.Maximized;
         StartPosition = FormStartPosition.CenterScreen;
         RightToLeft = RightToLeft.Yes;
-        RightToLeftLayout = true;
+        RightToLeftLayout = false;
         DoubleBuffered = true;
 
         BuildShell();
@@ -81,10 +81,33 @@ public sealed class MainForm : Form
 
     void BuildShell()
     {
-        var sidebar = new Panel { Dock = DockStyle.Right, Width = 235, BackColor = Color.FromArgb(12, 18, 28), Padding = new Padding(12) };
-        Controls.Add(sidebar);
+        // Root layout is deliberately LTR so RTL text never mirrors/overlaps the sidebar.
+        // This fixes the left-side content sliding underneath the navigation panel.
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            BackColor = Bg,
+            RightToLeft = RightToLeft.No
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 235));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        Controls.Add(root);
 
-        var brand = new Panel { Dock = DockStyle.Top, Height = 116, BackColor = Color.Transparent };
+        var sidebar = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(12, 18, 28),
+            Padding = new Padding(12),
+            RightToLeft = RightToLeft.Yes
+        };
+        root.Controls.Add(sidebar, 0, 0);
+
+        var brand = new Panel { Dock = DockStyle.Top, Height = 116, BackColor = Color.Transparent, RightToLeft = RightToLeft.Yes };
         sidebar.Controls.Add(brand);
 
         var logo = new Label
@@ -141,7 +164,8 @@ public sealed class MainForm : Form
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             AutoScroll = true,
-            Padding = new Padding(0, 8, 0, 0)
+            Padding = new Padding(0, 8, 0, 0),
+            RightToLeft = RightToLeft.Yes
         };
         sidebar.Controls.Add(nav);
         nav.BringToFront();
@@ -155,10 +179,24 @@ public sealed class MainForm : Form
         AddNav(nav, "پروگرامر", "⬢", "پروگرامر");
         AddNav(nav, "تنظیمات", "⚙", "تنظیمات");
 
-        var main = new Panel { Dock = DockStyle.Fill, BackColor = Bg };
-        Controls.Add(main);
+        var main = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Bg,
+            RightToLeft = RightToLeft.Yes,
+            Padding = Padding.Empty,
+            Margin = Padding.Empty
+        };
+        root.Controls.Add(main, 1, 0);
 
-        var header = new Panel { Dock = DockStyle.Top, Height = 74, BackColor = Color.FromArgb(14, 21, 31), Padding = new Padding(24, 12, 24, 10) };
+        var header = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 74,
+            BackColor = Color.FromArgb(14, 21, 31),
+            Padding = new Padding(24, 12, 24, 10),
+            RightToLeft = RightToLeft.Yes
+        };
         main.Controls.Add(header);
 
         ecuLabel = new Label
@@ -176,14 +214,20 @@ public sealed class MainForm : Form
         {
             Text = "○ دستگاه متصل نیست",
             Dock = DockStyle.Left,
-            Width = 250,
+            Width = 300,
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
             ForeColor = Red,
             TextAlign = ContentAlignment.MiddleLeft
         };
         header.Controls.Add(connectionLabel);
 
-        contentHost = new Panel { Dock = DockStyle.Fill, BackColor = Bg, Padding = new Padding(18) };
+        contentHost = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Bg,
+            Padding = new Padding(18),
+            RightToLeft = RightToLeft.Yes
+        };
         main.Controls.Add(contentHost);
         contentHost.BringToFront();
     }
