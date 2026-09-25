@@ -125,39 +125,122 @@ public sealed class BinaryDocument
 
 public sealed class DumpCatalogService
 {
-    private readonly DumpCatalog _catalog;
+    private readonly DumpCatalog _catalog = new();
+    private readonly string _localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"KhanehRemapStudio");
+    private string LocalCatalogPath => Path.Combine(_localDir,"dump_catalog.psv");
 
     public int Count => _catalog.Items.Count;
     public IReadOnlyDictionary<string,int> Vendors => _catalog.Vendors;
 
     public DumpCatalogService()
     {
-        _catalog=LoadCatalog();
+        Directory.CreateDirectory(_localDir);
+        LoadBuiltIns();
+        LoadPsvIfExists(LocalCatalogPath);
+
+        string besideExe=Path.Combine(AppContext.BaseDirectory,"Data","dump_catalog.psv");
+        LoadPsvIfExists(besideExe);
+
+        string autoFolder=Path.Combine(AppContext.BaseDirectory,"Domp");
+        if(Directory.Exists(autoFolder) && !_catalog.Items.Any(x=>x.SourceTag()=="auto-folder"))
+        {
+            try { IndexFolder(autoFolder,false); } catch { }
+        }
+        RefreshVendorCounts();
     }
 
     public IdentificationResult Identify(byte[] data,string sha256)
     {
-        var exact=_catalog.Items.FirstOrDefault(x =>
-            x.Size==data.LongLength && x.Sha256.Equals(sha256,StringComparison.OrdinalIgnoreCase));
-        if(exact!=null) return new IdentificationResult { Exact=exact, Similarity=1.0 };
+        var exact=_catalog.Items.FirstOrDefault(x=>x.Size==data.LongLength && x.Sha256.Equals(sha256,StringComparison.OrdinalIgnoreCase));
+        if(exact!=null) return new IdentificationResult{Exact=exact,Similarity=1};
 
         var fp=Util.BlockFingerprints(data,16);
-        DumpCatalogItem? best=null;
-        double score=0;
+        DumpCatalogItem? best=null; double score=0;
         foreach(var item in _catalog.Items)
         {
-            if(item.Size!=data.LongLength || item.Blocks.Count==0) continue;
+            if(item.Size!=data.LongLength || item.Blocks.Count!=16) continue;
             double s=Util.FingerprintSimilarity(fp,item.Blocks);
             if(s>score){score=s;best=item;}
         }
-        return new IdentificationResult { BestCandidate=best, Similarity=score };
+        return new IdentificationResult{BestCandidate=best,Similarity=score};
     }
 
-    private static DumpCatalog LoadCatalog()
+    public int IndexFolder(string folder,bool persist=true)
     {
-        string json=EmbeddedData.ReadTextBySuffix("Data.DumpCatalog.json");
-        return System.Text.Json.JsonSerializer.Deserialize<DumpCatalog>(json,
-            new System.Text.Json.JsonSerializerOptions{PropertyNameCaseInsensitive=true})
-            ?? new DumpCatalog();
+        if(!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
+        var exts=new HashSet<string>(StringComparer.OrdinalIgnoreCase){".bin",".ori",".mod",".rom",".dump"};
+        int added=0;
+        foreach(var file in Directory.EnumerateFiles(folder,"*.*",SearchOption.AllDirectories))
+        {
+            if(!exts.Contains(Path.GetExtension(file))) continue;
+            byte[] data;
+            try { data=File.ReadAllBytes(file); } catch { continue; }
+            if(data.Length==0) continue;
+            string sha=Util.Sha256(data);
+            if(_catalog.Items.Any(x=>x.Sha256.Equals(sha,StringComparison.OrdinalIgnoreCase))) continue;
+            string rel=Path.GetRelativePath(folder,file).Replace('\\','/');
+            string vendor=rel.Split('/').FirstOrDefault() ?? "unknown";
+            _catalog.Items.Add(new DumpCatalogItem
+            {
+                Name=Path.GetFileName(file),Path=rel,Vendor=vendor,Size=data.LongLength,Sha256=sha,
+                Blocks=Util.BlockFingerprints(data,16)
+            });
+            added++;
+        }
+        RefreshVendorCounts();
+        if(persist) SaveLocalCatalog();
+        return added;
     }
+
+    private void SaveLocalCatalog()
+    {
+        var sb=new System.Text.StringBuilder();
+        foreach(var x in _catalog.Items)
+        {
+            string blocks=x.Blocks.Count==16?string.Join(',',x.Blocks):"";
+            sb.Append(x.Sha256).Append('|').Append(x.Size).Append('|').Append(x.Vendor.Replace("|","_")).Append('|')
+              .Append(x.Path.Replace("|","_")).Append('|').Append(blocks).AppendLine();
+        }
+        File.WriteAllText(LocalCatalogPath,sb.ToString(),System.Text.Encoding.UTF8);
+    }
+
+    private void LoadPsvIfExists(string path)
+    {
+        if(!File.Exists(path)) return;
+        foreach(var line in File.ReadLines(path))
+        {
+            if(string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
+            var p=line.Split('|'); if(p.Length<4) continue;
+            if(!long.TryParse(p[1],out long size)) continue;
+            string sha=p[0].Trim(); if(sha.Length!=64) continue;
+            if(_catalog.Items.Any(x=>x.Sha256.Equals(sha,StringComparison.OrdinalIgnoreCase))) continue;
+            _catalog.Items.Add(new DumpCatalogItem
+            {
+                Sha256=sha,Size=size,Vendor=p[2],Path=p[3],Name=Path.GetFileName(p[3]),
+                Blocks=p.Length>4 && p[4].Length>0 ? p[4].Split(',',StringSplitOptions.RemoveEmptyEntries).ToList() : new()
+            });
+        }
+    }
+
+    private void LoadBuiltIns()
+    {
+        void Add(string sha,long size,string vendor,string path)
+            => _catalog.Items.Add(new DumpCatalogItem{Sha256=sha,Size=size,Vendor=vendor,Path=path,Name=Path.GetFileName(path)});
+        Add("2590c8c0351bc53ab870499d3c696bfd4ee34df618c184158254ff5e619175b1",524288,"siemens","siemens/Pride_Bifuel(CB7).bin");
+        Add("207891c86bdb5529a85ba7e5805b9ea8870379e9dbc4fe21862675c31452882d",524288,"siemens","siemens/Pride(Immo)-Bifuel.bin");
+        Add("2502c3f384c8389eb147684c9d8eabc5747bbfa3fad9741304816ff61b006d31",524288,"siemens","siemens/Pride_Bifuel(XC80MP02)(CA5).bin");
+        Add("cdbbf725920a26937a647fc8cc7dfc7bb2cdd54ef9048f8ee88e00520ed94a0f",524288,"siemens","siemens/Pride_Bifuel(CB7)(SC800PM1).bin");
+        Add("e7db6cfb7bb501d1e6a5ca8681bb95c56aa4e6461181e70f0b6f63197d02604e",524288,"siemens","siemens/Pride_Bifuel_ICU2(CA2).bin");
+    }
+
+    private void RefreshVendorCounts()
+    {
+        _catalog.Count=_catalog.Items.Count;
+        _catalog.Vendors=_catalog.Items.GroupBy(x=>x.Vendor,StringComparer.OrdinalIgnoreCase).ToDictionary(g=>g.Key,g=>g.Count(),StringComparer.OrdinalIgnoreCase);
+    }
+}
+
+internal static class DumpItemExtensions
+{
+    public static string SourceTag(this DumpCatalogItem item) => "";
 }
