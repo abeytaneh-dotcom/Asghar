@@ -7,7 +7,7 @@ import java.net.URL;
 import javax.net.ssl.HttpsURLConnection;
 
 final class Preflight {
-    static final String PACKAGE = "ir.khanehremap.diag";
+    static final String PACKAGE = "ir.khanehremap.smartdiag";
     static final String FINGERPRINT = "E1:FF:41:3B:FA:A1:60:2E:A7:65:35:EA:F8:A1:6D:30:C3:04:CC:DE:80:E7:24:45:2B:61:CF:FC:BB:45:76:11";
 
     private Preflight() {}
