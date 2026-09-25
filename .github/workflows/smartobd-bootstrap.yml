@@ -1,0 +1,36 @@
+name: Smart OBD Bootstrap Sources
+
+on:
+  push:
+    branches: [ smartobd-diagnostic-pro-v1 ]
+    paths:
+      - 'SmartOBD-Diagnostic-Pro/.large-sources.tar.xz.b64'
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: smartobd-diagnostic-pro-v1
+          fetch-depth: 0
+      - name: Restore large source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          base64 -d SmartOBD-Diagnostic-Pro/.large-sources.tar.xz.b64 > /tmp/smartobd-large.tar.xz
+          tar -xJf /tmp/smartobd-large.tar.xz
+          test -s SmartOBD-Diagnostic-Pro/firmware/src/main.cpp
+          test -s SmartOBD-Diagnostic-Pro/android/app/src/main/java/ir/khanehremap/smartobdpro/MainActivity.java
+          test -s SmartOBD-Diagnostic-Pro/android/app/src/main/assets/index.html
+          test -s SmartOBD-Diagnostic-Pro/android/app/src/main/assets/catalog.js
+          rm SmartOBD-Diagnostic-Pro/.large-sources.tar.xz.b64
+          git config user.name "khaneh-remap-build"
+          git config user.email "actions@users.noreply.github.com"
+          git add SmartOBD-Diagnostic-Pro
+          git commit -m "Restore Smart OBD Diagnostic Pro source files"
+          git push origin HEAD:smartobd-diagnostic-pro-v1
