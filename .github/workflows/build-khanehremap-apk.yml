@@ -1,4 +1,4 @@
-name: Export Android Signing Tools
+name: Build KhanehRemap Clean APK
 
 on:
   pull_request:
@@ -6,26 +6,37 @@ on:
   workflow_dispatch:
 
 jobs:
-  tools:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Install Android build tools
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK packages
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "build-tools;35.0.0"
-      - name: Collect signing tools
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Build release APK
+        working-directory: khanehremap-android-private-shell
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Collect APK
         run: |
-          mkdir -p artifact/tools/lib
-          cp /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign artifact/tools/zipalign
-          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar artifact/tools/lib/apksigner.jar
-          chmod +x artifact/tools/zipalign
+          mkdir -p artifact
+          cp khanehremap-android-private-shell/app/build/outputs/apk/release/app-release-unsigned.apk artifact/KhanehRemap-CleanInstall-unsigned.apk
+          sha256sum artifact/KhanehRemap-CleanInstall-unsigned.apk > artifact/SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: android-signing-tools
+          name: khanehremap-cleaninstall-apk
           path: artifact/
           if-no-files-found: error
