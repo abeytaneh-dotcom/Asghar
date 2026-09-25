@@ -37,7 +37,7 @@ jobs:
           test -f "$ANDROID_HOME/platforms/android-35/android.jar"
           test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
 
-      - name: Unpack Android source
+      - name: Unpack and patch Android source
         run: |
           mkdir -p apk-v3
           base64 -d apk-v3-src.zip.b64 > /tmp/apk-v3.zip
@@ -46,6 +46,24 @@ jobs:
             'android.useAndroidX=true' \
             'android.nonTransitiveRClass=true' \
             'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > apk-v3/gradle.properties
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('apk-v3/app/src/main/java/ir/khanehremap/diag/MainActivity.java')
+          s=p.read_text()
+          old='        @JavascriptInterface public void disconnect(){ runOnUiThread(()->{if(gatt!=null){try{gatt.disconnect();gatt.close();}catch(Exception ignored){}gatt=null;chars.clear();}); }'
+          new='''        @JavascriptInterface public void disconnect(){
+              runOnUiThread(()->{
+                  if(gatt!=null){
+                      try{gatt.disconnect();gatt.close();}catch(Exception ignored){}
+                      gatt=null;
+                  }
+                  chars.clear();
+              });
+          }'''
+          if old not in s:
+              raise SystemExit('disconnect patch target missing')
+          p.write_text(s.replace(old,new))
+          PY
 
       - name: Build unsigned release APK
         run: |
