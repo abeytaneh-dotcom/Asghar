@@ -130,14 +130,17 @@ public sealed class DumpCatalogService
     private readonly DumpCatalog _catalog = new();
     private readonly string _localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"KhanehRemapStudio");
     private string LocalCatalogPath => Path.Combine(_localDir,"dump_catalog.psv");
+    private string CacheDir => Path.Combine(_localDir,"Cache");
 
     public int Count => _catalog.Items.Count;
+    public int PhysicalCount => _catalog.Items.Count(x=>x.HasPhysicalSource);
     public IReadOnlyDictionary<string,int> Vendors => _catalog.Vendors;
     public IReadOnlyList<DumpCatalogItem> Items => _catalog.Items;
 
     public DumpCatalogService()
     {
         Directory.CreateDirectory(_localDir);
+        Directory.CreateDirectory(CacheDir);
         LoadBuiltIns();
         LoadPsvIfExists(LocalCatalogPath);
 
@@ -145,7 +148,7 @@ public sealed class DumpCatalogService
         LoadPsvIfExists(besideExe);
 
         string autoFolder=Path.Combine(AppContext.BaseDirectory,"Domp");
-        if(Directory.Exists(autoFolder) && !_catalog.Items.Any(x=>x.SourceTag()=="auto-folder"))
+        if(Directory.Exists(autoFolder))
         {
             try { IndexFolder(autoFolder,false); } catch { }
         }
@@ -168,11 +171,57 @@ public sealed class DumpCatalogService
         return new IdentificationResult{BestCandidate=best,Similarity=score};
     }
 
+    public string Materialize(DumpCatalogItem item)
+    {
+        if(item.SourceKind.Equals("file",StringComparison.OrdinalIgnoreCase))
+        {
+            if(File.Exists(item.SourceContainer)) return item.SourceContainer;
+            throw new FileNotFoundException("فایل اصلی دیگر در مسیر ایندکس‌شده وجود ندارد.",item.SourceContainer);
+        }
+
+        if(item.SourceKind.Equals("archive",StringComparison.OrdinalIgnoreCase))
+        {
+            if(!File.Exists(item.SourceContainer))
+                throw new FileNotFoundException("آرشیو اصلی دیگر در مسیر ایندکس‌شده وجود ندارد.",item.SourceContainer);
+            if(string.IsNullOrWhiteSpace(item.EntryPath))
+                throw new InvalidDataException("مسیر فایل داخل آرشیو ثبت نشده است.");
+
+            string ext=Path.GetExtension(item.Name);
+            if(string.IsNullOrWhiteSpace(ext)) ext=".bin";
+            string cached=Path.Combine(CacheDir,item.Sha256+ext);
+            if(File.Exists(cached) && new FileInfo(cached).Length==item.Size) return cached;
+
+            using var archive=ArchiveFactory.Open(item.SourceContainer);
+            var entry=archive.Entries.FirstOrDefault(e=>!e.IsDirectory &&
+                string.Equals((e.Key??"").Replace('\\','/'),item.EntryPath.Replace('\\','/'),StringComparison.OrdinalIgnoreCase));
+            if(entry==null) throw new FileNotFoundException("فایل داخل آرشیو پیدا نشد.",item.EntryPath);
+
+            using var input=entry.OpenEntryStream();
+            using var output=File.Create(cached);
+            input.CopyTo(output);
+            output.Flush();
+            if(new FileInfo(cached).Length!=item.Size)
+            {
+                try{File.Delete(cached);}catch{}
+                throw new InvalidDataException("فایل استخراج‌شده ناقص است.");
+            }
+            string sha=Util.Sha256(File.ReadAllBytes(cached));
+            if(!sha.Equals(item.Sha256,StringComparison.OrdinalIgnoreCase))
+            {
+                try{File.Delete(cached);}catch{}
+                throw new InvalidDataException("SHA-256 فایل استخراج‌شده با بانک تطبیق ندارد.");
+            }
+            return cached;
+        }
+
+        throw new InvalidOperationException("این رکورد فقط اطلاعات شناسایی دارد و فایل فیزیکی هنوز به بانک معرفی نشده است. پوشه یا آرشیو دامپ را ایندکس کنید.");
+    }
+
     public int IndexArchive(string archivePath,bool persist=true)
     {
         if(!File.Exists(archivePath)) throw new FileNotFoundException(archivePath);
         var exts=new HashSet<string>(StringComparer.OrdinalIgnoreCase){".bin",".ori",".mod",".rom",".dump"};
-        int added=0;
+        int linked=0;
 
         using var archive=ArchiveFactory.Open(archivePath);
         foreach(var entry in archive.Entries.Where(e=>!e.IsDirectory))
@@ -192,54 +241,70 @@ public sealed class DumpCatalogService
 
             if(data.Length==0) continue;
             string sha=Util.Sha256(data);
-            if(_catalog.Items.Any(x=>x.Sha256.Equals(sha,StringComparison.OrdinalIgnoreCase))) continue;
-
             string[] seg=key.Split('/',StringSplitOptions.RemoveEmptyEntries);
             string vendor=seg.Length>1 ? seg[^2] : "unknown";
-            if(key.Contains("/Domp/",StringComparison.OrdinalIgnoreCase) || key.StartsWith("Domp/",StringComparison.OrdinalIgnoreCase))
+            int di=Array.FindIndex(seg,x=>x.Equals("Domp",StringComparison.OrdinalIgnoreCase));
+            if(di>=0 && di+1<seg.Length) vendor=seg[di+1];
+
+            var existing=_catalog.Items.FirstOrDefault(x=>x.Sha256.Equals(sha,StringComparison.OrdinalIgnoreCase));
+            if(existing!=null)
             {
-                int di=Array.FindIndex(seg,x=>x.Equals("Domp",StringComparison.OrdinalIgnoreCase));
-                if(di>=0 && di+1<seg.Length) vendor=seg[di+1];
+                existing.SourceKind="archive";existing.SourceContainer=Path.GetFullPath(archivePath);existing.EntryPath=key;
+                existing.Path=key;existing.Name=Path.GetFileName(key);existing.Size=data.LongLength;
+                if(string.IsNullOrWhiteSpace(existing.Vendor) || existing.Vendor=="unknown")existing.Vendor=vendor;
+                if(existing.Blocks.Count!=16)existing.Blocks=Util.BlockFingerprints(data,16);
+                linked++;continue;
             }
 
             _catalog.Items.Add(new DumpCatalogItem
             {
                 Name=Path.GetFileName(key),Path=key,Vendor=vendor,Size=data.LongLength,Sha256=sha,
-                Blocks=Util.BlockFingerprints(data,16)
+                Blocks=Util.BlockFingerprints(data,16),SourceKind="archive",
+                SourceContainer=Path.GetFullPath(archivePath),EntryPath=key
             });
-            added++;
+            linked++;
         }
 
         RefreshVendorCounts();
         if(persist) SaveLocalCatalog();
-        return added;
+        return linked;
     }
 
     public int IndexFolder(string folder,bool persist=true)
     {
         if(!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
         var exts=new HashSet<string>(StringComparer.OrdinalIgnoreCase){".bin",".ori",".mod",".rom",".dump"};
-        int added=0;
+        int linked=0;
         foreach(var file in Directory.EnumerateFiles(folder,"*.*",SearchOption.AllDirectories))
         {
             if(!exts.Contains(Path.GetExtension(file))) continue;
             byte[] data;
             try { data=File.ReadAllBytes(file); } catch { continue; }
             if(data.Length==0) continue;
+
             string sha=Util.Sha256(data);
-            if(_catalog.Items.Any(x=>x.Sha256.Equals(sha,StringComparison.OrdinalIgnoreCase))) continue;
             string rel=Path.GetRelativePath(folder,file).Replace('\\','/');
             string vendor=rel.Split('/').FirstOrDefault() ?? "unknown";
+            var existing=_catalog.Items.FirstOrDefault(x=>x.Sha256.Equals(sha,StringComparison.OrdinalIgnoreCase));
+            if(existing!=null)
+            {
+                existing.SourceKind="file";existing.SourceContainer=Path.GetFullPath(file);existing.EntryPath="";
+                existing.Path=rel;existing.Name=Path.GetFileName(file);existing.Size=data.LongLength;
+                if(string.IsNullOrWhiteSpace(existing.Vendor)||existing.Vendor=="unknown")existing.Vendor=vendor;
+                if(existing.Blocks.Count!=16)existing.Blocks=Util.BlockFingerprints(data,16);
+                linked++;continue;
+            }
+
             _catalog.Items.Add(new DumpCatalogItem
             {
                 Name=Path.GetFileName(file),Path=rel,Vendor=vendor,Size=data.LongLength,Sha256=sha,
-                Blocks=Util.BlockFingerprints(data,16)
+                Blocks=Util.BlockFingerprints(data,16),SourceKind="file",SourceContainer=Path.GetFullPath(file)
             });
-            added++;
+            linked++;
         }
         RefreshVendorCounts();
         if(persist) SaveLocalCatalog();
-        return added;
+        return linked;
     }
 
     private void SaveLocalCatalog()
@@ -248,8 +313,9 @@ public sealed class DumpCatalogService
         foreach(var x in _catalog.Items)
         {
             string blocks=x.Blocks.Count==16?string.Join(',',x.Blocks):"";
-            sb.Append(x.Sha256).Append('|').Append(x.Size).Append('|').Append(x.Vendor.Replace("|","_")).Append('|')
-              .Append(x.Path.Replace("|","_")).Append('|').Append(blocks).AppendLine();
+            sb.Append(x.Sha256).Append('|').Append(x.Size).Append('|').Append(Safe(x.Vendor)).Append('|')
+              .Append(Safe(x.Path)).Append('|').Append(blocks).Append('|').Append(Safe(x.SourceKind)).Append('|')
+              .Append(B64(x.SourceContainer)).Append('|').Append(B64(x.EntryPath)).AppendLine();
         }
         File.WriteAllText(LocalCatalogPath,sb.ToString(),System.Text.Encoding.UTF8);
     }
@@ -263,19 +329,26 @@ public sealed class DumpCatalogService
             var p=line.Split('|'); if(p.Length<4) continue;
             if(!long.TryParse(p[1],out long size)) continue;
             string sha=p[0].Trim(); if(sha.Length!=64) continue;
-            if(_catalog.Items.Any(x=>x.Sha256.Equals(sha,StringComparison.OrdinalIgnoreCase))) continue;
-            _catalog.Items.Add(new DumpCatalogItem
-            {
-                Sha256=sha,Size=size,Vendor=p[2],Path=p[3],Name=Path.GetFileName(p[3]),
-                Blocks=p.Length>4 && p[4].Length>0 ? p[4].Split(',',StringSplitOptions.RemoveEmptyEntries).ToList() : new()
-            });
+
+            var existing=_catalog.Items.FirstOrDefault(x=>x.Sha256.Equals(sha,StringComparison.OrdinalIgnoreCase));
+            var item=existing ?? new DumpCatalogItem{Sha256=sha};
+            item.Size=size;item.Vendor=p[2];item.Path=p[3];item.Name=Path.GetFileName(p[3]);
+            item.Blocks=p.Length>4 && p[4].Length>0 ? p[4].Split(',',StringSplitOptions.RemoveEmptyEntries).ToList() : item.Blocks;
+            if(p.Length>5)item.SourceKind=p[5];
+            if(p.Length>6)item.SourceContainer=UnB64(p[6]);
+            if(p.Length>7)item.EntryPath=UnB64(p[7]);
+            if(existing==null)_catalog.Items.Add(item);
         }
     }
+
+    private static string B64(string s)=>string.IsNullOrEmpty(s)?"":Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(s));
+    private static string UnB64(string s){try{return string.IsNullOrEmpty(s)?"":System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(s));}catch{return "";}}
+    private static string Safe(string s)=>(s??"").Replace("|","_").Replace("\r"," ").Replace("\n"," ");
 
     private void LoadBuiltIns()
     {
         void Add(string sha,long size,string vendor,string path)
-            => _catalog.Items.Add(new DumpCatalogItem{Sha256=sha,Size=size,Vendor=vendor,Path=path,Name=Path.GetFileName(path)});
+            => _catalog.Items.Add(new DumpCatalogItem{Sha256=sha,Size=size,Vendor=vendor,Path=path,Name=Path.GetFileName(path),SourceKind="metadata"});
         Add("2590c8c0351bc53ab870499d3c696bfd4ee34df618c184158254ff5e619175b1",524288,"siemens","siemens/Pride_Bifuel(CB7).bin");
         Add("207891c86bdb5529a85ba7e5805b9ea8870379e9dbc4fe21862675c31452882d",524288,"siemens","siemens/Pride(Immo)-Bifuel.bin");
         Add("2502c3f384c8389eb147684c9d8eabc5747bbfa3fad9741304816ff61b006d31",524288,"siemens","siemens/Pride_Bifuel(XC80MP02)(CA5).bin");
@@ -288,9 +361,4 @@ public sealed class DumpCatalogService
         _catalog.Count=_catalog.Items.Count;
         _catalog.Vendors=_catalog.Items.GroupBy(x=>x.Vendor,StringComparer.OrdinalIgnoreCase).ToDictionary(g=>g.Key,g=>g.Count(),StringComparer.OrdinalIgnoreCase);
     }
-}
-
-internal static class DumpItemExtensions
-{
-    public static string SourceTag(this DumpCatalogItem item) => "";
 }
