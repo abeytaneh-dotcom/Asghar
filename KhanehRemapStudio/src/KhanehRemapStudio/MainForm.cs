@@ -324,11 +324,131 @@ public sealed class MainForm : Form
         _search.TextChanged+=(_,_)=>RefreshMapList();_category.SelectedIndexChanged+=(_,_)=>RefreshMapList();
         _librarySearch.TextChanged+=(_,_)=>{BuildEcuLibraryTree();BuildFileTree();};
         _ecuTree.AfterSelect+=(_,e)=>ShowEcuProfileDetails(e.Node?.Tag as EcuProfile);
+        _ecuTree.NodeMouseDoubleClick+=(_,e)=>{if(e.Node?.Tag is EcuProfile p)FilterFilesForEcu(p);};
         _fileTree.AfterSelect+=(_,e)=>ShowDumpDetails(e.Node?.Tag as DumpCatalogItem);
+        _fileTree.NodeMouseDoubleClick+=(_,e)=>{if(e.Node?.Tag is DumpCatalogItem x)OpenCatalogDump(x);};
         _mapList.SelectedIndexChanged+=(_,_)=>{if(_mapList.SelectedItem is MapDefinition m)SelectMap(m);};
         _grid.CellEndEdit+=GridCellEndEdit;
         DragEnter+=(_,e)=>{if(e.Data?.GetDataPresent(DataFormats.FileDrop)==true)e.Effect=DragDropEffects.Copy;};
         DragDrop+=(_,e)=>{if(e.Data?.GetData(DataFormats.FileDrop) is string[] a&&a.Length>0)LoadDump(a[0]);};
+    }
+
+    private void OpenCatalogDump(DumpCatalogItem item)
+    {
+        try
+        {
+            Cursor=Cursors.WaitCursor;
+            string path=_catalog.Materialize(item);
+            LoadDump(path);
+            _libraryTabs.SelectedIndex=1;
+            SetStatus($"فایل واقعی از بانک باز شد: {item.Name}");
+        }
+        catch(Exception ex)
+        {
+            MessageBox.Show(this,ex.Message,"باز کردن فایل بانک",MessageBoxButtons.OK,MessageBoxIcon.Error);
+        }
+        finally{Cursor=Cursors.Default;}
+    }
+
+    private void FilterFilesForEcu(EcuProfile p)
+    {
+        _libraryTabs.SelectedIndex=1;
+        _librarySearch.Text=p.Family;
+        SetStatus($"بانک فایل برای {p.Vendor} {p.Family} فیلتر شد.");
+    }
+
+    private void OpenTuningGuide()
+    {
+        if(!_doc.HasFile)
+        {
+            Info("ابتدا یک دامپ ECU را باز کنید.");
+            return;
+        }
+        if(_maps.Count==0)
+        {
+            Info("برای این فایل هنوز جدول کالیبراسیون دقیق یا تعریف واردشده وجود ندارد.");
+            return;
+        }
+
+        using var d=new TuningGuideDialog(_maps,_selected);
+        if(d.ShowDialog(this)!=DialogResult.OK || !d.ApplyRequested || d.SelectedMap==null)return;
+
+        var map=d.SelectedMap;
+        SelectMap(map);
+        var rule=TuningGuide.For(map);
+
+        string mode=d.AutoRequested?rule.EditMode:d.ApplyMode;
+        double value=d.AutoRequested?rule.DefaultValue:d.ApplyValue;
+
+        if(d.AutoRequested && !TuningGuide.CanAuto(map,rule))
+        {
+            MessageBox.Show(this,"AUTO برای این جدول فعال نیست؛ تعریف/Scale یا Rule عددی دقیق باید تأیید شده باشد.",
+                "راهنمای ریمپ",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+            return;
+        }
+
+        ApplyGuideEdit(map,mode,value,d.WholeMap,d.AutoRequested,rule);
+    }
+
+    private void ApplyGuideEdit(MapDefinition map,string mode,double value,bool wholeMap,bool auto,TuningGuideRule rule)
+    {
+        if(map.ReadOnly)
+        {
+            Info("این جدول Read-only است و تا زمان تعریف دقیق قابل تغییر نیست.");
+            return;
+        }
+
+        var cells=new List<(int r,int c)>();
+        if(!wholeMap && _grid.SelectedCells.Count>0)
+        {
+            foreach(DataGridViewCell cell in _grid.SelectedCells)
+                cells.Add((cell.RowIndex,cell.ColumnIndex));
+        }
+        else
+        {
+            for(int r=0;r<map.Rows;r++)
+                for(int col=0;col<map.Cols;col++)cells.Add((r,col));
+        }
+
+        cells=cells.Distinct().ToList();
+        if(cells.Count==0){Info("سلولی برای ویرایش انتخاب نشده است.");return;}
+
+        string op=mode=="percent"?$"{value:+0.###;-0.###;0}%":$"{value:+0.###;-0.###;0} {map.Unit}".Trim();
+        var confirm=MessageBox.Show(this,
+            $"{map.NameFa}\n\nعملیات: {op}\nناحیه: {(wholeMap?"کل جدول":cells.Count+" سلول انتخابی")}\n\n{rule.SuggestedRange}\n\nبعد از تغییر، Checksum و دیتالاگ را بررسی کنید.\n\nاعمال شود؟",
+            auto?"AUTO پیشنهادی":"ویرایش راهنما",MessageBoxButtons.YesNo,MessageBoxIcon.Question);
+        if(confirm!=DialogResult.Yes)return;
+
+        var changes=new List<ByteChange>();
+        int size=Util.TypeSize(map.DataType);
+        foreach(var (r,col) in cells)
+        {
+            int addr=checked((int)map.Address+(r*map.Cols+col)*size);
+            double oldV=_doc.ReadScaled(addr,map);
+            double newV=mode=="percent"?oldV*(1+value/100d):oldV+value;
+            var old=_doc.GetBytes(addr,size);
+            try
+            {
+                _doc.WriteScaled(addr,map,newV);
+                var now=_doc.GetBytes(addr,size);
+                if(!old.SequenceEqual(now))
+                    changes.Add(new ByteChange{Address=addr,OldBytes=old,NewBytes=now});
+            }
+            catch
+            {
+                _doc.PutBytes(addr,old);
+            }
+        }
+
+        if(changes.Count>0)
+        {
+            _undo.Push(changes);_redo.Clear();
+            AfterEdit($"{(auto?"AUTO":"راهنما")}: {changes.Count} سلول تغییر کرد • {op}");
+        }
+        else
+        {
+            SetStatus("هیچ تغییر معتبری اعمال نشد.");
+        }
     }
 
     private void OpenDump(){using var d=new OpenFileDialog{Filter="ECU files|*.bin;*.ori;*.mod;*.rom;*.dump|All files|*.*",Title="باز کردن دامپ ECU"};if(d.ShowDialog(this)==DialogResult.OK)LoadDump(d.FileName);}
