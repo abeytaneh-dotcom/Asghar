@@ -82,6 +82,7 @@ public sealed class MainForm : Form
         quick.Controls.Add(ActionButton("Redo",Redo,false,78));
         quick.Controls.Add(ActionButton("ورود XDF/A2L",ImportDefinition,false,128));
         quick.Controls.Add(ActionButton("تعریف‌های آزاد",ShowPublicDefinitions,false,122));
+        quick.Controls.Add(ActionButton("؟ راهنمای ریمپ",OpenTuningGuide,true,132));
 
         topBar.Controls.Add(quick);topBar.Controls.Add(brandBlock);
         Controls.Add(topBar);
@@ -232,41 +233,55 @@ public sealed class MainForm : Form
 
     private Button ActionButton(string text,Action action,bool accent,int width)
     {
-        var b=new Button
+        var b=new ModernButton
         {
-            Text=text,Width=width,Height=38,FlatStyle=FlatStyle.Flat,
-            BackColor=accent?Color.FromArgb(20,91,84):Color.FromArgb(20,31,45),
-            ForeColor=accent?Color.White:Fg,Cursor=Cursors.Hand,Margin=new Padding(4,0,4,0),
-            Font=new Font("Segoe UI",9.3f,accent?FontStyle.Bold:FontStyle.Regular)
+            Text=text,Width=width,Height=40,AccentMode=accent,AccentColor=Accent,
+            ForeColor=Color.White,Margin=new Padding(4,0,4,0),
+            Font=new Font("Segoe UI",9.2f,accent?FontStyle.Bold:FontStyle.Regular),
+            Image=IconFactory.Create(IconKey(text),21)
         };
-        b.FlatAppearance.BorderColor=accent?Accent:Color.FromArgb(42,60,78);
-        b.FlatAppearance.BorderSize=1;b.Click+=(_,_)=>action();return b;
+        b.Click+=(_,_)=>action();return b;
     }
 
     private Button StageButton(string text,Action action)
     {
-        var b=new Button
+        var b=new ModernButton
         {
-            Dock=DockStyle.Fill,Text=text,FlatStyle=FlatStyle.Flat,
-            BackColor=Color.FromArgb(18,29,43),ForeColor=Color.FromArgb(205,218,232),
-            Cursor=Cursors.Hand,Margin=new Padding(4,1,4,1),
-            Font=new Font("Segoe UI",9.4f,FontStyle.Bold)
+            Dock=DockStyle.Fill,Text=text,AccentMode=false,AccentColor=Accent,
+            ForeColor=Color.FromArgb(220,231,241),Margin=new Padding(4,1,4,1),
+            Font=new Font("Segoe UI",9.2f,FontStyle.Bold),
+            Image=IconFactory.Create(IconKey(text),20)
         };
-        b.FlatAppearance.BorderColor=Color.FromArgb(42,61,80);b.FlatAppearance.BorderSize=1;
-        b.MouseEnter+=(_,_)=>b.BackColor=Color.FromArgb(25,55,68);
-        b.MouseLeave+=(_,_)=>b.BackColor=Color.FromArgb(18,29,43);
         b.Click+=(_,_)=>action();return b;
     }
 
     private Button SmallButton(string text,Action action,int width)
     {
-        var b=new Button
+        var b=new ModernButton
         {
-            Text=text,Width=width,Height=32,FlatStyle=FlatStyle.Flat,
-            BackColor=Color.FromArgb(24,39,55),ForeColor=Fg,Cursor=Cursors.Hand,Margin=new Padding(3,0,3,0),
-            Font=new Font("Segoe UI",8.8f,FontStyle.Bold)
+            Text=text,Width=width,Height=33,AccentMode=false,AccentColor=Accent,
+            ForeColor=Fg,Margin=new Padding(3,0,3,0),
+            Font=new Font("Segoe UI",8.7f,FontStyle.Bold),
+            Image=IconFactory.Create(IconKey(text),18)
         };
-        b.FlatAppearance.BorderColor=Color.FromArgb(52,75,97);b.Click+=(_,_)=>action();return b;
+        b.Click+=(_,_)=>action();return b;
+    }
+
+    private static string IconKey(string text)
+    {
+        string t=(text??"").ToLowerInvariant();
+        if(t.Contains("راهنما")||t.Contains("?")||t.Contains("؟"))return "help";
+        if(t.Contains("باز")||t.Contains("بانک خودرو"))return "open";
+        if(t.Contains("ذخیره")||t.Contains("خروجی"))return "save";
+        if(t.Contains("چکسام"))return "checksum";
+        if(t.Contains("مقایسه"))return "compare";
+        if(t.Contains("ویرایش"))return "edit";
+        if(t.Contains("نقشه")||t.Contains("xdf")||t.Contains("تعریف"))return "map";
+        if(t.Contains("rar")||t.Contains("zip")||t.Contains("7z"))return "archive";
+        if(t.Contains("ecu")||t.Contains("شناسایی"))return "ecu";
+        if(t.Contains("undo"))return "undo";
+        if(t.Contains("redo"))return "redo";
+        return "file";
     }
 
     private Control InfoCard(string caption,Label value,Color valueColor)
@@ -280,7 +295,15 @@ public sealed class MainForm : Form
     private void SetupTree(TreeView tree)
     {
         tree.Dock=DockStyle.Fill;tree.BackColor=Color.FromArgb(11,19,29);tree.ForeColor=Fg;tree.BorderStyle=BorderStyle.None;
-        tree.Font=new Font("Segoe UI",9.2f);tree.ItemHeight=28;tree.HideSelection=false;tree.ShowLines=true;tree.ShowPlusMinus=true;tree.FullRowSelect=true;
+        tree.Font=new Font("Segoe UI",9.2f);tree.ItemHeight=30;tree.HideSelection=false;tree.ShowLines=false;tree.ShowPlusMinus=true;tree.FullRowSelect=true;
+        var il=new ImageList{ImageSize=new Size(20,20),ColorDepth=ColorDepth.Depth32Bit};
+        il.Images.Add("folder",IconFactory.Create("folder",20));
+        il.Images.Add("car",IconFactory.Create("car",20));
+        il.Images.Add("ecu",IconFactory.Create("ecu",20));
+        il.Images.Add("file",IconFactory.Create("file",20));
+        il.Images.Add("archive",IconFactory.Create("archive",20));
+        il.Images.Add("map",IconFactory.Create("map",20));
+        tree.ImageList=il;
     }
 
     private void StyleHeader(Label l,Color c){l.Dock=DockStyle.Fill;l.AutoEllipsis=true;l.ForeColor=c;l.TextAlign=ContentAlignment.MiddleRight;l.Font=new Font("Segoe UI",9.1f);}
