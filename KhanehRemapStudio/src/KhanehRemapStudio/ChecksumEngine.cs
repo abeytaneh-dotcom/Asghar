@@ -84,6 +84,18 @@ internal static class ChecksumMath
         return tokens.Any(t=>n.Contains(t.ToUpperInvariant()));
     }
 
+    public static uint Crc32(byte[] d,int start,int end)
+    {
+        uint crc=0xFFFFFFFFu;
+        for(int i=start;i<end;i++)
+        {
+            crc^=d[i];
+            for(int b=0;b<8;b++)
+                crc=(crc&1)!=0 ? (crc>>1)^0xEDB88320u : crc>>1;
+        }
+        return ~crc;
+    }
+
     public static ChecksumReport Report(string id,string family,bool valid,bool repairable,int count,string message) => new()
     {
         PluginId=id,Family=family,Supported=true,Valid=valid,Repairable=repairable,RegionCount=count,Message=message
@@ -256,14 +268,14 @@ public sealed class BoschM744CrcChecksum : IChecksumPlugin
 
     public ChecksumReport Verify(byte[] d)
     {
-        uint calc=Crc32.HashToUInt32(d.AsSpan(65536,131054-65536));
+        uint calc=ChecksumMath.Crc32(d,65536,131054);
         uint stored=ChecksumMath.ReadU32LE(d,131066);
         bool ok=calc==stored;
         return ChecksumMath.Report(Id,DisplayName,ok,true,1,ok?"CRC32 صحیح است.":"CRC32 نیاز به اصلاح دارد.");
     }
     public ChecksumReport Repair(byte[] d)
     {
-        uint calc=Crc32.HashToUInt32(d.AsSpan(65536,131054-65536));
+        uint calc=ChecksumMath.Crc32(d,65536,131054);
         ChecksumMath.WriteU32LE(d,131066,calc);
         var r=Verify(d); r.Message=r.Valid?"CRC32 اصلاح شد.":"اصلاح CRC32 ناموفق بود."; return r;
     }
