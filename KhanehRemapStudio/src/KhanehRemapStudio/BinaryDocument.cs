@@ -133,6 +133,7 @@ public sealed class DumpCatalogService
 
     public int Count => _catalog.Items.Count;
     public IReadOnlyDictionary<string,int> Vendors => _catalog.Vendors;
+    public IReadOnlyList<DumpCatalogItem> Items => _catalog.Items;
 
     public DumpCatalogService()
     {
