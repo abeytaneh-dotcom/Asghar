@@ -1,5 +1,3 @@
-using System.IO.Hashing;
-
 namespace KhanehRemapStudio;
 
 public interface IChecksumPlugin
