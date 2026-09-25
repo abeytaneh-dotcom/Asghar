@@ -1,4 +1,4 @@
-name: Build Khaneh Remap APK v3.0.4 Fresh Identity
+name: Build Khaneh Remap APK v3.0.5 Clean Install
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -31,31 +31,30 @@ jobs:
         with:
           packages: ''
 
-      - name: Ensure Android SDK 35
+      - name: Ensure Android SDK
         run: |
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
-          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
-          test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
 
-      - name: Unpack and create truly new Android identity
+      - name: Unpack clean source
         run: |
-          mkdir -p apk-v3
-          base64 -d apk-v3-src.zip.b64 > /tmp/apk-v3.zip
-          unzip -q /tmp/apk-v3.zip -d apk-v3
+          rm -rf apk-v305
+          mkdir -p apk-v305
+          base64 -d apk-v3-src.zip.b64 > /tmp/apk-v305.zip
+          unzip -q /tmp/apk-v305.zip -d apk-v305
 
           printf '%s\n' \
             'android.useAndroidX=true' \
             'android.nonTransitiveRClass=true' \
-            'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > apk-v3/gradle.properties
+            'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > apk-v305/gradle.properties
 
           python3 - <<'PY'
           from pathlib import Path
+          root=Path('apk-v305')
 
-          root=Path('apk-v3')
-
-          # Keep the fixed native BLE disconnect method.
+          # Fix native BLE bridge syntax.
           p=root/'app/src/main/java/ir/khanehremap/diag/MainActivity.java'
           s=p.read_text()
           old='        @JavascriptInterface public void disconnect(){ runOnUiThread(()->{if(gatt!=null){try{gatt.disconnect();gatt.close();}catch(Exception ignored){}gatt=null;chars.clear();}); }'
@@ -72,159 +71,100 @@ jobs:
               s=s.replace(old,new)
           p.write_text(s)
 
-          # Completely new package identity, so Android treats it as a separate app.
+          # Completely fresh package identity and conservative release settings.
           p=root/'app/build.gradle'
           s=p.read_text()
-          s=s.replace("applicationId 'ir.khanehremap.diag'","applicationId 'ir.khanehremap.smartobd.kilometer.v304'")
-          s=s.replace('versionCode 300','versionCode 304')
-          s=s.replace("versionName '3.0.0'","versionName '3.0.4'")
+          import re
+          s=re.sub(r"applicationId\s+'[^']+'","applicationId 'com.krdiag.kilometer.n202609252354'",s)
+          s=re.sub(r"minSdk\s+\d+","minSdk 23",s)
+          s=re.sub(r"targetSdk\s+\d+","targetSdk 34",s)
+          s=re.sub(r"versionCode\s+\d+","versionCode 305",s)
+          s=re.sub(r"versionName\s+'[^']+'","versionName '3.0.5'",s)
+          s=s.replace('minifyEnabled true','minifyEnabled false')
+          s=s.replace('shrinkResources true','shrinkResources false')
           p.write_text(s)
 
-          # Explicit launcher icon in manifest (previous build had no icon attribute).
+          # Explicit launcher identity.
           p=root/'app/src/main/AndroidManifest.xml'
           s=p.read_text()
-          s=s.replace(
-              'android:allowBackup="false"',
-              'android:allowBackup="false"\n        android:icon="@drawable/kr_launcher"\n        android:roundIcon="@drawable/kr_launcher"'
-          )
+          if 'android:icon=' not in s:
+              s=s.replace('android:allowBackup="false"',
+                          'android:allowBackup="false"\n        android:icon="@drawable/kr_launcher"\n        android:roundIcon="@drawable/kr_launcher"')
+          else:
+              import re
+              s=re.sub(r'android:icon="[^"]+"','android:icon="@drawable/kr_launcher"',s)
+              s=re.sub(r'android:roundIcon="[^"]+"','android:roundIcon="@drawable/kr_launcher"',s)
           s=s.replace('android:label="خانه ریمپ"','android:label="@string/app_name"')
           p.write_text(s)
 
           (root/'app/src/main/res/values/strings.xml').write_text(
               '<resources>\n'
-              '    <string name="app_name">خانه ریمپ کیلومتر</string>\n'
+              '  <string name="app_name">خانه ریمپ کیلومتر</string>\n'
               '</resources>\n'
           )
           PY
 
-          mkdir -p apk-v3/app/src/main/res/drawable
-          cat > apk-v3/app/src/main/res/drawable/kr_launcher.xml <<'XML'
+          mkdir -p apk-v305/app/src/main/res/drawable
+          cat > apk-v305/app/src/main/res/drawable/kr_launcher.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-
-              <!-- Deep automotive-tech background -->
-              <path
-                  android:fillColor="#041016"
-                  android:pathData="M0,0h108v108h-108z"/>
-
-              <!-- Cyan border glow -->
-              <path
-                  android:fillColor="@android:color/transparent"
-                  android:strokeColor="#22E8FF"
-                  android:strokeWidth="3"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#041016" android:pathData="M0,0h108v108h-108z"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#22E8FF" android:strokeWidth="3"
                   android:pathData="M8,54A46,46 0,1 1,100 54A46,46 0,1 1,8 54"/>
-
-              <!-- Speedometer arc -->
-              <path
-                  android:fillColor="@android:color/transparent"
-                  android:strokeColor="#39F2C1"
-                  android:strokeWidth="6"
-                  android:strokeLineCap="round"
-                  android:pathData="M21,55A33,33 0,0 1,87 55"/>
-
-              <!-- Gauge ticks -->
-              <path android:strokeColor="#8BFAFF" android:strokeWidth="3" android:strokeLineCap="round"
-                  android:pathData="M25,50L31,52 M31,36L36,41 M43,27L46,34 M54,24L54,32 M66,27L63,34 M77,36L72,41 M83,49L77,51"/>
-
-              <!-- Needle -->
-              <path
-                  android:fillColor="@android:color/transparent"
-                  android:strokeColor="#FFFFFF"
-                  android:strokeWidth="4"
-                  android:strokeLineCap="round"
-                  android:pathData="M54,55L80,36"/>
-              <path
-                  android:fillColor="#22E8FF"
-                  android:pathData="M59,55A5,5 0,1 1,49 55A5,5 0,1 1,59 55"/>
-
-              <!-- Sleek car silhouette -->
-              <path
-                  android:fillColor="#0B2530"
-                  android:strokeColor="#27E5FF"
-                  android:strokeWidth="2"
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#39F2C1" android:strokeWidth="6"
+                  android:strokeLineCap="round" android:pathData="M21,55A33,33 0,0 1,87 55"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#FFFFFF" android:strokeWidth="4"
+                  android:strokeLineCap="round" android:pathData="M54,55L80,36"/>
+              <path android:fillColor="#22E8FF" android:pathData="M59,55A5,5 0,1 1,49 55A5,5 0,1 1,59 55"/>
+              <path android:fillColor="#0B2530" android:strokeColor="#27E5FF" android:strokeWidth="2"
                   android:pathData="M18,70L24,62L36,58L45,51L66,51L75,57L85,61L91,70L88,76L20,76z"/>
-              <path
-                  android:fillColor="#123E4A"
-                  android:pathData="M39,58L47,53L64,53L72,58z"/>
-              <path
-                  android:fillColor="#B9FBFF"
-                  android:pathData="M23,66L32,63L29,68z M85,66L76,63L79,68z"/>
-
-              <!-- Wheels -->
-              <path android:fillColor="#020608" android:pathData="M37,76A7,7 0,1 1,23 76A7,7 0,1 1,37 76"/>
-              <path android:fillColor="#24DDF4" android:pathData="M34,76A4,4 0,1 1,26 76A4,4 0,1 1,34 76"/>
-              <path android:fillColor="#020608" android:pathData="M85,76A7,7 0,1 1,71 76A7,7 0,1 1,85 76"/>
-              <path android:fillColor="#24DDF4" android:pathData="M82,76A4,4 0,1 1,74 76A4,4 0,1 1,82 76"/>
-
-              <!-- Stylized KR monogram -->
-              <path
-                  android:fillColor="#F2FEFF"
+              <path android:fillColor="#F2FEFF"
                   android:pathData="M34,79L39,79L39,91L45,79L51,79L44,87L52,98L46,98L40,90L39,91L39,98L34,98z"/>
-              <path
-                  android:fillColor="#1FE7D2"
+              <path android:fillColor="#1FE7D2"
                   android:pathData="M55,79L68,79C75,79 78,82 78,87C78,91 75,93 72,94L79,98L72,98L66,94L61,94L61,98L55,98zM61,84L61,90L68,90C71,90 72,89 72,87C72,85 71,84 68,84z"/>
-
-              <!-- Circuit accents -->
-              <path
-                  android:fillColor="@android:color/transparent"
-                  android:strokeColor="#22E8FF"
-                  android:strokeWidth="2"
-                  android:strokeLineCap="round"
-                  android:pathData="M13,88L23,88L27,84 M95,88L85,88L81,84"/>
-              <path android:fillColor="#39F2C1" android:pathData="M15,88A2,2 0,1 1,11 88A2,2 0,1 1,15 88"/>
-              <path android:fillColor="#39F2C1" android:pathData="M97,88A2,2 0,1 1,93 88A2,2 0,1 1,97 88"/>
           </vector>
           XML
 
-      - name: Build release APK
+      - name: Build release
         run: |
-          cd apk-v3
-          gradle --no-daemon :app:assembleRelease
+          cd apk-v305
+          gradle --no-daemon clean :app:assembleRelease
 
-      - name: Zipalign APK
+      - name: Zipalign
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 \
-            apk-v3/app/build/outputs/apk/release/app-release-unsigned.apk \
-            KhanehRemap-SmartOBD-v3.0.4-aligned-unsigned.apk
+            apk-v305/app/build/outputs/apk/release/app-release-unsigned.apk \
+            KhanehRemap-SmartOBD-v3.0.5-aligned.apk
 
-      - name: Create brand-new signing identity and sign V1 V2 V3
-        shell: bash
+      - name: Fresh signing key and APK signing
         run: |
           set -e
           PASS="$(openssl rand -hex 32)"
-          printf "%s" "$PASS" > KhanehRemap-v304-signing-password.txt
+          printf "%s" "$PASS" > KhanehRemap-v305-signing-password.txt
+          ALIAS="krfresh305"
+          keytool -genkeypair -v             -keystore KhanehRemap-SmartOBD-v305-FRESH.jks             -storepass "$PASS" -keypass "$PASS"             -alias "$ALIAS" -keyalg RSA -keysize 4096 -validity 12000             -dname "CN=Khaneh Remap v305 Fresh, OU=Smart OBD, O=Khaneh Remap, C=IR"
 
-          keytool -genkeypair -v             -keystore KhanehRemap-SmartOBD-v304-FRESH.jks             -storepass "$PASS" -keypass "$PASS"             -alias kr_v304_fresh_$(date +%s)             -keyalg RSA -keysize 4096 -validity 12000             -dname "CN=Khaneh Remap Smart OBD v304, OU=Fresh Mobile Identity, O=Khaneh Remap, C=IR"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign             --ks KhanehRemap-SmartOBD-v305-FRESH.jks             --ks-key-alias "$ALIAS"             --ks-pass "pass:$PASS"             --key-pass "pass:$PASS"             --v1-signing-enabled true             --v2-signing-enabled true             --v3-signing-enabled true             --out KhanehRemap-SmartOBD-v3.0.5-CLEAN.apk             KhanehRemap-SmartOBD-v3.0.5-aligned.apk
 
-          ALIAS="$(keytool -list -keystore KhanehRemap-SmartOBD-v304-FRESH.jks -storepass "$PASS" | awk -F, '/PrivateKeyEntry/{print $1; exit}' | xargs)"
-
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign             --ks KhanehRemap-SmartOBD-v304-FRESH.jks             --ks-key-alias "$ALIAS"             --ks-pass "pass:$PASS"             --key-pass "pass:$PASS"             --v1-signing-enabled true             --v2-signing-enabled true             --v3-signing-enabled true             --out KhanehRemap-SmartOBD-v3.0.4-FRESH.apk             KhanehRemap-SmartOBD-v3.0.4-aligned-unsigned.apk
-
-      - name: Verify package icon label and signature
+      - name: Verify APK
         run: |
-          echo "=== BADGING ==="
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging KhanehRemap-SmartOBD-v3.0.4-FRESH.apk | grep -E "package:|application-label|application-icon" || true
-          echo "=== SIGNATURE ==="
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs KhanehRemap-SmartOBD-v3.0.4-FRESH.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging KhanehRemap-SmartOBD-v3.0.5-CLEAN.apk | grep -E "package:|sdkVersion|targetSdkVersion|application-label|application-icon"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs KhanehRemap-SmartOBD-v3.0.5-CLEAN.apk
 
-      - name: Upload signed APK
+      - name: Upload clean signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: KhanehRemap-SmartOBD-v3.0.4-FRESH
-          path: KhanehRemap-SmartOBD-v3.0.4-FRESH.apk
-          if-no-files-found: error
+          name: KhanehRemap-SmartOBD-v3.0.5-CLEAN
+          path: KhanehRemap-SmartOBD-v3.0.5-CLEAN.apk
           retention-days: 1
 
       - name: Upload signing material
         uses: actions/upload-artifact@v4
         with:
-          name: KhanehRemap-SmartOBD-v3.0.4-FRESH-signing
+          name: KhanehRemap-SmartOBD-v3.0.5-CLEAN-signing
           path: |
-            KhanehRemap-SmartOBD-v304-FRESH.jks
-            KhanehRemap-v304-signing-password.txt
-          if-no-files-found: error
+            KhanehRemap-SmartOBD-v305-FRESH.jks
+            KhanehRemap-v305-signing-password.txt
           retention-days: 1
