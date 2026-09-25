@@ -1,3 +1,5 @@
+using SharpCompress.Archives;
+
 using System.Security.Cryptography;
 
 namespace KhanehRemapStudio;
@@ -163,6 +165,53 @@ public sealed class DumpCatalogService
             if(s>score){score=s;best=item;}
         }
         return new IdentificationResult{BestCandidate=best,Similarity=score};
+    }
+
+    public int IndexArchive(string archivePath,bool persist=true)
+    {
+        if(!File.Exists(archivePath)) throw new FileNotFoundException(archivePath);
+        var exts=new HashSet<string>(StringComparer.OrdinalIgnoreCase){".bin",".ori",".mod",".rom",".dump"};
+        int added=0;
+
+        using var archive=ArchiveFactory.Open(archivePath);
+        foreach(var entry in archive.Entries.Where(e=>!e.IsDirectory))
+        {
+            string key=(entry.Key ?? "").Replace('\\','/');
+            if(!exts.Contains(Path.GetExtension(key))) continue;
+
+            byte[] data;
+            try
+            {
+                using var input=entry.OpenEntryStream();
+                using var ms=new MemoryStream();
+                input.CopyTo(ms);
+                data=ms.ToArray();
+            }
+            catch { continue; }
+
+            if(data.Length==0) continue;
+            string sha=Util.Sha256(data);
+            if(_catalog.Items.Any(x=>x.Sha256.Equals(sha,StringComparison.OrdinalIgnoreCase))) continue;
+
+            string[] seg=key.Split('/',StringSplitOptions.RemoveEmptyEntries);
+            string vendor=seg.Length>1 ? seg[^2] : "unknown";
+            if(key.Contains("/Domp/",StringComparison.OrdinalIgnoreCase) || key.StartsWith("Domp/",StringComparison.OrdinalIgnoreCase))
+            {
+                int di=Array.FindIndex(seg,x=>x.Equals("Domp",StringComparison.OrdinalIgnoreCase));
+                if(di>=0 && di+1<seg.Length) vendor=seg[di+1];
+            }
+
+            _catalog.Items.Add(new DumpCatalogItem
+            {
+                Name=Path.GetFileName(key),Path=key,Vendor=vendor,Size=data.LongLength,Sha256=sha,
+                Blocks=Util.BlockFingerprints(data,16)
+            });
+            added++;
+        }
+
+        RefreshVendorCounts();
+        if(persist) SaveLocalCatalog();
+        return added;
     }
 
     public int IndexFolder(string folder,bool persist=true)
