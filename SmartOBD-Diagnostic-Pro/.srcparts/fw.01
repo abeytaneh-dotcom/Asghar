@@ -1,0 +1,144 @@
+Id=r.identifier; canRequestId=r.identifier-8; }
+      return out.len>0;
+    }
+    if(type==1){
+      expected=((size_t)(r.data[0]&0x0F)<<8)|r.data[1];
+      for(int i=2;i<8 && out.len<expected;i++) out.push(r.data[i]);
+      responder=r.identifier; if(functional){ canResponseId=responder; canRequestId=responder-8; }
+      uint8_t fc[8]={0x30,0x00,0x00,0,0,0,0,0};
+      canTx(responder-8,fc,8); began=true; nextSeq=1;
+      if(out.len>=expected) return true;
+      continue;
+    }
+    if(type==2 && began && r.identifier==responder){
+      uint8_t seq=r.data[0]&0x0F;
+      if(seq!=(nextSeq&0x0F)) return false;
+      nextSeq++;
+      for(int i=1;i<8 && out.len<expected;i++) out.push(r.data[i]);
+      if(out.len>=expected){ out.len=expected; return true; }
+    }
+  }
+  return false;
+}
+
+static void klineClose(){ KLine.end(); pinMode(PIN_KLINE_TX,OUTPUT); digitalWrite(PIN_KLINE_TX,HIGH); klineStarted=false; }
+static uint8_t ksum(const uint8_t* p,size_t n){ uint16_t s=0; for(size_t i=0;i<n;i++)s+=p[i]; return (uint8_t)s; }
+static void klineIdle(){ klineClose(); delay(280); }
+static void send5Baud(uint8_t b){
+  pinMode(PIN_KLINE_TX,OUTPUT); digitalWrite(PIN_KLINE_TX,LOW); delay(200);
+  for(int i=0;i<8;i++){ digitalWrite(PIN_KLINE_TX,(b>>i)&1); delay(200); }
+  digitalWrite(PIN_KLINE_TX,HIGH); delay(200);
+}
+
+static bool klineFastInit(){
+  klineIdle();
+  digitalWrite(PIN_KLINE_TX,LOW); delay(25); digitalWrite(PIN_KLINE_TX,HIGH); delay(25);
+  KLine.begin(10400,SERIAL_8N1,PIN_KLINE_RX,PIN_KLINE_TX);
+  while(KLine.available())KLine.read();
+  uint8_t req[5]={0xC1,0x33,0xF1,0x81,0}; req[4]=ksum(req,4);
+  KLine.write(req,5); KLine.flush();
+  uint8_t r[40]; size_t n=0; uint32_t st=millis(),last=st;
+  while(millis()-st<450){
+    while(KLine.available() && n<sizeof(r)){ r[n++]=KLine.read(); last=millis(); }
+    if(n && millis()-last>35)break; delay(1);
+  }
+  for(size_t i=0;i<n;i++) if(r[i]==0xC1 || r[i]==0x81){ klineStarted=true; return true; }
+  klineClose(); return false;
+}
+
+static bool kline5BaudInit(){
+  klineIdle(); send5Baud(0x33);
+  KLine.begin(10400,SERIAL_8N1,PIN_KLINE_RX,PIN_KLINE_TX);
+  uint8_t b[3]={0}; int got=0; uint32_t st=millis();
+  while(millis()-st<1800 && got<3) if(KLine.available()) b[got++]=KLine.read();
+  if(got<3 || b[0]!=0x55){ klineClose(); return false; }
+  delay(25); KLine.write((uint8_t)~b[2]); KLine.flush(); delay(60);
+  while(KLine.available())KLine.read(); klineStarted=true; return true;
+}
+
+// Generic ISO9141/KWP OBD request. Returned buffer begins with positive-response service.
+static bool klineObdRequest(const uint8_t* req,size_t reqLen,ByteBuf& out,uint32_t timeoutMs=500){
+  if(!klineStarted || reqLen<1 || reqLen>5) return false;
+  while(KLine.available())KLine.read(); out.clear();
+  uint8_t tx[10]; size_t n=0;
+  tx[n++]=0x68; tx[n++]=0x6A; tx[n++]=0xF1;
+  for(size_t i=0;i<reqLen;i++) tx[n++]=req[i];
+  uint8_t cs=ksum(tx,n); tx[n++]=cs;
+  KLine.write(tx,n); KLine.flush();
+  uint8_t raw[220]; size_t rn=0; uint32_t st=millis(),last=st;
+  while(millis()-st<timeoutMs){
+    while(KLine.available() && rn<sizeof(raw)){ raw[rn++]=KLine.read(); last=millis(); }
+    if(rn && millis()-last>35)break; delay(1);
+  }
+  uint8_t positive=req[0]+0x40;
+  int pos=-1;
+  for(size_t i=0;i<rn;i++) if(raw[i]==positive){ pos=(int)i; break; }
+  if(pos<0) return false;
+  // Remove trailing checksum where possible. Preserve enough bytes for DTC/VIN parsing.
+  size_t end=rn; if(end>(size_t)pos+1) end--;
+  for(size_t i=pos;i<end;i++) out.push(raw[i]);
+  return out.len>0;
+}
+
+static bool obdRequest(uint8_t mode,int pid,ByteBuf& out,uint32_t timeoutMs=650,bool functional=false){
+  uint8_t req[2]; size_t n=1; req[0]=mode;
+  if(pid>=0){ req[1]=(uint8_t)pid; n=2; }
+  if(canStarted) return canIsoTpRequest(req,n,out,timeoutMs,functional);
+  if(klineStarted) return klineObdRequest(req,n,out,timeoutMs);
+  return false;
+}
+
+static void decodeSupportBlock(uint8_t base,const ByteBuf& b){
+  uint8_t service=0x41;
+  for(size_t i=0;i+5<b.len;i++){
+    if(b.data[i]==service && b.data[i+1]==base){
+      uint32_t bits=(uint32_t(b.data[i+2])<<24)|(uint32_t(b.data[i+3])<<16)|(uint32_t(b.data[i+4])<<8)|b.data[i+5];
+      for(int n=1;n<=32;n++){ int id=base+n; if(id<0x61) pidSupported[id]=((bits>>(32-n))&1U)!=0; }
+      return;
+    }
+  }
+}
+
+static void loadSupportedPids(){
+  memset(pidSupported,0,sizeof(pidSupported));
+  ByteBuf b; bool any=false;
+  if(obdRequest(0x01,0x00,b,350)){ decodeSupportBlock(0x00,b); any=true; }
+  if(pidSupported[0x20] && obdRequest(0x01,0x20,b,350)) decodeSupportBlock(0x20,b);
+  if(pidSupported[0x40] && obdRequest(0x01,0x40,b,350)) decodeSupportBlock(0x40,b);
+  if(!any){
+    const uint8_t fallback[]={0x04,0x05,0x06,0x07,0x0B,0x0C,0x0D,0x0E,0x0F,0x10,0x11,0x1F,0x2F,0x42};
+    for(uint8_t id:fallback) pidSupported[id]=true;
+  }
+}
+
+static bool detectCANRate(int rate){
+  bleOut("ECU:SCAN,CAN:"+String(rate));
+  if(!startCAN(rate)) return false;
+  ByteBuf b;
+  if(obdRequest(0x01,0x00,b,400,true) && b.len>=2 && b.data[0]==0x41){
+    protocolName="CAN:"+String(rate); bleOut("ECU:CONNECTED,"+protocolName); return true;
+  }
+  stopCAN(); return false;
+}
+
+static bool detectKLine(){
+  stopCAN();
+  bleOut("ECU:SCAN,KLINE:FAST");
+  if(klineFastInit()){ protocolName="KLINE:KWP"; bleOut("ECU:CONNECTED,"+protocolName); return true; }
+  bleOut("ECU:SCAN,KLINE:5BAUD");
+  if(kline5BaudInit()){ protocolName="KLINE:ISO9141"; bleOut("ECU:CONNECTED,"+protocolName); return true; }
+  return false;
+}
+
+static bool detectProtocol(){
+  liveStreaming=false; protocolName="NONE"; stopCAN(); klineClose();
+  bleOut("DETECT:START");
+  if(detectCANRate(500)){ loadSupportedPids(); return true; }
+  if(detectCANRate(250)){ loadSupportedPids(); return true; }
+  if(detectKLine()){ loadSupportedPids(); return true; }
+  bleOut("ECU:NOT_FOUND"); return false;
+}
+
+static int findService(const ByteBuf& b,uint8_t service){ for(size_t i=0;i<b.len;i++) if(b.data[i]==service)return (int)i; return -1; }
+
+static String asciiPayload(const ByteBuf& b,uint8_t 
