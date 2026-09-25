@@ -605,14 +605,17 @@ public sealed class MainForm : Form
 
             foreach(string maker in makers)
             {
-                var makerNode=GetOrAdd(_ecuTree.Nodes,maker);
+                var makerNode=GetOrAdd(_ecuTree.Nodes,maker);makerNode.ImageKey=makerNode.SelectedImageKey="folder";
                 foreach(string vehicle in vehicles)
                 {
-                    var vehicleNode=GetOrAdd(makerNode.Nodes,vehicle);
-                    var vendorNode=GetOrAdd(vehicleNode.Nodes,p.Vendor);
+                    var vehicleNode=GetOrAdd(makerNode.Nodes,vehicle);vehicleNode.ImageKey=vehicleNode.SelectedImageKey="car";
+                    var vendorNode=GetOrAdd(vehicleNode.Nodes,p.Vendor);vendorNode.ImageKey=vendorNode.SelectedImageKey="ecu";
                     string bus=p.Buses.Count>0?string.Join("/",p.Buses):"—";
                     string suffix=p.AutoIdentification?"  AUTO-ID":"";
-                    var leaf=new TreeNode($"{p.Family}   [{bus}]{suffix}"){Tag=p,ForeColor=p.AutoIdentification?Accent:Fg};
+                    var leaf=new TreeNode($"{p.Family}   [{bus}]{suffix}")
+                    {
+                        Tag=p,ForeColor=p.AutoIdentification?Accent:Fg,ImageKey="ecu",SelectedImageKey="ecu"
+                    };
                     vendorNode.Nodes.Add(leaf);
                 }
             }
@@ -631,7 +634,7 @@ public sealed class MainForm : Form
     private void BuildFileTree()
     {
         string q=_librarySearch.Text.Trim().ToLowerInvariant();
-        var items=_catalog.Items.Where(x =>
+        var items=_catalog.Items.Where(x=>x.HasPhysicalSource).Where(x =>
             q.Length==0 ||
             (x.Name??"").ToLowerInvariant().Contains(q) ||
             (x.Path??"").ToLowerInvariant().Contains(q) ||
@@ -642,18 +645,38 @@ public sealed class MainForm : Form
         _fileTree.Nodes.Clear();
         _fileTree.Sorted=true;
 
-        foreach(var x in items)
+        if(items.Count==0)
         {
-            string vendor=string.IsNullOrWhiteSpace(x.Vendor)?"unknown":x.Vendor;
-            string family=string.IsNullOrWhiteSpace(x.FamilyHint)?"سایر / نامشخص":x.FamilyHint;
-            var vendorNode=GetOrAdd(_fileTree.Nodes,vendor);
-            var familyNode=GetOrAdd(vendorNode.Nodes,family);
-            var leaf=new TreeNode($"{x.Name}   •   {Util.FormatSize(x.Size)}"){Tag=x,ForeColor=Color.FromArgb(207,221,235)};
-            familyNode.Nodes.Add(leaf);
+            var empty=new TreeNode("بانک فایل واقعی هنوز ایندکس نشده است")
+            {
+                ForeColor=Warn,ImageKey="archive",SelectedImageKey="archive"
+            };
+            var hint=new TreeNode("از «ایندکس پوشه» یا «RAR / ZIP / 7z» استفاده کنید")
+            {
+                ForeColor=Muted,ImageKey="folder",SelectedImageKey="folder"
+            };
+            empty.Nodes.Add(hint);empty.Expand();_fileTree.Nodes.Add(empty);
+        }
+        else
+        {
+            foreach(var x in items)
+            {
+                string vendor=string.IsNullOrWhiteSpace(x.Vendor)?"unknown":x.Vendor;
+                string family=string.IsNullOrWhiteSpace(x.FamilyHint)?"سایر / نامشخص":x.FamilyHint;
+                var vendorNode=GetOrAdd(_fileTree.Nodes,vendor);vendorNode.ImageKey=vendorNode.SelectedImageKey="folder";
+                var familyNode=GetOrAdd(vendorNode.Nodes,family);familyNode.ImageKey=familyNode.SelectedImageKey="ecu";
+                string source=x.SourceKind.Equals("archive",StringComparison.OrdinalIgnoreCase)?"archive":"file";
+                var leaf=new TreeNode($"{x.Name}   •   {Util.FormatSize(x.Size)}")
+                {
+                    Tag=x,ForeColor=Color.FromArgb(207,221,235),ImageKey=source,SelectedImageKey=source
+                };
+                familyNode.Nodes.Add(leaf);
+            }
+
+            AddCounts(_fileTree.Nodes);
+            if(q.Length>0)_fileTree.ExpandAll();
         }
 
-        AddCounts(_fileTree.Nodes);
-        if(q.Length>0)_fileTree.ExpandAll();
         _fileTree.EndUpdate();
         UpdateLibraryStats();
     }
@@ -691,32 +714,39 @@ public sealed class MainForm : Form
     {
         if(p==null)return;
         string yes="✓",no="—";
+        int files=_catalog.Items.Count(x=>x.HasPhysicalSource &&
+            ((x.Vendor??"").Contains(p.Vendor,StringComparison.OrdinalIgnoreCase) ||
+             (!string.IsNullOrWhiteSpace(p.Family) && ((x.FamilyHint??"").Contains(p.Family,StringComparison.OrdinalIgnoreCase) || (x.Name??"").Contains(p.Family,StringComparison.OrdinalIgnoreCase)))));
         _ecuDetails.Text=
             $"ECU: {p.Vendor} / {p.Family}\n"+
             $"Variant: {(p.Variants.Count>0?string.Join(" • ",p.Variants):"—")}\n"+
             $"خودرو: {(p.Vehicles.Count>0?string.Join(" • ",p.Vehicles):"—")}\n"+
             $"پروتکل: {(p.Buses.Count>0?string.Join(" / ",p.Buses):"—")}\n"+
             $"روش پروگرام: {(p.ProgrammingMethods.Count>0?string.Join(" / ",p.ProgrammingMethods):"—")}\n"+
-            $"OBD: {(p.ObdProgramming?yes:no)}   Auto ID: {(p.AutoIdentification?yes:no)}   Confidence: {p.Confidence}";
+            $"OBD: {(p.ObdProgramming?yes:no)}   Auto ID: {(p.AutoIdentification?yes:no)}   Confidence: {p.Confidence}\n"+
+            $"فایل واقعی مرتبط در بانک: {files}\n"+
+            $"دوبار کلیک: نمایش فایل‌های مرتبط";
     }
 
     private void ShowDumpDetails(DumpCatalogItem? x)
     {
         if(x==null)return;
         _ecuDetails.Text=
-            $"فایل: {x.Name}\n"+
+            $"فایل واقعی: {x.Name}\n"+
             $"ECU Vendor: {x.Vendor}\n"+
             $"Family Hint: {(string.IsNullOrWhiteSpace(x.FamilyHint)?"—":x.FamilyHint)}\n"+
             $"Size: {Util.FormatSize(x.Size)}\n"+
+            $"Source: {(x.SourceKind=="archive"?"Archive":"Folder")}\n"+
             $"SHA-256: {x.Sha256}\n"+
-            $"Path: {x.Path}";
+            $"Path: {x.Path}\n"+
+            $"دوبار کلیک: باز کردن و تحلیل واقعی فایل";
     }
 
     private void UpdateLibraryStats()
     {
         int makers=_ecuProfiles.SelectMany(x=>x.VehicleMakers).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         int vendors=_ecuProfiles.Select(x=>x.Vendor).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-        _libraryStats.Text=$"{_ecuProfiles.Count} ECU • {makers} MAKERS • {vendors} VENDORS";
+        _libraryStats.Text=$"{_ecuProfiles.Count} ECU • {_catalog.PhysicalCount} REAL FILES • {makers} MAKERS";
     }
 
     private void DrawLibraryTab(object? sender,DrawItemEventArgs e)
