@@ -8,8 +8,8 @@ android {
         applicationId 'ir.khanehremap.smartdiag'
         minSdk 24
         targetSdk 34
-        versionCode 29003
-        versionName '2.9.3'
+        versionCode 29004
+        versionName '2.9.4'
     }
 
     buildTypes {
