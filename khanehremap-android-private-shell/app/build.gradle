@@ -5,11 +5,11 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId 'ir.khanehremap.diag'
+        applicationId 'ir.khanehremap.smartdiag'
         minSdk 24
         targetSdk 34
-        versionCode 29001
-        versionName '2.9.1'
+        versionCode 29002
+        versionName '2.9.2'
     }
 
     buildTypes {
