@@ -16,4 +16,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Data\**\*.*" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="SharpCompress" Version="0.38.0" />
+  </ItemGroup>
 </Project>
