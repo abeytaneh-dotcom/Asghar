@@ -42,6 +42,10 @@ jobs:
           mkdir -p apk-v3
           base64 -d apk-v3-src.zip.b64 > /tmp/apk-v3.zip
           unzip -q /tmp/apk-v3.zip -d apk-v3
+          printf '%s\n' \
+            'android.useAndroidX=true' \
+            'android.nonTransitiveRClass=true' \
+            'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > apk-v3/gradle.properties
 
       - name: Build unsigned release APK
         run: |
@@ -50,7 +54,9 @@ jobs:
 
       - name: Zipalign APK
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4             apk-v3/app/build/outputs/apk/release/app-release-unsigned.apk             KhanehRemap-SmartOBD-v3.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 \
+            apk-v3/app/build/outputs/apk/release/app-release-unsigned.apk \
+            KhanehRemap-SmartOBD-v3.0-aligned-unsigned.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
