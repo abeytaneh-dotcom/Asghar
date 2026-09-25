@@ -1,0 +1,50 @@
+name: Smart OBD Diagnostic Pro Build
+
+on:
+  push:
+    branches: [ smartobd-diagnostic-pro-v1 ]
+  pull_request:
+    paths:
+      - 'SmartOBD-Diagnostic-Pro/**'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Protocol/UI smoke test
+        run: python SmartOBD-Diagnostic-Pro/tools/protocol_smoke_test.py
+
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install platformio
+      - name: Build ESP32-C3 firmware
+        run: pio run -d SmartOBD-Diagnostic-Pro/firmware
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartOBD-ESP32C3-firmware
+          path: SmartOBD-Diagnostic-Pro/firmware/.pio/build/esp32-c3/firmware.bin
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build Android APK
+        run: gradle -p SmartOBD-Diagnostic-Pro/android :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartOBD-Diagnostic-Pro-APK
+          path: SmartOBD-Diagnostic-Pro/android/app/build/outputs/apk/debug/app-debug.apk
