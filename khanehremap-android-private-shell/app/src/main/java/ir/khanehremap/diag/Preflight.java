@@ -29,7 +29,7 @@ final class Preflight {
         c.setConnectTimeout(7000);
         c.setReadTimeout(7000);
         c.setInstanceFollowRedirects(true);
-        c.setRequestProperty("User-Agent", "KhanehRemapApp/2.9.3.3");
+        c.setRequestProperty("User-Agent", "KhanehRemapApp/2.9.4.3");
         try {
             return c.getResponseCode();
         } finally {
