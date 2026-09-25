@@ -8,6 +8,7 @@ public sealed class MainForm : Form
     private readonly BinaryDocument _doc=new();
     private readonly DumpCatalogService _catalog=new();
     private readonly ChecksumManager _checksum=new();
+    private readonly ProfileStore _profileStore=new();
     private IdentificationResult _id=new();
     private readonly List<MapDefinition> _maps=new();
     private readonly Stack<List<ByteChange>> _undo=new();
@@ -35,7 +36,7 @@ public sealed class MainForm : Form
         Width=1560;Height=930;MinimumSize=new Size(1160,740);StartPosition=FormStartPosition.CenterScreen;
         BackColor=Bg;ForeColor=Fg;Font=new Font("Segoe UI",10f);RightToLeft=RightToLeft.Yes;RightToLeftLayout=true;AllowDrop=true;
         BuildUi();HookEvents();SetStatus("آماده — فایل ECU را باز کنید.");
-        _bank.Text=$"بانک دامپ: {_catalog.Count:N0}";
+        _bank.Text=$"بانک دامپ: {_catalog.Count:N0} • پروفایل دقیق: {_profileStore.CountProfiles():N0}";
     }
 
     private void BuildUi()
@@ -146,8 +147,12 @@ public sealed class MainForm : Form
     private void LoadMaps()
     {
         _maps.Clear();
-        var profile=BuiltInProfiles.Find(_doc.Sha256);
-        if(profile!=null)_maps.AddRange(profile.Maps);
+        var profile=_profileStore.FindExact(_doc.Sha256) ?? BuiltInProfiles.Find(_doc.Sha256);
+        if(profile!=null)
+        {
+            _maps.AddRange(profile.Maps);
+            SetStatus($"پروفایل دقیق بارگذاری شد: {profile.ProfileName} • {profile.Maps.Count} تعریف");
+        }
         else if(_id.Vendor.Equals("siemens",StringComparison.OrdinalIgnoreCase) || _id.DisplayName.Contains("Siemens",StringComparison.OrdinalIgnoreCase))
         {
             bool bi=_id.DisplayName.Contains("Bifuel",StringComparison.OrdinalIgnoreCase)||_id.DisplayName.Contains("CNG",StringComparison.OrdinalIgnoreCase);
@@ -164,8 +169,31 @@ public sealed class MainForm : Form
         try
         {
             var p=DefinitionParsers.Parse(d.FileName);int ok=0,reject=0;
-            foreach(var m in p.Maps){if(Inside(m)){_maps.Add(m);ok++;}else reject++;}
-            RefreshCategories();RefreshMapList();SetStatus($"تعریف وارد شد: {ok} مورد" +(reject>0?$" • {reject} خارج از محدوده":""));
+            var valid=new List<MapDefinition>();
+            foreach(var m in p.Maps)
+            {
+                if(Inside(m)){_maps.Add(m);valid.Add(m);ok++;}
+                else reject++;
+            }
+            RefreshCategories();RefreshMapList();
+            SetStatus($"تعریف وارد شد: {ok} مورد" +(reject>0?$" • {reject} خارج از محدوده":""));
+
+            if(valid.Count>0)
+            {
+                var bind=MessageBox.Show(this,
+                    "این تعریف به SHA-256 همین دامپ متصل و در بانک تعریف محلی ذخیره شود؟\n\nدر دفعات بعد همین فایل به‌صورت خودکار با همین جداول باز می‌شود.",
+                    "ثبت پروفایل دقیق",MessageBoxButtons.YesNo,MessageBoxIcon.Question);
+                if(bind==DialogResult.Yes)
+                {
+                    p.Maps=valid;
+                    if(string.IsNullOrWhiteSpace(p.ProfileName)) p.ProfileName=Path.GetFileNameWithoutExtension(d.FileName);
+                    if(string.IsNullOrWhiteSpace(p.EcuVendor)) p.EcuVendor=_id.Vendor;
+                    if(string.IsNullOrWhiteSpace(p.EcuFamily)) p.EcuFamily=_id.FamilyHint;
+                    _profileStore.SaveForDump(p,_doc.Sha256,_doc.Length,$"{p.Source} • bound to exact dump");
+                    _bank.Text=$"بانک دامپ: {_catalog.Count:N0} • پروفایل دقیق: {_profileStore.CountProfiles():N0}";
+                    SetStatus($"پروفایل دقیق ذخیره شد: {p.ProfileName} • {valid.Count} جدول/پارامتر.");
+                }
+            }
         }catch(Exception ex){MessageBox.Show(this,ex.Message,"خطای تعریف",MessageBoxButtons.OK,MessageBoxIcon.Error);}
     }
 
