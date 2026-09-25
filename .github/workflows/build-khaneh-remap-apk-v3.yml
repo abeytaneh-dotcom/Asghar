@@ -75,7 +75,6 @@ jobs:
           s=s.replace('if(url.startsWith(APP_URL) && !u.getPath().contains("/manage-")) return false;','if(url.startsWith(APP_URL) && !u.getPath().contains("/panel-")) return false;')
           s=s.replace('                injectNativeUpdateHook();\\n','')
           s=re.sub(r'\\n    private void injectNativeUpdateHook\\(\\)\\{.*?\\n    \\}\\n','\\n',s,flags=re.S)
-          s=s.replace('@JavascriptInterface public void checkForAppUpdate(String token){checkUpdate(token);}','@JavascriptInterface public void checkForAppUpdate(String token){checkUpdate(token);}\\n        @JavascriptInterface public String getVersion(){return currentVersion();}')
           p.write_text(s)
 
           # Completely fresh package identity and conservative release settings.
