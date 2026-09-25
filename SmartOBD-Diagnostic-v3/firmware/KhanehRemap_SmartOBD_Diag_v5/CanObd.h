@@ -11,7 +11,11 @@ class KRCanObd {
       (gpio_num_t)KR_CAN_TX_PIN, (gpio_num_t)KR_CAN_RX_PIN, TWAI_MODE_NORMAL);
     g.tx_queue_len = 8; g.rx_queue_len = 28;
     g.alerts_enabled = TWAI_ALERT_BUS_OFF | TWAI_ALERT_ERR_PASS | TWAI_ALERT_RX_QUEUE_FULL;
-    twai_timing_config_t t = bitrate == 250000 ? TWAI_TIMING_CONFIG_250KBITS() : TWAI_TIMING_CONFIG_500KBITS();
+    twai_timing_config_t t = TWAI_TIMING_CONFIG_500KBITS();
+    if (bitrate == 250000) {
+      twai_timing_config_t t250 = TWAI_TIMING_CONFIG_250KBITS();
+      t = t250;
+    }
     bitrate_ = bitrate == 250000 ? 250000 : 500000;
     twai_filter_config_t f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     if (twai_driver_install(&g, &t, &f) != ESP_OK) return false;
