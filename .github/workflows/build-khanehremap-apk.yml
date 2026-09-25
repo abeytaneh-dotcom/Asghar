@@ -30,10 +30,13 @@ jobs:
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
         run: gradle --no-daemon :app:assembleRelease
-      - name: Collect unsigned APK
+      - name: Collect APK and signing tools
         run: |
-          mkdir -p artifact
+          mkdir -p artifact/tools/lib
           cp khanehremap-android-private-shell/app/build/outputs/apk/release/app-release-unsigned.apk artifact/KhanehRemap-PrivateShell-unsigned.apk
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign artifact/tools/zipalign
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar artifact/tools/lib/apksigner.jar
+          chmod +x artifact/tools/zipalign
           sha256sum artifact/KhanehRemap-PrivateShell-unsigned.apk > artifact/SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
