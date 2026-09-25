@@ -9,6 +9,7 @@ public sealed class MainForm : Form
     private readonly DumpCatalogService _catalog=new();
     private readonly ChecksumManager _checksum=new();
     private readonly ProfileStore _profileStore=new();
+    private readonly IReadOnlyList<EcuProfile> _ecuProfiles=EcuProfileCatalog.Load();
     private IdentificationResult _id=new();
     private readonly List<MapDefinition> _maps=new();
     private readonly Stack<List<ByteChange>> _undo=new();
@@ -21,9 +22,12 @@ public sealed class MainForm : Form
         Blue=Color.FromArgb(78,156,244), Warn=Color.FromArgb(255,190,92), Bad=Color.FromArgb(255,105,105);
 
     private readonly Label _file=new(),_identify=new(),_hash=new(),_checksumLabel=new(),_changes=new();
-    private readonly TextBox _search=new(),_info=new(),_hex=new();
+    private readonly TextBox _search=new(),_info=new(),_hex=new(),_librarySearch=new();
     private readonly ComboBox _category=new();
     private readonly ListBox _mapList=new();
+    private readonly TreeView _ecuTree=new(),_fileTree=new();
+    private readonly Label _ecuDetails=new(),_libraryStats=new(),_mapStats=new();
+    private readonly TabControl _libraryTabs=new();
     private readonly DataGridView _grid=new();
     private readonly LineGraphPanel _g2=new();
     private readonly SurfaceGraphPanel _g3=new();
@@ -35,8 +39,9 @@ public sealed class MainForm : Form
         Text="Khaneh Remap Studio Pro • خانه ریمپ";
         Width=1560;Height=930;MinimumSize=new Size(1160,740);StartPosition=FormStartPosition.CenterScreen;
         BackColor=Bg;ForeColor=Fg;Font=new Font("Segoe UI",10f);RightToLeft=RightToLeft.Yes;RightToLeftLayout=true;AllowDrop=true;
-        BuildUi();HookEvents();SetStatus("آماده — فایل ECU را باز کنید.");
-        _bank.Text=$"بانک دامپ: {_catalog.Count:N0} • پروفایل دقیق: {_profileStore.CountProfiles():N0}";
+        BuildUi();HookEvents();BuildEcuLibraryTree();BuildFileTree();SetStatus("آماده — فایل ECU را باز کنید.");
+        _bank.Text=$"ECU: {_ecuProfiles.Count:N0} • دامپ: {_catalog.Count:N0} • پروفایل دقیق: {_profileStore.CountProfiles():N0}";
+        UpdateLibraryStats();
     }
 
     private void BuildUi()
