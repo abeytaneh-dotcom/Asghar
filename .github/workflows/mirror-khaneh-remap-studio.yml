@@ -1,0 +1,39 @@
+name: Mirror Khaneh Remap Studio
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/mirror-khaneh-remap-studio.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download khaneh-remap-studio-latest --repo "$GITHUB_REPOSITORY" -p "KhanehRemapStudio-Setup-x64.exe"
+          test -s KhanehRemapStudio-Setup-x64.exe
+          echo "EXE_SHA256=$(sha256sum KhanehRemapStudio-Setup-x64.exe | awk '{print $1}')"
+          zip -9 -q KhanehRemapStudio-Pro-Windows-x64.zip KhanehRemapStudio-Setup-x64.exe
+          ls -lh KhanehRemapStudio-Pro-Windows-x64.zip
+
+      - name: Upload to Gofile
+        shell: bash
+        run: |
+          set -euo pipefail
+          SERVER=$(curl --http1.1 -L --connect-timeout 20 --max-time 60 -sS "https://api.gofile.io/servers" | jq -r '.data.servers[0].name')
+          GO=$(curl --http1.1 -L --connect-timeout 25 --max-time 420 -sS             -F "file=@KhanehRemapStudio-Pro-Windows-x64.zip;filename=KhanehRemapStudio-Pro-Windows-x64.zip"             "https://$SERVER.gofile.io/contents/uploadfile")
+          echo "GOFILE_RAW=$GO"
+          PAGE=$(printf '%s' "$GO" | jq -r '.data.downloadPage // empty')
+          test -n "$PAGE"
+          echo "KHANEH_REMAP_GOFILE=$PAGE"
