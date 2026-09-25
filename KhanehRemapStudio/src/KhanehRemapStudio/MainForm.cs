@@ -46,80 +46,241 @@ public sealed class MainForm : Form
 
     private void BuildUi()
     {
-        var tool=new ToolStrip{Dock=DockStyle.Top,Height=48,AutoSize=false,BackColor=Color.FromArgb(7,12,19),ForeColor=Fg,
-            GripStyle=ToolStripGripStyle.Hidden,Padding=new Padding(10,7,10,7),RightToLeft=RightToLeft.Yes,
-            Renderer=new ToolStripProfessionalRenderer(new DarkColorTable())};
-        AddTool(tool,"باز کردن دامپ",(_,_)=>OpenDump(),true);
-        AddTool(tool,"ذخیره MOD",(_,_)=>SaveMod(),true);
-        tool.Items.Add(new ToolStripSeparator());
-        AddTool(tool,"چکسام",(_,_)=>VerifyChecksum(),false);
-        AddTool(tool,"اصلاح چکسام",(_,_)=>RepairChecksum(),false);
-        tool.Items.Add(new ToolStripSeparator());
-        AddTool(tool,"ورود XDF/A2L",(_,_)=>ImportDefinition(),false);
-        AddTool(tool,"ایندکس بانک دامپ",(_,_)=>IndexDumpFolder(),false);
-        AddTool(tool,"ایندکس RAR/ZIP/7z",(_,_)=>IndexDumpArchive(),false);
-        tool.Items.Add(new ToolStripSeparator());
-        AddTool(tool,"ویرایش گروهی",(_,_)=>BatchEdit(),false);
-        AddTool(tool,"مقایسه",(_,_)=>Compare(),false);
-        AddTool(tool,"Undo",(_,_)=>Undo(),false);
-        AddTool(tool,"Redo",(_,_)=>Redo(),false);
-        Controls.Add(tool);
+        SuspendLayout();
 
-        var header=new Panel{Dock=DockStyle.Top,Height=112,BackColor=Color.FromArgb(13,22,34),Padding=new Padding(12)};
-        var brand=new Label{Dock=DockStyle.Left,Width=270,Text="KHANEH REMAP\nSTUDIO PRO",Font=new Font("Segoe UI",17f,FontStyle.Bold),
-            ForeColor=Accent,TextAlign=ContentAlignment.MiddleLeft,RightToLeft=RightToLeft.No};
+        var topBar=new Panel
+        {
+            Dock=DockStyle.Top,
+            Height=74,
+            BackColor=Color.FromArgb(7,13,21),
+            Padding=new Padding(16,8,16,8)
+        };
 
-        var cards=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=2,RowCount=3,Padding=new Padding(8,0,4,0)};
-        cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
-        for(int i=0;i<3;i++)cards.RowStyles.Add(new RowStyle(SizeType.Percent,33.333f));
-        StyleHeader(_file,Fg);StyleHeader(_identify,Blue);StyleHeader(_hash,Muted);StyleHeader(_checksumLabel,Muted);StyleHeader(_changes,Muted);
-        var engine=new Label{Text="ENGINE: Binary / Maps / Checksum / Compare",Dock=DockStyle.Fill,AutoEllipsis=true,ForeColor=Color.FromArgb(111,178,235),
-            TextAlign=ContentAlignment.MiddleRight,RightToLeft=RightToLeft.No,Font=new Font("Segoe UI",8.5f,FontStyle.Bold)};
-        cards.Controls.Add(_file,0,0);cards.Controls.Add(_identify,1,0);cards.Controls.Add(_hash,0,1);cards.Controls.Add(_checksumLabel,1,1);cards.Controls.Add(_changes,0,2);cards.Controls.Add(engine,1,2);
-        header.Controls.Add(cards);header.Controls.Add(brand);Controls.Add(header);
+        var brandBlock=new Panel{Dock=DockStyle.Left,Width=300,BackColor=Color.Transparent};
+        var brand=new Label
+        {
+            Dock=DockStyle.Top,Height=36,Text="KHANEH REMAP",
+            Font=new Font("Segoe UI",20f,FontStyle.Bold),
+            ForeColor=Accent,TextAlign=ContentAlignment.MiddleLeft,RightToLeft=RightToLeft.No
+        };
+        var brandSub=new Label
+        {
+            Dock=DockStyle.Top,Height=24,Text="ECU CALIBRATION STUDIO • PRO",
+            Font=new Font("Segoe UI",8.3f,FontStyle.Bold),
+            ForeColor=Blue,TextAlign=ContentAlignment.MiddleLeft,RightToLeft=RightToLeft.No
+        };
+        brandBlock.Controls.Add(brandSub);brandBlock.Controls.Add(brand);
+
+        var quick=new FlowLayoutPanel
+        {
+            Dock=DockStyle.Fill,FlowDirection=FlowDirection.RightToLeft,
+            WrapContents=false,Padding=new Padding(4,7,4,0),BackColor=Color.Transparent
+        };
+        quick.Controls.Add(ActionButton("باز کردن دامپ",OpenDump,true,136));
+        quick.Controls.Add(ActionButton("ذخیره MOD",SaveMod,true,126));
+        quick.Controls.Add(ActionButton("Undo",Undo,false,78));
+        quick.Controls.Add(ActionButton("Redo",Redo,false,78));
+        quick.Controls.Add(ActionButton("ورود XDF/A2L",ImportDefinition,false,128));
+        quick.Controls.Add(ActionButton("تعریف‌های آزاد",ShowPublicDefinitions,false,122));
+
+        topBar.Controls.Add(quick);topBar.Controls.Add(brandBlock);
+        Controls.Add(topBar);
+
+        var stageBar=new Panel
+        {
+            Dock=DockStyle.Top,Height=60,BackColor=Color.FromArgb(11,19,30),
+            Padding=new Padding(10,7,10,7)
+        };
+        var stages=new TableLayoutPanel
+        {
+            Dock=DockStyle.Fill,ColumnCount=7,RowCount=1,BackColor=Color.Transparent
+        };
+        for(int i=0;i<7;i++)stages.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100f/7f));
+        stages.Controls.Add(StageButton("01  بانک خودرو",()=>{_libraryTabs.SelectedIndex=0;_librarySearch.Focus();}),0,0);
+        stages.Controls.Add(StageButton("02  شناسایی دامپ",OpenDump),1,0);
+        stages.Controls.Add(StageButton("03  نقشه‌ها",()=>{_search.Focus();}),2,0);
+        stages.Controls.Add(StageButton("04  ویرایش",()=>{if(_tabs.TabPages.Count>0)_tabs.SelectedIndex=0;}),3,0);
+        stages.Controls.Add(StageButton("05  مقایسه",Compare),4,0);
+        stages.Controls.Add(StageButton("06  چکسام",VerifyChecksum),5,0);
+        stages.Controls.Add(StageButton("07  خروجی",SaveMod),6,0);
+        stageBar.Controls.Add(stages);
+        Controls.Add(stageBar);
+
+        var header=new Panel
+        {
+            Dock=DockStyle.Top,Height=92,BackColor=Color.FromArgb(13,22,34),
+            Padding=new Padding(10,9,10,9)
+        };
+        var cards=new TableLayoutPanel
+        {
+            Dock=DockStyle.Fill,ColumnCount=5,RowCount=1,BackColor=Color.Transparent
+        };
+        for(int i=0;i<5;i++)cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,20));
+
+        cards.Controls.Add(InfoCard("فایل فعال",_file,Fg),0,0);
+        cards.Controls.Add(InfoCard("شناسایی ECU",_identify,Blue),1,0);
+        cards.Controls.Add(InfoCard("Checksum",_checksumLabel,Accent),2,0);
+        cards.Controls.Add(InfoCard("تغییرات",_changes,Warn),3,0);
+        cards.Controls.Add(InfoCard("SHA-256",_hash,Muted),4,0);
+        header.Controls.Add(cards);
+        Controls.Add(header);
 
         var workspace=new Panel{Dock=DockStyle.Fill,BackColor=Bg,Padding=new Padding(8)};
-        var split=new SplitContainer
+
+        var outer=new SplitContainer
         {
-            Dock=DockStyle.Fill,
-            SplitterWidth=6,
-            BackColor=Color.FromArgb(6,11,18),
+            Dock=DockStyle.Fill,SplitterWidth=6,BackColor=Color.FromArgb(5,10,16),
             RightToLeft=RightToLeft.No
         };
-        // Do not set SplitterDistance/Panel minimums while the control still has
-        // its tiny design-time default size; that can throw before the window opens.
-        split.Size=new Size(1200,700);
-        split.Panel1MinSize=280;
-        split.Panel2MinSize=500;
-        split.SplitterDistance=340;
+        outer.Size=new Size(1400,700);
+        outer.Panel1MinSize=300;outer.Panel2MinSize=760;outer.SplitterDistance=330;
 
-        var leftOuter=new Panel{Dock=DockStyle.Fill,BackColor=Color.FromArgb(33,50,68),Padding=new Padding(1)};
-        var left=new Panel{Dock=DockStyle.Fill,BackColor=Panel,Padding=new Padding(12)};
-        var title=new Label{Text="نقشه‌ها و پارامترها",Dock=DockStyle.Top,Height=34,Font=new Font("Segoe UI",11.5f,FontStyle.Bold),ForeColor=Fg,TextAlign=ContentAlignment.MiddleRight};
-        var filters=new TableLayoutPanel{Dock=DockStyle.Top,Height=82,RowCount=2,ColumnCount=1,Padding=new Padding(0,2,0,7),BackColor=Panel};
-        _search.Dock=DockStyle.Fill;_search.BackColor=Panel2;_search.ForeColor=Fg;_search.BorderStyle=BorderStyle.FixedSingle;_search.PlaceholderText="جستجو: جرقه، سوخت، 0x...";_search.Margin=new Padding(0,2,0,5);
-        _category.Dock=DockStyle.Fill;_category.DropDownStyle=ComboBoxStyle.DropDownList;_category.BackColor=Panel2;_category.ForeColor=Fg;_category.FlatStyle=FlatStyle.Flat;
+        var libraryShell=new Panel{Dock=DockStyle.Fill,BackColor=Color.FromArgb(30,47,64),Padding=new Padding(1)};
+        var library=new Panel{Dock=DockStyle.Fill,BackColor=Panel,Padding=new Padding(10)};
+
+        var libTitle=new TableLayoutPanel{Dock=DockStyle.Top,Height=58,ColumnCount=2,BackColor=Panel};
+        libTitle.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,65));libTitle.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,35));
+        var libName=new Label{Text="بانک تخصصی ECU و فایل",Dock=DockStyle.Fill,ForeColor=Fg,Font=new Font("Segoe UI",12f,FontStyle.Bold),TextAlign=ContentAlignment.MiddleRight};
+        _libraryStats.Dock=DockStyle.Fill;_libraryStats.ForeColor=Muted;_libraryStats.Font=new Font("Segoe UI",8.8f);_libraryStats.TextAlign=ContentAlignment.MiddleLeft;_libraryStats.RightToLeft=RightToLeft.No;
+        libTitle.Controls.Add(libName,0,0);libTitle.Controls.Add(_libraryStats,1,0);
+
+        _librarySearch.Dock=DockStyle.Top;_librarySearch.Height=34;_librarySearch.BackColor=Panel2;_librarySearch.ForeColor=Fg;_librarySearch.BorderStyle=BorderStyle.FixedSingle;
+        _librarySearch.PlaceholderText="جستجو: خودرو، ECU، سازنده، پروتکل...";
+
+        _libraryTabs.Dock=DockStyle.Fill;_libraryTabs.RightToLeft=RightToLeft.Yes;_libraryTabs.RightToLeftLayout=true;
+        _libraryTabs.DrawMode=TabDrawMode.OwnerDrawFixed;_libraryTabs.SizeMode=TabSizeMode.Fixed;_libraryTabs.ItemSize=new Size(138,34);
+        _libraryTabs.DrawItem+=DrawLibraryTab;
+
+        var ecuPage=new TabPage("بانک ECU"){BackColor=Color.FromArgb(12,21,32),Padding=new Padding(5)};
+        SetupTree(_ecuTree);ecuPage.Controls.Add(_ecuTree);
+        var filePage=new TabPage("بانک فایل"){BackColor=Color.FromArgb(12,21,32),Padding=new Padding(5)};
+        SetupTree(_fileTree);filePage.Controls.Add(_fileTree);
+        _libraryTabs.TabPages.AddRange(new[]{ecuPage,filePage});
+
+        _ecuDetails.Dock=DockStyle.Bottom;_ecuDetails.Height=165;_ecuDetails.BackColor=Color.FromArgb(11,19,29);_ecuDetails.ForeColor=Color.FromArgb(191,207,223);
+        _ecuDetails.Padding=new Padding(10);_ecuDetails.Font=new Font("Segoe UI",9f);_ecuDetails.TextAlign=ContentAlignment.TopRight;
+        _ecuDetails.Text="یک ECU یا فایل را از بانک انتخاب کنید.";
+
+        var libActions=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=46,FlowDirection=FlowDirection.RightToLeft,WrapContents=false,Padding=new Padding(0,6,0,4)};
+        libActions.Controls.Add(SmallButton("ایندکس پوشه",IndexDumpFolder,112));
+        libActions.Controls.Add(SmallButton("RAR / ZIP / 7z",IndexDumpArchive,120));
+
+        library.Controls.Add(_libraryTabs);library.Controls.Add(_ecuDetails);library.Controls.Add(libActions);library.Controls.Add(_librarySearch);library.Controls.Add(libTitle);
+        libraryShell.Controls.Add(library);outer.Panel1.Controls.Add(libraryShell);
+
+        var workSplit=new SplitContainer
+        {
+            Dock=DockStyle.Fill,SplitterWidth=6,BackColor=Color.FromArgb(5,10,16),
+            RightToLeft=RightToLeft.No
+        };
+        workSplit.Size=new Size(1000,700);workSplit.Panel1MinSize=270;workSplit.Panel2MinSize=520;workSplit.SplitterDistance=300;
+
+        var mapShell=new Panel{Dock=DockStyle.Fill,BackColor=Color.FromArgb(30,47,64),Padding=new Padding(1)};
+        var mapPanel=new Panel{Dock=DockStyle.Fill,BackColor=Panel,Padding=new Padding(10)};
+        var mapTitle=new TableLayoutPanel{Dock=DockStyle.Top,Height=54,ColumnCount=2};
+        mapTitle.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,68));mapTitle.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,32));
+        var mapName=new Label{Text="جداول کالیبراسیون",Dock=DockStyle.Fill,ForeColor=Fg,Font=new Font("Segoe UI",11.5f,FontStyle.Bold),TextAlign=ContentAlignment.MiddleRight};
+        _mapStats.Dock=DockStyle.Fill;_mapStats.ForeColor=Muted;_mapStats.TextAlign=ContentAlignment.MiddleLeft;_mapStats.RightToLeft=RightToLeft.No;
+        mapTitle.Controls.Add(mapName,0,0);mapTitle.Controls.Add(_mapStats,1,0);
+
+        var filters=new TableLayoutPanel{Dock=DockStyle.Top,Height=78,ColumnCount=1,RowCount=2,Padding=new Padding(0,0,0,6)};
+        _search.Dock=DockStyle.Fill;_search.BackColor=Panel2;_search.ForeColor=Fg;_search.BorderStyle=BorderStyle.FixedSingle;_search.PlaceholderText="جستجوی مپ / آدرس / دسته";
+        _search.Margin=new Padding(0,2,0,4);
+        _category.Dock=DockStyle.Fill;_category.DropDownStyle=ComboBoxStyle.DropDownList;_category.BackColor=Panel2;_category.ForeColor=Fg;_category.FlatStyle=FlatStyle.Flat;_category.Margin=new Padding(0,2,0,0);
         filters.Controls.Add(_search,0,0);filters.Controls.Add(_category,0,1);
 
-        _mapList.Dock=DockStyle.Fill;_mapList.BackColor=Color.FromArgb(12,21,32);_mapList.ForeColor=Fg;_mapList.BorderStyle=BorderStyle.None;
-        _mapList.DrawMode=DrawMode.OwnerDrawFixed;_mapList.ItemHeight=35;_mapList.IntegralHeight=false;_mapList.Font=new Font("Segoe UI",9.7f);
+        _mapList.Dock=DockStyle.Fill;_mapList.BackColor=Color.FromArgb(11,19,29);_mapList.ForeColor=Fg;_mapList.BorderStyle=BorderStyle.None;
+        _mapList.DrawMode=DrawMode.OwnerDrawFixed;_mapList.ItemHeight=38;_mapList.IntegralHeight=false;_mapList.Font=new Font("Segoe UI",9.5f);
         _mapList.DrawItem+=DrawMapItem;
-        left.Controls.Add(_mapList);left.Controls.Add(filters);left.Controls.Add(title);leftOuter.Controls.Add(left);split.Panel1.Controls.Add(leftOuter);
 
-        var editorOuter=new Panel{Dock=DockStyle.Fill,BackColor=Color.FromArgb(33,50,68),Padding=new Padding(1)};
-        _tabs.Dock=DockStyle.Fill;_tabs.RightToLeft=RightToLeft.Yes;_tabs.RightToLeftLayout=true;_tabs.DrawMode=TabDrawMode.OwnerDrawFixed;_tabs.SizeMode=TabSizeMode.Fixed;_tabs.ItemSize=new Size(126,36);_tabs.DrawItem+=DrawTab;
+        var mapActions=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=48,FlowDirection=FlowDirection.RightToLeft,WrapContents=false,Padding=new Padding(0,6,0,4)};
+        mapActions.Controls.Add(SmallButton("ویرایش گروهی",BatchEdit,112));
+        mapActions.Controls.Add(SmallButton("مقایسه",Compare,88));
 
-        var tableTab=new TabPage("جدول"){BackColor=Panel,Padding=new Padding(8)};SetupGrid();tableTab.Controls.Add(_grid);
-        var g2tab=new TabPage("2D"){BackColor=Panel,Padding=new Padding(8)};_g2.Dock=DockStyle.Fill;_g2.BackColor=Color.FromArgb(9,16,25);g2tab.Controls.Add(_g2);
-        var g3tab=new TabPage("3D"){BackColor=Panel,Padding=new Padding(8)};_g3.Dock=DockStyle.Fill;_g3.BackColor=Color.FromArgb(9,16,25);g3tab.Controls.Add(_g3);
-        var hexTab=new TabPage("HEX"){BackColor=Panel,Padding=new Padding(8)};_hex.Dock=DockStyle.Fill;_hex.Multiline=true;_hex.ReadOnly=true;_hex.WordWrap=false;_hex.ScrollBars=ScrollBars.Both;_hex.BackColor=Color.FromArgb(7,13,21);_hex.ForeColor=Color.FromArgb(204,220,237);_hex.Font=new Font("Consolas",10f);_hex.RightToLeft=RightToLeft.No;_hex.BorderStyle=BorderStyle.None;hexTab.Controls.Add(_hex);
-        var infoTab=new TabPage("اطلاعات"){BackColor=Panel,Padding=new Padding(12)};_info.Dock=DockStyle.Fill;_info.Multiline=true;_info.ReadOnly=true;_info.ScrollBars=ScrollBars.Vertical;_info.BackColor=Color.FromArgb(15,25,38);_info.ForeColor=Fg;_info.BorderStyle=BorderStyle.None;_info.Font=new Font("Segoe UI",10.5f);infoTab.Controls.Add(_info);
-        _tabs.TabPages.AddRange(new[]{tableTab,g2tab,g3tab,hexTab,infoTab});editorOuter.Controls.Add(_tabs);split.Panel2.Controls.Add(editorOuter);
-        workspace.Controls.Add(split);Controls.Add(workspace);
+        mapPanel.Controls.Add(_mapList);mapPanel.Controls.Add(mapActions);mapPanel.Controls.Add(filters);mapPanel.Controls.Add(mapTitle);
+        mapShell.Controls.Add(mapPanel);workSplit.Panel1.Controls.Add(mapShell);
 
-        var status=new StatusStrip{Dock=DockStyle.Bottom,Height=28,BackColor=Color.FromArgb(7,12,19),ForeColor=Fg,SizingGrip=false};
-        _status.Spring=true;_status.TextAlign=ContentAlignment.MiddleRight;_bank.ForeColor=Blue;status.Items.Add(_status);status.Items.Add(_bank);Controls.Add(status);
-        tool.BringToFront();header.BringToFront();status.BringToFront();
+        var editorShell=new Panel{Dock=DockStyle.Fill,BackColor=Color.FromArgb(30,47,64),Padding=new Padding(1)};
+        var editor=new Panel{Dock=DockStyle.Fill,BackColor=Panel,Padding=new Padding(8)};
+
+        _tabs.Dock=DockStyle.Fill;_tabs.RightToLeft=RightToLeft.Yes;_tabs.RightToLeftLayout=true;_tabs.DrawMode=TabDrawMode.OwnerDrawFixed;
+        _tabs.SizeMode=TabSizeMode.Fixed;_tabs.ItemSize=new Size(125,36);_tabs.DrawItem+=DrawTab;
+        var tableTab=new TabPage("جدول"){BackColor=Panel,Padding=new Padding(6)};SetupGrid();tableTab.Controls.Add(_grid);
+        var g2tab=new TabPage("2D"){BackColor=Panel,Padding=new Padding(6)};_g2.Dock=DockStyle.Fill;_g2.BackColor=Color.FromArgb(8,15,24);g2tab.Controls.Add(_g2);
+        var g3tab=new TabPage("3D"){BackColor=Panel,Padding=new Padding(6)};_g3.Dock=DockStyle.Fill;_g3.BackColor=Color.FromArgb(8,15,24);g3tab.Controls.Add(_g3);
+        var hexTab=new TabPage("HEX"){BackColor=Panel,Padding=new Padding(6)};_hex.Dock=DockStyle.Fill;_hex.Multiline=true;_hex.ReadOnly=true;_hex.WordWrap=false;_hex.ScrollBars=ScrollBars.Both;_hex.BackColor=Color.FromArgb(6,12,20);_hex.ForeColor=Color.FromArgb(205,221,237);_hex.Font=new Font("Consolas",10f);_hex.RightToLeft=RightToLeft.No;_hex.BorderStyle=BorderStyle.None;hexTab.Controls.Add(_hex);
+        var infoTab=new TabPage("تعریف"){BackColor=Panel,Padding=new Padding(10)};_info.Dock=DockStyle.Fill;_info.Multiline=true;_info.ReadOnly=true;_info.ScrollBars=ScrollBars.Vertical;_info.BackColor=Color.FromArgb(12,21,32);_info.ForeColor=Fg;_info.BorderStyle=BorderStyle.None;_info.Font=new Font("Segoe UI",10f);infoTab.Controls.Add(_info);
+        _tabs.TabPages.AddRange(new[]{tableTab,g2tab,g3tab,hexTab,infoTab});
+
+        var editorStatus=new Panel{Dock=DockStyle.Bottom,Height=42,BackColor=Color.FromArgb(10,18,28),Padding=new Padding(8,6,8,5)};
+        var checkBtn=SmallButton("بررسی چکسام",VerifyChecksum,118);checkBtn.Dock=DockStyle.Right;
+        var fixBtn=SmallButton("اصلاح چکسام",RepairChecksum,118);fixBtn.Dock=DockStyle.Right;
+        editorStatus.Controls.Add(fixBtn);editorStatus.Controls.Add(checkBtn);
+
+        editor.Controls.Add(_tabs);editor.Controls.Add(editorStatus);
+        editorShell.Controls.Add(editor);workSplit.Panel2.Controls.Add(editorShell);
+
+        outer.Panel2.Controls.Add(workSplit);workspace.Controls.Add(outer);Controls.Add(workspace);
+
+        var status=new StatusStrip{Dock=DockStyle.Bottom,Height=29,BackColor=Color.FromArgb(7,12,19),ForeColor=Fg,SizingGrip=false};
+        _status.Spring=true;_status.TextAlign=ContentAlignment.MiddleRight;_status.ForeColor=Color.FromArgb(202,214,227);
+        _bank.ForeColor=Blue;status.Items.Add(_status);status.Items.Add(_bank);Controls.Add(status);
+
+        topBar.BringToFront();stageBar.BringToFront();header.BringToFront();status.BringToFront();
+        ResumeLayout(true);
+    }
+
+    private Button ActionButton(string text,Action action,bool accent,int width)
+    {
+        var b=new Button
+        {
+            Text=text,Width=width,Height=38,FlatStyle=FlatStyle.Flat,
+            BackColor=accent?Color.FromArgb(20,91,84):Color.FromArgb(20,31,45),
+            ForeColor=accent?Color.White:Fg,Cursor=Cursors.Hand,Margin=new Padding(4,0,4,0),
+            Font=new Font("Segoe UI",9.3f,accent?FontStyle.Bold:FontStyle.Regular)
+        };
+        b.FlatAppearance.BorderColor=accent?Accent:Color.FromArgb(42,60,78);
+        b.FlatAppearance.BorderSize=1;b.Click+=(_,_)=>action();return b;
+    }
+
+    private Button StageButton(string text,Action action)
+    {
+        var b=new Button
+        {
+            Dock=DockStyle.Fill,Text=text,FlatStyle=FlatStyle.Flat,
+            BackColor=Color.FromArgb(18,29,43),ForeColor=Color.FromArgb(205,218,232),
+            Cursor=Cursors.Hand,Margin=new Padding(4,1,4,1),
+            Font=new Font("Segoe UI",9.4f,FontStyle.Bold)
+        };
+        b.FlatAppearance.BorderColor=Color.FromArgb(42,61,80);b.FlatAppearance.BorderSize=1;
+        b.MouseEnter+=(_,_)=>b.BackColor=Color.FromArgb(25,55,68);
+        b.MouseLeave+=(_,_)=>b.BackColor=Color.FromArgb(18,29,43);
+        b.Click+=(_,_)=>action();return b;
+    }
+
+    private Button SmallButton(string text,Action action,int width)
+    {
+        var b=new Button
+        {
+            Text=text,Width=width,Height=32,FlatStyle=FlatStyle.Flat,
+            BackColor=Color.FromArgb(24,39,55),ForeColor=Fg,Cursor=Cursors.Hand,Margin=new Padding(3,0,3,0),
+            Font=new Font("Segoe UI",8.8f,FontStyle.Bold)
+        };
+        b.FlatAppearance.BorderColor=Color.FromArgb(52,75,97);b.Click+=(_,_)=>action();return b;
+    }
+
+    private Control InfoCard(string caption,Label value,Color valueColor)
+    {
+        var p=new Panel{Dock=DockStyle.Fill,BackColor=Color.FromArgb(18,30,44),Margin=new Padding(4),Padding=new Padding(10,5,10,5)};
+        var cap=new Label{Dock=DockStyle.Top,Height=22,Text=caption,ForeColor=Muted,Font=new Font("Segoe UI",8.2f,FontStyle.Bold),TextAlign=ContentAlignment.MiddleRight};
+        value.Dock=DockStyle.Fill;value.AutoEllipsis=true;value.ForeColor=valueColor;value.Font=new Font("Segoe UI",9f,FontStyle.Bold);value.TextAlign=ContentAlignment.MiddleRight;
+        value.Text=caption+" : —";p.Controls.Add(value);p.Controls.Add(cap);return p;
+    }
+
+    private void SetupTree(TreeView tree)
+    {
+        tree.Dock=DockStyle.Fill;tree.BackColor=Color.FromArgb(11,19,29);tree.ForeColor=Fg;tree.BorderStyle=BorderStyle.None;
+        tree.Font=new Font("Segoe UI",9.2f);tree.ItemHeight=28;tree.HideSelection=false;tree.ShowLines=true;tree.ShowPlusMinus=true;tree.FullRowSelect=true;
     }
 
     private void StyleHeader(Label l,Color c){l.Dock=DockStyle.Fill;l.AutoEllipsis=true;l.ForeColor=c;l.TextAlign=ContentAlignment.MiddleRight;l.Font=new Font("Segoe UI",9.1f);}
