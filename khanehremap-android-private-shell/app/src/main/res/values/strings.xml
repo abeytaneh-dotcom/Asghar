@@ -3,5 +3,7 @@
     <string name="error_title">خانه ریمپ</string>
     <string name="error_network">ارتباط برقرار نیست. اینترنت دستگاه را بررسی و دوباره تلاش کنید.</string>
     <string name="error_setup">راه‌اندازی برنامه کامل نشده است. با پشتیبانی خانه ریمپ تماس بگیرید.</string>
+    <string name="error_browser">مرورگر مورد نیاز برنامه آماده نیست. Chrome را به‌روزرسانی و دوباره تلاش کنید.</string>
     <string name="retry">تلاش مجدد</string>
+    <string name="asset_statements">[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"web","site":"https://achinu.ir"}}]</string>
 </resources>
