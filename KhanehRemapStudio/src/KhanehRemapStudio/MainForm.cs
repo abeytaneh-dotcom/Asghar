@@ -169,6 +169,26 @@ public sealed class MainForm : Form
         }catch(Exception ex){MessageBox.Show(this,ex.Message,"خطای تعریف",MessageBoxButtons.OK,MessageBoxIcon.Error);}
     }
 
+
+    private void ShowPublicDefinitions()
+    {
+        using var d=new PublicDefinitionsDialog();
+        if(d.ShowDialog(this)!=DialogResult.OK || string.IsNullOrWhiteSpace(d.ResourceSuffix)) return;
+        if(!_doc.HasFile){Info("ابتدا دامپ ECU را باز کنید، سپس تعریف را اعمال کنید.");return;}
+        try
+        {
+            string text=EmbeddedData.ReadTextBySuffix(d.ResourceSuffix);
+            string temp=Path.Combine(Path.GetTempPath(),Guid.NewGuid().ToString("N")+".xdf");
+            File.WriteAllText(temp,text,System.Text.Encoding.UTF8);
+            var p=DefinitionParsers.Parse(temp);
+            File.Delete(temp);
+            int ok=0;
+            foreach(var m in p.Maps) if(Inside(m)){_maps.Add(m);ok++;}
+            RefreshCategories();RefreshMapList();SetStatus($"تعریف آزاد {d.SelectedTitle} وارد شد: {ok} جدول/پارامتر.");
+        }
+        catch(Exception ex){MessageBox.Show(this,ex.Message,"تعریف رایگان",MessageBoxButtons.OK,MessageBoxIcon.Error);}
+    }
+
     private void IndexDumpFolder()
     {
         using var d=new FolderBrowserDialog{Description="پوشه بانک دامپ‌ها را انتخاب کنید. برنامه SHA-256 و اثرانگشت بلوکی فایل‌ها را ایندکس می‌کند.",UseDescriptionForTitle=true};
@@ -319,4 +339,32 @@ public sealed class BatchEditDialog : Form
 public sealed class TextDialog : Form
 {
     public TextDialog(string title,string text){Text=title;Width=850;Height=620;StartPosition=FormStartPosition.CenterParent;BackColor=Color.FromArgb(16,25,37);ForeColor=Color.White;var b=new TextBox{Dock=DockStyle.Fill,Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Both,WordWrap=false,Text=text,BackColor=Color.FromArgb(8,14,22),ForeColor=ForeColor,BorderStyle=BorderStyle.None,Font=new Font("Consolas",10f),RightToLeft=RightToLeft.No};Controls.Add(b);}
+}
+
+public sealed class PublicDefinitionsDialog : Form
+{
+    private readonly ListBox _list=new();
+    private readonly Label _desc=new();
+    private readonly (string title,string suffix,string desc)[] _items=
+    {
+        ("OpenGK Siemens 662007 2.0L","Data.PublicDefinitions.OpenGK_ca662007_2000.xdf","TunerPro XDF آزاد OpenGK • Apache-2.0"),
+        ("OpenGK Siemens 662008 2.0L","Data.PublicDefinitions.OpenGK_ca662008_2000.xdf","TunerPro XDF آزاد OpenGK • Apache-2.0"),
+        ("OpenGK Siemens 654019 2.7L","Data.PublicDefinitions.OpenGK_ca654019_2700.xdf","TunerPro XDF آزاد OpenGK • Apache-2.0")
+    };
+    public string ResourceSuffix{get;private set;}="";
+    public string SelectedTitle{get;private set;}="";
+    public PublicDefinitionsDialog()
+    {
+        Text="تعریف‌های رایگان";Width=700;Height=430;StartPosition=FormStartPosition.CenterParent;BackColor=Color.FromArgb(16,25,37);ForeColor=Color.White;Font=new Font("Segoe UI",10f);RightToLeft=RightToLeft.Yes;RightToLeftLayout=true;
+        var title=new Label{Text="بانک تعریف‌های آزاد و دارای مجوز",Dock=DockStyle.Top,Height=55,Font=new Font("Segoe UI",15f,FontStyle.Bold),ForeColor=Color.FromArgb(39,215,174),TextAlign=ContentAlignment.MiddleCenter};
+        _list.Dock=DockStyle.Fill;_list.BackColor=Color.FromArgb(22,35,50);_list.ForeColor=ForeColor;_list.BorderStyle=BorderStyle.None;_list.DataSource=_items.Select(x=>x.title).ToList();
+        _desc.Dock=DockStyle.Bottom;_desc.Height=70;_desc.Padding=new Padding(10);_desc.ForeColor=Color.FromArgb(150,170,192);_desc.TextAlign=ContentAlignment.MiddleRight;
+        var bottom=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=55,FlowDirection=FlowDirection.RightToLeft,Padding=new Padding(8)};
+        var apply=new Button{Text="اعمال",Width=110,Height=34};var license=new Button{Text="مجوز",Width=100,Height=34};var close=new Button{Text="بستن",Width=100,Height=34};
+        apply.Click+=(_,_)=>{if(_list.SelectedIndex<0)return;var x=_items[_list.SelectedIndex];ResourceSuffix=x.suffix;SelectedTitle=x.title;DialogResult=DialogResult.OK;Close();};
+        license.Click+=(_,_)=>{try{using var t=new TextDialog("OpenGK Apache-2.0",EmbeddedData.ReadTextBySuffix("Data.PublicDefinitions.OpenGK_LICENSE.txt"));t.ShowDialog(this);}catch{}};
+        close.Click+=(_,_)=>Close();bottom.Controls.AddRange(new Control[]{apply,license,close});
+        _list.SelectedIndexChanged+=(_,_)=>{if(_list.SelectedIndex>=0)_desc.Text=_items[_list.SelectedIndex].desc+"\nفقط روی کالیبراسیون سازگار خودش استفاده شود." ;};
+        Controls.Add(_list);Controls.Add(_desc);Controls.Add(bottom);Controls.Add(title);if(_list.Items.Count>0)_list.SelectedIndex=0;
+    }
 }
