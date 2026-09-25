@@ -1,5 +1,6 @@
 package ir.khanehremap.diag;
 
+import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -11,20 +12,19 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
-import com.google.androidbrowserhelper.trusted.LauncherActivity;
+import androidx.browser.customtabs.CustomTabsCallback;
+import androidx.browser.trusted.TrustedWebActivityIntentBuilder;
+
 import com.google.androidbrowserhelper.trusted.TwaLauncher;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public final class TwaActivity extends LauncherActivity {
+public final class TwaActivity extends Activity {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private LinearLayout root;
-
-    @Override
-    protected boolean shouldLaunchImmediately() {
-        return false;
-    }
+    private TwaLauncher twaLauncher;
+    private volatile boolean launchRequested = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,17 +33,6 @@ public final class TwaActivity extends LauncherActivity {
         getWindow().setNavigationBarColor(Color.rgb(2, 9, 20));
         buildLoading();
         runPreflight();
-    }
-
-    @Override
-    protected Uri getLaunchingUrl() {
-        return Uri.parse(Endpoint.launchUrl());
-    }
-
-    @Override
-    protected TwaLauncher.FallbackStrategy getFallbackStrategy() {
-        return (context, twaBuilder, providerPackage, completionCallback) ->
-                runOnUiThread(() -> showError(3));
     }
 
     private void buildLoading() {
@@ -83,6 +72,7 @@ public final class TwaActivity extends LauncherActivity {
     }
 
     private void runPreflight() {
+        launchRequested = false;
         executor.execute(() -> {
             if (!chromeInstalled()) {
                 runOnUiThread(() -> showError(3));
@@ -90,23 +80,54 @@ public final class TwaActivity extends LauncherActivity {
             }
             int result = Preflight.check();
             runOnUiThread(() -> {
-                if (isFinishing()) return;
-                if (result == 0) {
-                    launchTwa();
-                } else {
-                    showError(result);
-                }
+                if (isFinishing() || isDestroyed()) return;
+                if (result == 0) launchTrustedWebActivity();
+                else showError(result);
             });
         });
+    }
+
+    private void launchTrustedWebActivity() {
+        if (launchRequested) return;
+        launchRequested = true;
+
+        if (twaLauncher != null) {
+            try { twaLauncher.destroy(); } catch (Throwable ignored) {}
+        }
+
+        twaLauncher = new TwaLauncher(this, "com.android.chrome");
+        TrustedWebActivityIntentBuilder builder =
+                new TrustedWebActivityIntentBuilder(Uri.parse(Endpoint.launchUrl()))
+                        .setToolbarColor(Color.rgb(2, 9, 20))
+                        .setNavigationBarColor(Color.rgb(2, 9, 20));
+
+        CustomTabsCallback callback = new CustomTabsCallback() {};
+
+        TwaLauncher.FallbackStrategy noBrowserUiFallback =
+                (context, twaBuilder, providerPackage, completionCallback) -> {
+                    runOnUiThread(() -> {
+                        launchRequested = false;
+                        showError(4);
+                    });
+                };
+
+        try {
+            twaLauncher.launch(builder, callback, null, () -> {}, noBrowserUiFallback);
+        } catch (Throwable t) {
+            launchRequested = false;
+            showError(4);
+        }
     }
 
     private void showError(int type) {
         if (root == null) buildLoading();
         root.removeAllViews();
         root.addView(label("خانه ریمپ", 30, true, Color.WHITE));
+
         int msgRes;
         if (type == 1) msgRes = R.string.error_network;
         else if (type == 3) msgRes = R.string.error_browser;
+        else if (type == 4) msgRes = R.string.error_launch;
         else msgRes = R.string.error_setup;
 
         TextView msg = label(getString(msgRes), 18, false, Color.rgb(185, 211, 230));
@@ -129,6 +150,10 @@ public final class TwaActivity extends LauncherActivity {
     @Override
     protected void onDestroy() {
         executor.shutdownNow();
+        if (twaLauncher != null) {
+            try { twaLauncher.destroy(); } catch (Throwable ignored) {}
+            twaLauncher = null;
+        }
         super.onDestroy();
     }
 }
