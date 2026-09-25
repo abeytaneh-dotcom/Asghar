@@ -299,6 +299,9 @@ public sealed class MainForm : Form
     private void HookEvents()
     {
         _search.TextChanged+=(_,_)=>RefreshMapList();_category.SelectedIndexChanged+=(_,_)=>RefreshMapList();
+        _librarySearch.TextChanged+=(_,_)=>{BuildEcuLibraryTree();BuildFileTree();};
+        _ecuTree.AfterSelect+=(_,e)=>ShowEcuProfileDetails(e.Node?.Tag as EcuProfile);
+        _fileTree.AfterSelect+=(_,e)=>ShowDumpDetails(e.Node?.Tag as DumpCatalogItem);
         _mapList.SelectedIndexChanged+=(_,_)=>{if(_mapList.SelectedItem is MapDefinition m)SelectMap(m);};
         _grid.CellEndEdit+=GridCellEndEdit;
         DragEnter+=(_,e)=>{if(e.Data?.GetDataPresent(DataFormats.FileDrop)==true)e.Effect=DragDropEffects.Copy;};
@@ -369,7 +372,7 @@ public sealed class MainForm : Form
                     if(string.IsNullOrWhiteSpace(p.EcuVendor)) p.EcuVendor=_id.Vendor;
                     if(string.IsNullOrWhiteSpace(p.EcuFamily)) p.EcuFamily=_id.FamilyHint;
                     _profileStore.SaveForDump(p,_doc.Sha256,_doc.Length,$"{p.Source} • bound to exact dump");
-                    _bank.Text=$"بانک دامپ: {_catalog.Count:N0} • پروفایل دقیق: {_profileStore.CountProfiles():N0}";
+                    _bank.Text=$"ECU: {_ecuProfiles.Count:N0} • دامپ: {_catalog.Count:N0} • پروفایل دقیق: {_profileStore.CountProfiles():N0}";BuildFileTree();
                     SetStatus($"پروفایل دقیق ذخیره شد: {p.ProfileName} • {valid.Count} جدول/پارامتر.");
                 }
             }
@@ -400,7 +403,7 @@ public sealed class MainForm : Form
     {
         using var d=new FolderBrowserDialog{Description="پوشه بانک دامپ‌ها را انتخاب کنید. برنامه SHA-256 و اثرانگشت بلوکی فایل‌ها را ایندکس می‌کند.",UseDescriptionForTitle=true};
         if(d.ShowDialog(this)!=DialogResult.OK)return;
-        try{Cursor=Cursors.WaitCursor;int n=_catalog.IndexFolder(d.SelectedPath,true);_bank.Text=$"بانک دامپ: {_catalog.Count:N0}";SetStatus($"بانک دامپ به‌روزرسانی شد: {n:N0} فایل جدید.");if(_doc.HasFile){_id=_catalog.Identify(_doc.Working,_doc.Sha256);_identify.Text=_id.IsExact?$"تشخیص دقیق: {_id.DisplayName}":$"نزدیک‌ترین: {_id.DisplayName} • {_id.Similarity:P0}";UpdateChecksumLabel();}}
+        try{Cursor=Cursors.WaitCursor;int n=_catalog.IndexFolder(d.SelectedPath,true);_bank.Text=$"ECU: {_ecuProfiles.Count:N0} • دامپ: {_catalog.Count:N0} • پروفایل دقیق: {_profileStore.CountProfiles():N0}";BuildFileTree();SetStatus($"بانک دامپ به‌روزرسانی شد: {n:N0} فایل جدید.");if(_doc.HasFile){_id=_catalog.Identify(_doc.Working,_doc.Sha256);_identify.Text=_id.IsExact?$"تشخیص دقیق: {_id.DisplayName}":$"نزدیک‌ترین: {_id.DisplayName} • {_id.Similarity:P0}";UpdateChecksumLabel();}}
         catch(Exception ex){MessageBox.Show(this,ex.Message,"خطای ایندکس",MessageBoxButtons.OK,MessageBoxIcon.Error);}finally{Cursor=Cursors.Default;}
     }
 
@@ -443,6 +446,153 @@ public sealed class MainForm : Form
         finally{Cursor=Cursors.Default;}
     }
 
+    private void BuildEcuLibraryTree()
+    {
+        string q=_librarySearch.Text.Trim().ToLowerInvariant();
+        var profiles=_ecuProfiles.Where(p=>q.Length==0 || p.SearchText.Contains(q)).ToList();
+
+        _ecuTree.BeginUpdate();
+        _ecuTree.Nodes.Clear();
+        _ecuTree.Sorted=true;
+
+        foreach(var p in profiles)
+        {
+            var makers=p.VehicleMakers.Count>0?p.VehicleMakers:new List<string>{"سایر"};
+            var vehicles=p.Vehicles.Count>0?p.Vehicles:new List<string>{"خودرو نامشخص"};
+
+            foreach(string maker in makers)
+            {
+                var makerNode=GetOrAdd(_ecuTree.Nodes,maker);
+                foreach(string vehicle in vehicles)
+                {
+                    var vehicleNode=GetOrAdd(makerNode.Nodes,vehicle);
+                    var vendorNode=GetOrAdd(vehicleNode.Nodes,p.Vendor);
+                    string bus=p.Buses.Count>0?string.Join("/",p.Buses):"—";
+                    string suffix=p.AutoIdentification?"  AUTO-ID":"";
+                    var leaf=new TreeNode($"{p.Family}   [{bus}]{suffix}"){Tag=p,ForeColor=p.AutoIdentification?Accent:Fg};
+                    vendorNode.Nodes.Add(leaf);
+                }
+            }
+        }
+
+        AddCounts(_ecuTree.Nodes);
+        if(q.Length>0)_ecuTree.ExpandAll();
+        else
+        {
+            foreach(TreeNode n in _ecuTree.Nodes)n.Collapse();
+        }
+        _ecuTree.EndUpdate();
+        UpdateLibraryStats();
+    }
+
+    private void BuildFileTree()
+    {
+        string q=_librarySearch.Text.Trim().ToLowerInvariant();
+        var items=_catalog.Items.Where(x =>
+            q.Length==0 ||
+            (x.Name??"").ToLowerInvariant().Contains(q) ||
+            (x.Path??"").ToLowerInvariant().Contains(q) ||
+            (x.Vendor??"").ToLowerInvariant().Contains(q) ||
+            (x.FamilyHint??"").ToLowerInvariant().Contains(q)).ToList();
+
+        _fileTree.BeginUpdate();
+        _fileTree.Nodes.Clear();
+        _fileTree.Sorted=true;
+
+        foreach(var x in items)
+        {
+            string vendor=string.IsNullOrWhiteSpace(x.Vendor)?"unknown":x.Vendor;
+            string family=string.IsNullOrWhiteSpace(x.FamilyHint)?"سایر / نامشخص":x.FamilyHint;
+            var vendorNode=GetOrAdd(_fileTree.Nodes,vendor);
+            var familyNode=GetOrAdd(vendorNode.Nodes,family);
+            var leaf=new TreeNode($"{x.Name}   •   {Util.FormatSize(x.Size)}"){Tag=x,ForeColor=Color.FromArgb(207,221,235)};
+            familyNode.Nodes.Add(leaf);
+        }
+
+        AddCounts(_fileTree.Nodes);
+        if(q.Length>0)_fileTree.ExpandAll();
+        _fileTree.EndUpdate();
+        UpdateLibraryStats();
+    }
+
+    private static TreeNode GetOrAdd(TreeNodeCollection nodes,string text)
+    {
+        foreach(TreeNode n in nodes)
+            if(string.Equals(n.Name,text,StringComparison.OrdinalIgnoreCase))return n;
+        var node=new TreeNode(text){Name=text};
+        nodes.Add(node);
+        return node;
+    }
+
+    private static void AddCounts(TreeNodeCollection nodes)
+    {
+        foreach(TreeNode n in nodes)
+        {
+            if(n.Nodes.Count>0)
+            {
+                AddCounts(n.Nodes);
+                int leaves=CountLeaves(n);
+                string baseText=n.Name.Length>0?n.Name:n.Text;
+                n.Text=$"{baseText}   ({leaves})";
+            }
+        }
+    }
+
+    private static int CountLeaves(TreeNode n)
+    {
+        if(n.Nodes.Count==0)return 1;
+        int c=0;foreach(TreeNode ch in n.Nodes)c+=CountLeaves(ch);return c;
+    }
+
+    private void ShowEcuProfileDetails(EcuProfile? p)
+    {
+        if(p==null)return;
+        string yes="✓",no="—";
+        _ecuDetails.Text=
+            $"ECU: {p.Vendor} / {p.Family}\n"+
+            $"Variant: {(p.Variants.Count>0?string.Join(" • ",p.Variants):"—")}\n"+
+            $"خودرو: {(p.Vehicles.Count>0?string.Join(" • ",p.Vehicles):"—")}\n"+
+            $"پروتکل: {(p.Buses.Count>0?string.Join(" / ",p.Buses):"—")}\n"+
+            $"روش پروگرام: {(p.ProgrammingMethods.Count>0?string.Join(" / ",p.ProgrammingMethods):"—")}\n"+
+            $"OBD: {(p.ObdProgramming?yes:no)}   Auto ID: {(p.AutoIdentification?yes:no)}   Confidence: {p.Confidence}";
+    }
+
+    private void ShowDumpDetails(DumpCatalogItem? x)
+    {
+        if(x==null)return;
+        _ecuDetails.Text=
+            $"فایل: {x.Name}\n"+
+            $"ECU Vendor: {x.Vendor}\n"+
+            $"Family Hint: {(string.IsNullOrWhiteSpace(x.FamilyHint)?"—":x.FamilyHint)}\n"+
+            $"Size: {Util.FormatSize(x.Size)}\n"+
+            $"SHA-256: {x.Sha256}\n"+
+            $"Path: {x.Path}";
+    }
+
+    private void UpdateLibraryStats()
+    {
+        int makers=_ecuProfiles.SelectMany(x=>x.VehicleMakers).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        int vendors=_ecuProfiles.Select(x=>x.Vendor).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        _libraryStats.Text=$"{_ecuProfiles.Count} ECU • {makers} MAKERS • {vendors} VENDORS";
+    }
+
+    private void DrawLibraryTab(object? sender,DrawItemEventArgs e)
+    {
+        if(e.Index<0)return;
+        bool selected=e.Index==_libraryTabs.SelectedIndex;
+        using var bg=new SolidBrush(selected?Color.FromArgb(25,57,72):Color.FromArgb(16,25,37));
+        e.Graphics.FillRectangle(bg,e.Bounds);
+        if(selected)
+        {
+            using var p=new Pen(Accent,3f);
+            e.Graphics.DrawLine(p,e.Bounds.Left+10,e.Bounds.Bottom-2,e.Bounds.Right-10,e.Bounds.Bottom-2);
+        }
+        TextRenderer.DrawText(e.Graphics,_libraryTabs.TabPages[e.Index].Text,
+            new Font("Segoe UI",9.2f,selected?FontStyle.Bold:FontStyle.Regular),
+            e.Bounds,selected?Color.White:Muted,
+            TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.NoPrefix);
+    }
+
     private void RefreshCategories()
     {
         string old=Convert.ToString(_category.SelectedItem)??"همه";var c=_maps.Select(x=>x.Category).Where(x=>!string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x=>x).ToList();c.Insert(0,"همه");
@@ -453,7 +603,7 @@ public sealed class MainForm : Form
     {
         string q=_search.Text.Trim().ToLowerInvariant(),cat=Convert.ToString(_category.SelectedItem)??"همه";string? id=_selected?.Id;
         var list=_maps.Where(m=>(cat=="همه"||m.Category==cat)&&(q.Length==0||m.NameFa.ToLowerInvariant().Contains(q)||m.NameEn.ToLowerInvariant().Contains(q)||m.Category.ToLowerInvariant().Contains(q)||$"0x{m.Address:X}".ToLowerInvariant().Contains(q))).OrderBy(x=>x.Category).ThenBy(x=>x.Address).ToList();
-        _mapList.DataSource=null;_mapList.DataSource=list;_mapList.DisplayMember=nameof(MapDefinition.Display);
+        _mapList.DataSource=null;_mapList.DataSource=list;_mapList.DisplayMember=nameof(MapDefinition.Display);_mapStats.Text=$"{list.Count}/{_maps.Count} MAPS";
         if(id!=null){int i=list.FindIndex(x=>x.Id==id);if(i>=0)_mapList.SelectedIndex=i;}
     }
 
