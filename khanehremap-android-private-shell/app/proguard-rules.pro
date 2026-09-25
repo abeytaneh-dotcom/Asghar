@@ -1,0 +1,2 @@
+-keep class ir.khanehremap.diag.** { *; }
+-dontwarn com.google.androidbrowserhelper.**
