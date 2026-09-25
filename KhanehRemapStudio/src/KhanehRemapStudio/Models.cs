@@ -77,6 +77,13 @@ public sealed class DumpCatalogItem
     public string Sha256 { get; set; } = "";
     public List<string> Blocks { get; set; } = new();
     public List<string> AsciiIds { get; set; } = new();
+    // Physical source, if available. Metadata-only built-ins leave these empty.
+    public string SourceKind { get; set; } = ""; // file | archive | metadata
+    public string SourceContainer { get; set; } = ""; // absolute file/archive path
+    public string EntryPath { get; set; } = ""; // archive entry path
+    public bool HasPhysicalSource =>
+        SourceKind.Equals("file",StringComparison.OrdinalIgnoreCase) && File.Exists(SourceContainer) ||
+        SourceKind.Equals("archive",StringComparison.OrdinalIgnoreCase) && File.Exists(SourceContainer) && !string.IsNullOrWhiteSpace(EntryPath);
 
     public string FamilyHint
     {
