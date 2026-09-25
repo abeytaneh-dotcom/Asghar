@@ -1,4 +1,4 @@
-name: Build Khaneh Remap APK v3.0.6 Auto Update
+name: Build Khaneh Remap v306-v307 Update Test
 
 on:
   push:
@@ -36,32 +36,35 @@ jobs:
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
           test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
 
-      - name: Download v3.0.5 signing identity
-        uses: actions/download-artifact@v4
-        with:
-          name: KhanehRemap-SmartOBD-v3.0.5-CLEAN-signing
-          path: signing
-          github-token: ${{ github.token }}
-          repository: abeytaneh-dotcom/Asghar
-          run-id: 36186243145
-
-      - name: Unpack clean source and create v3.0.6
+      - name: Download v305 signing identity securely from previous artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          rm -rf apk-v306
-          mkdir -p apk-v306
-          base64 -d apk-v3-src.zip.b64 > /tmp/apk-v306.zip
-          unzip -q /tmp/apk-v306.zip -d apk-v306
-          printf '%s\n' \
-            'android.useAndroidX=true' \
-            'android.nonTransitiveRClass=true' \
-            'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > apk-v306/gradle.properties
+          set -e
+          mkdir -p signing
+          curl -fL             -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/abeytaneh-dotcom/Asghar/actions/artifacts/10885364695/zip"             -o /tmp/signing.zip
+          unzip -q /tmp/signing.zip -d signing
+          test -f signing/KhanehRemap-SmartOBD-v305-FRESH.jks
+          test -f signing/KhanehRemap-v305-signing-password.txt
+
+      - name: Prepare Android source
+        run: |
+          rm -rf apk-update
+          mkdir -p apk-update
+          base64 -d apk-v3-src.zip.b64 > /tmp/apk-update.zip
+          unzip -q /tmp/apk-update.zip -d apk-update
+
+          printf '%s\n'             'android.useAndroidX=true'             'android.nonTransitiveRClass=true'             'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > apk-update/gradle.properties
 
           python3 - <<'PY'
           from pathlib import Path
           import re
 
-          root=Path('apk-v306')
+          root=Path('apk-update')
+
+          # Package identity MUST stay identical to installed v3.0.5.
           p=root/'app/build.gradle'
           s=p.read_text()
           s=re.sub(r"applicationId\s+'[^']+'","applicationId 'com.krdiag.kilometer.n202609252354'",s)
@@ -72,18 +75,30 @@ jobs:
           s=s.replace('minifyEnabled true','minifyEnabled false').replace('shrinkResources true','shrinkResources false')
           p.write_text(s)
 
+          # Explicit app icon/name.
           p=root/'app/src/main/AndroidManifest.xml'
           s=p.read_text()
           if 'android:icon=' not in s:
               s=s.replace('android:allowBackup="false"',
                           'android:allowBackup="false"\n        android:icon="@drawable/kr_launcher"\n        android:roundIcon="@drawable/kr_launcher"')
+          else:
+              s=re.sub(r'android:icon="[^"]+"','android:icon="@drawable/kr_launcher"',s)
+              if 'android:roundIcon=' in s:
+                  s=re.sub(r'android:roundIcon="[^"]+"','android:roundIcon="@drawable/kr_launcher"',s)
+              else:
+                  s=s.replace('android:icon="@drawable/kr_launcher"',
+                              'android:icon="@drawable/kr_launcher"\n        android:roundIcon="@drawable/kr_launcher"')
           s=s.replace('android:label="خانه ریمپ"','android:label="@string/app_name"')
           p.write_text(s)
-          (root/'app/src/main/res/values/strings.xml').write_text('<resources>\n<string name="app_name">خانه ریمپ کیلومتر</string>\n</resources>\n')
+          (root/'app/src/main/res/values/strings.xml').write_text(
+              '<resources>\n<string name="app_name">خانه ریمپ کیلومتر</string>\n</resources>\n'
+          )
 
+          # Native WebView/BLE source.
           p=root/'app/src/main/java/ir/khanehremap/diag/MainActivity.java'
           s=p.read_text()
 
+          # Fix generated BLE disconnect syntax.
           old='        @JavascriptInterface public void disconnect(){ runOnUiThread(()->{if(gatt!=null){try{gatt.disconnect();gatt.close();}catch(Exception ignored){}gatt=null;chars.clear();}); }'
           new='''        @JavascriptInterface public void disconnect(){
               runOnUiThread(()->{
@@ -96,43 +111,60 @@ jobs:
           }'''
           if old in s: s=s.replace(old,new)
 
-          # No management-route hint in the app binary; endpoint is not rendered in UI.
+          # User app endpoint only. No admin path exists in the app.
           s=s.replace('private static final String APP_URL = "https://achinu.ir/diag/";',
-                      'private static final String APP_ENDPOINT = "aHR0cHM6Ly9hY2hpbnUuaXIvZGlhZy8=";')
+                      'private static final String APP_ENDPOINT = "aHR0cHM6Ly9hY2hpbnUuaXIvYW1wZXIv";')
           s=s.replace('private static final String APP_ORIGIN = "https://achinu.ir";\n','')
           anchor='    private SharedPreferences prefs;\n'
           if 'private String appUrl()' not in s:
-              s=s.replace(anchor,anchor+'\n    private String appUrl(){ return new String(Base64.decode(APP_ENDPOINT,Base64.NO_WRAP)); }\n')
+              s=s.replace(anchor, anchor+'\n    private String appUrl(){ return new String(Base64.decode(APP_ENDPOINT,Base64.NO_WRAP)); }\n')
 
-          s=s.replace('if(url.startsWith(APP_URL) && !u.getPath().contains("/manage-")) return false;',
-                      'Uri b=Uri.parse(appUrl()); String p=u.getPath()==null?"":u.getPath(); if("https".equalsIgnoreCase(u.getScheme()) && b.getHost()!=null && b.getHost().equalsIgnoreCase(u.getHost()) && ("/diag/".equals(p)||"/diag/index.php".equals(p))) return false;')
+          # Only the normal user page may navigate inside WebView.
+          s=s.replace(
+              'if(url.startsWith(APP_URL) && !u.getPath().contains("/manage-")) return false;',
+              'Uri b=Uri.parse(appUrl()); String pth=u.getPath()==null?"":u.getPath(); if("https".equalsIgnoreCase(u.getScheme()) && b.getHost()!=null && b.getHost().equalsIgnoreCase(u.getHost()) && ("/amper/".equals(pth)||"/amper/index.php".equals(pth))) return false;'
+          )
+
           s=s.replace('web.loadUrl(APP_URL);','web.loadUrl(appUrl());')
           s=s.replace('web.loadUrl(APP_URL));','web.loadUrl(appUrl()));')
-          s=s.replace('URL u=new URL(APP_URL+"api/app_manifest.php");','URL u=new URL(appUrl()+"api/app_manifest.php");')
-          s=s.replace('injectNativeUpdateHook();\n','')
+          s=s.replace('URL u=new URL(APP_URL+"api/app_manifest.php");',
+                      'URL u=new URL(appUrl()+"api/app_manifest.php");')
 
-          # Replace obsolete manual button hook with no-op.
+          # Remove old update-button injection.
+          s=s.replace('                injectNativeUpdateHook();\n','')
           s=re.sub(r'\n    private void injectNativeUpdateHook\(\)\{.*?\n    \}\n', '\n', s, flags=re.S)
 
-          # Current version must come from package metadata.
-          s=s.replace('if(compareVersion(ver,"3.0.0")<=0){toastUi("برنامه به‌روز است");return;}\n                toastUi("در حال دریافت نسخه "+ver);\n                downloadAndInstall(url,sha,ver);',
-          '''String current=currentVersion();
-                if(compareVersion(ver,current)<=0)return;
+          # Native bridge exposes current version to the page and performs secure update.
+          s=s.replace(
+              '@JavascriptInterface public void checkForAppUpdate(String token){checkUpdate(token);}',
+              '@JavascriptInterface public void checkForAppUpdate(String token){checkUpdate(token);}\n        @JavascriptInterface public String getVersion(){return currentVersion();}'
+          )
+
+          old_update='''String ver=j.optString("version","");String url=j.optString("url","");String sha=j.optString("sha256","");
+                if(compareVersion(ver,"3.0.0")<=0){toastUi("برنامه به‌روز است");return;}
+                toastUi("در حال دریافت نسخه "+ver);
+                downloadAndInstall(url,sha,ver);'''
+          new_update='''String ver=j.optString("version","");String url=j.optString("url","");String sha=j.optString("sha256","");
                 String notes=j.optString("notes","");
+                if(compareVersion(ver,currentVersion())<=0)return;
                 runOnUiThread(()->new AlertDialog.Builder(MainActivity.this)
-                    .setTitle("نسخه جدید آماده است")
-                    .setMessage("نسخه "+ver+(notes.isEmpty()?"":"\\n\\n"+notes))
+                    .setTitle("آپدیت جدید")
+                    .setMessage("نسخه "+ver+" آماده است."+(notes.isEmpty()?"":"\\n\\n"+notes))
                     .setNegativeButton("بعداً",null)
-                    .setPositiveButton("دانلود و نصب",(d,w)->new Thread(()->{
+                    .setPositiveButton("دانلود و نصب",(dlg,which)->new Thread(()->{
                         try{toastUi("در حال دریافت نسخه "+ver);downloadAndInstall(url,sha,ver);}
                         catch(Exception ex){toastUi("دریافت آپدیت انجام نشد");}
                     }).start())
-                    .show());''')
+                    .show());'''
+          if old_update not in s:
+              raise SystemExit('update block target not found')
+          s=s.replace(old_update,new_update)
 
           marker='    private void downloadAndInstall(String url,String sha,String ver)throws Exception{'
           if 'private String currentVersion()' not in s:
               s=s.replace(marker,'''    private String currentVersion(){
-        try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "0";}
+        try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}
+        catch(Exception e){return "0";}
     }
 
 '''+marker)
@@ -140,8 +172,8 @@ jobs:
           p.write_text(s)
           PY
 
-          mkdir -p apk-v306/app/src/main/res/drawable
-          cat > apk-v306/app/src/main/res/drawable/kr_launcher.xml <<'XML'
+          mkdir -p apk-update/app/src/main/res/drawable
+          cat > apk-update/app/src/main/res/drawable/kr_launcher.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp" android:height="108dp"
@@ -163,35 +195,42 @@ jobs:
           </vector>
           XML
 
-      - name: Build release
+      - name: Build v3.0.6
         run: |
-          cd apk-v306
+          cd apk-update
           gradle --no-daemon clean :app:assembleRelease
-
-      - name: Zipalign
-        run: |
-          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 \
-            apk-v306/app/build/outputs/apk/release/app-release-unsigned.apk \
-            KhanehRemap-SmartOBD-v3.0.6-aligned.apk
-
-      - name: Sign with v3.0.5 identity
-        run: |
+          cd ..
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4             apk-update/app/build/outputs/apk/release/app-release-unsigned.apk             KhanehRemap-SmartOBD-v3.0.6-aligned.apk
           PASS="$(cat signing/KhanehRemap-v305-signing-password.txt)"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
-            --ks signing/KhanehRemap-SmartOBD-v305-FRESH.jks \
-            --ks-key-alias krfresh305 \
-            --ks-pass "pass:$PASS" \
-            --key-pass "pass:$PASS" \
-            --v1-signing-enabled true \
-            --v2-signing-enabled true \
-            --v3-signing-enabled true \
-            --out KhanehRemap-SmartOBD-v3.0.6.apk \
-            KhanehRemap-SmartOBD-v3.0.6-aligned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign             --ks signing/KhanehRemap-SmartOBD-v305-FRESH.jks             --ks-key-alias krfresh305             --ks-pass "pass:$PASS" --key-pass "pass:$PASS"             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true             --out KhanehRemap-SmartOBD-v3.0.6.apk             KhanehRemap-SmartOBD-v3.0.6-aligned.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs KhanehRemap-SmartOBD-v3.0.6.apk
 
-      - name: Upload APK
+      - name: Build v3.0.7 TEST update
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('apk-update/app/build.gradle')
+          s=p.read_text().replace('versionCode 306','versionCode 307').replace("versionName '3.0.6'","versionName '3.0.7'")
+          p.write_text(s)
+          PY
+          cd apk-update
+          gradle --no-daemon clean :app:assembleRelease
+          cd ..
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4             apk-update/app/build/outputs/apk/release/app-release-unsigned.apk             KhanehRemap-SmartOBD-v3.0.7-TEST-aligned.apk
+          PASS="$(cat signing/KhanehRemap-v305-signing-password.txt)"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign             --ks signing/KhanehRemap-SmartOBD-v305-FRESH.jks             --ks-key-alias krfresh305             --ks-pass "pass:$PASS" --key-pass "pass:$PASS"             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true             --out KhanehRemap-SmartOBD-v3.0.7-TEST.apk             KhanehRemap-SmartOBD-v3.0.7-TEST-aligned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs KhanehRemap-SmartOBD-v3.0.7-TEST.apk
+
+      - name: Verify same package and versions
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging KhanehRemap-SmartOBD-v3.0.6.apk | grep -E "package:|application-label"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging KhanehRemap-SmartOBD-v3.0.7-TEST.apk | grep -E "package:|application-label"
+
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: KhanehRemap-SmartOBD-v3.0.6
-          path: KhanehRemap-SmartOBD-v3.0.6.apk
+          name: KhanehRemap-v306-v307-update-test
+          path: |
+            KhanehRemap-SmartOBD-v3.0.6.apk
+            KhanehRemap-SmartOBD-v3.0.7-TEST.apk
           retention-days: 1
