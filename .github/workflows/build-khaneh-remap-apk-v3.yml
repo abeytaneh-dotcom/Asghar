@@ -1,0 +1,56 @@
+name: Build Khaneh Remap APK v3
+
+on:
+  push:
+    branches:
+      - apk-build-v3-20260925
+    paths:
+      - apk-v3-src.zip.b64
+      - .github/workflows/build-khaneh-remap-apk-v3.yml
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Unpack Android source
+        run: |
+          mkdir -p apk-v3
+          base64 -d apk-v3-src.zip.b64 > /tmp/apk-v3.zip
+          unzip -q /tmp/apk-v3.zip -d apk-v3
+
+      - name: Build unsigned release APK
+        run: |
+          cd apk-v3
+          gradle --no-daemon :app:assembleRelease
+
+      - name: Zipalign APK
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4             apk-v3/app/build/outputs/apk/release/app-release-unsigned.apk             KhanehRemap-SmartOBD-v3.0-aligned-unsigned.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KhanehRemap-SmartOBD-v3.0-unsigned
+          path: KhanehRemap-SmartOBD-v3.0-aligned-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
