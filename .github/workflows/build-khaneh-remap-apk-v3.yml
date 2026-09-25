@@ -38,13 +38,11 @@ jobs:
           test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
 
-      - name: Download v305 signing identity securely from previous artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Download v305 signing identity
         run: |
           set -e
           mkdir -p signing
-          curl -fL             -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/abeytaneh-dotcom/Asghar/actions/artifacts/10885364695/zip"             -o /tmp/signing.zip
+          curl -fL "https://sdmntpritalynorth.oaiusercontent.com/files/00000000-5458-8246-9b06-8ab799c60012/raw?se=2026-09-25T21%3A58%3A39Z&sp=r&sv=2026-02-06&sr=b&scid=3372472f-fe78-50d1-a382-a5544c00caca&skoid=40ce4b34-a373-4a62-b0bf-44befe221915&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-25T19%3A41%3A48Z&ske=2026-09-26T19%3A41%3A48Z&sks=b&skv=2026-02-06&sig=YR8N7fVzkyG5PziqpjjMpMQh4u9gcXHnPO5vtCnI1K0%3D" -o /tmp/signing.zip
           unzip -q /tmp/signing.zip -d signing
           test -f signing/KhanehRemap-SmartOBD-v305-FRESH.jks
           test -f signing/KhanehRemap-v305-signing-password.txt
