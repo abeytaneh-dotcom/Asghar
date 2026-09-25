@@ -1,17 +1,189 @@
-name: Update APK build
+name: Build Khaneh Remap APK v3.0.6 Unsigned
 
 on:
   push:
     branches:
       - apk-build-v3-20260925
     paths:
+      - apk-v3-src.zip.b64
       - .github/workflows/build-khaneh-remap-apk-v3.yml
-      - build-update.sh
-      - patch-update.py
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - run: echo BUILD_WORKFLOW_OK
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+
+      - name: Ensure Android SDK
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
+
+      - name: Unpack clean source
+        run: |
+          rm -rf apk-v306
+          mkdir -p apk-v306
+          base64 -d apk-v3-src.zip.b64 > /tmp/apk-v306.zip
+          unzip -q /tmp/apk-v306.zip -d apk-v306
+
+          printf '%s\n' \
+            'android.useAndroidX=true' \
+            'android.nonTransitiveRClass=true' \
+            'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > apk-v306/gradle.properties
+
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('apk-v306')
+
+          # Fix native BLE bridge syntax.
+          p=root/'app/src/main/java/ir/khanehremap/diag/MainActivity.java'
+          s=p.read_text()
+          old='        @JavascriptInterface public void disconnect(){ runOnUiThread(()->{if(gatt!=null){try{gatt.disconnect();gatt.close();}catch(Exception ignored){}gatt=null;chars.clear();}); }'
+          new='''        @JavascriptInterface public void disconnect(){
+              runOnUiThread(()->{
+                  if(gatt!=null){
+                      try{gatt.disconnect();gatt.close();}catch(Exception ignored){}
+                      gatt=null;
+                  }
+                  chars.clear();
+              });
+          }'''
+          if old in s:
+              s=s.replace(old,new)
+
+          s=s.replace('private static final String APP_URL = "https://achinu.ir/diag/";',
+                      'private static final String APP_URL = "https://achinu.ir/amper/";')
+          s=s.replace('private static final String APP_ORIGIN = "https://achinu.ir";\\n','')
+          s=s.replace('if(url.startsWith(APP_URL) && !u.getPath().contains("/manage-")) return false;',
+                      'if(url.startsWith(APP_URL) && !u.getPath().contains("/panel-")) return false;')
+          s=s.replace('                injectNativeUpdateHook();\\n','')
+          s=re.sub(r'\\n    private void injectNativeUpdateHook\\(\\)\\{.*?\\n    \\}\\n','\\n',s,flags=re.S)
+          s=s.replace('@JavascriptInterface public void checkForAppUpdate(String token){checkUpdate(token);}',
+                      '@JavascriptInterface public void checkForAppUpdate(String token){checkUpdate(token);}\\n        @JavascriptInterface public String getVersion(){return currentVersion();}')
+          old_update='''String ver=j.optString("version","");String url=j.optString("url","");String sha=j.optString("sha256","");
+                if(compareVersion(ver,"3.0.0")<=0){toastUi("برنامه به‌روز است");return;}
+                toastUi("در حال دریافت نسخه "+ver);
+                downloadAndInstall(url,sha,ver);'''
+          new_update='''String ver=j.optString("version","");String url=j.optString("url","");String sha=j.optString("sha256","");
+                String notes=j.optString("notes","");
+                if(compareVersion(ver,currentVersion())<=0)return;
+                runOnUiThread(()->new AlertDialog.Builder(MainActivity.this)
+                    .setTitle("آپدیت جدید")
+                    .setMessage("نسخه "+ver+" آماده است."+(notes.isEmpty()?"":"\\\\n\\\\n"+notes))
+                    .setNegativeButton("بعداً",null)
+                    .setPositiveButton("دانلود و نصب",(dlg,which)->new Thread(()->{
+                        try{toastUi("در حال دریافت نسخه "+ver);downloadAndInstall(url,sha,ver);}
+                        catch(Exception ex){toastUi("دریافت آپدیت انجام نشد");}
+                    }).start())
+                    .show());'''
+          if old_update not in s:
+              raise SystemExit('update block missing')
+          s=s.replace(old_update,new_update)
+          marker='    private void downloadAndInstall(String url,String sha,String ver)throws Exception{'
+          if 'private String currentVersion()' not in s:
+              s=s.replace(marker,'''    private String currentVersion(){
+        try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}
+        catch(Exception e){return "0";}
+    }
+
+'''+marker)
+          p.write_text(s)
+
+          # Completely fresh package identity and conservative release settings.
+          p=root/'app/build.gradle'
+          s=p.read_text()
+          import re
+          s=re.sub(r"applicationId\s+'[^']+'","applicationId 'com.krdiag.kilometer.n202609252354'",s)
+          s=re.sub(r"minSdk\s+\d+","minSdk 23",s)
+          s=re.sub(r"targetSdk\s+\d+","targetSdk 34",s)
+          s=re.sub(r"versionCode\s+\d+","versionCode 306",s)
+          s=re.sub(r"versionName\s+'[^']+'","versionName '3.0.6'",s)
+          s=s.replace('minifyEnabled true','minifyEnabled false')
+          s=s.replace('shrinkResources true','shrinkResources false')
+          p.write_text(s)
+
+          # Explicit launcher identity.
+          p=root/'app/src/main/AndroidManifest.xml'
+          s=p.read_text()
+          if 'android:icon=' not in s:
+              s=s.replace('android:allowBackup="false"',
+                          'android:allowBackup="false"\n        android:icon="@drawable/kr_launcher"\n        android:roundIcon="@drawable/kr_launcher"')
+          else:
+              import re
+              s=re.sub(r'android:icon="[^"]+"','android:icon="@drawable/kr_launcher"',s)
+              s=re.sub(r'android:roundIcon="[^"]+"','android:roundIcon="@drawable/kr_launcher"',s)
+          s=s.replace('android:label="خانه ریمپ"','android:label="@string/app_name"')
+          p.write_text(s)
+
+          (root/'app/src/main/res/values/strings.xml').write_text(
+              '<resources>\n'
+              '  <string name="app_name">خانه ریمپ کیلومتر</string>\n'
+              '</resources>\n'
+          )
+          PY
+
+          mkdir -p apk-v306/app/src/main/res/drawable
+          cat > apk-v306/app/src/main/res/drawable/kr_launcher.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#041016" android:pathData="M0,0h108v108h-108z"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#22E8FF" android:strokeWidth="3"
+                  android:pathData="M8,54A46,46 0,1 1,100 54A46,46 0,1 1,8 54"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#39F2C1" android:strokeWidth="6"
+                  android:strokeLineCap="round" android:pathData="M21,55A33,33 0,0 1,87 55"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#FFFFFF" android:strokeWidth="4"
+                  android:strokeLineCap="round" android:pathData="M54,55L80,36"/>
+              <path android:fillColor="#22E8FF" android:pathData="M59,55A5,5 0,1 1,49 55A5,5 0,1 1,59 55"/>
+              <path android:fillColor="#0B2530" android:strokeColor="#27E5FF" android:strokeWidth="2"
+                  android:pathData="M18,70L24,62L36,58L45,51L66,51L75,57L85,61L91,70L88,76L20,76z"/>
+              <path android:fillColor="#F2FEFF"
+                  android:pathData="M34,79L39,79L39,91L45,79L51,79L44,87L52,98L46,98L40,90L39,91L39,98L34,98z"/>
+              <path android:fillColor="#1FE7D2"
+                  android:pathData="M55,79L68,79C75,79 78,82 78,87C78,91 75,93 72,94L79,98L72,98L66,94L61,94L61,98L55,98zM61,84L61,90L68,90C71,90 72,89 72,87C72,85 71,84 68,84z"/>
+          </vector>
+          XML
+
+      - name: Build release
+        run: |
+          cd apk-v306
+          gradle --no-daemon clean :app:assembleRelease
+
+      - name: Zipalign
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 \
+            apk-v306/app/build/outputs/apk/release/app-release-unsigned.apk \
+            KhanehRemap-SmartOBD-v3.0.6-aligned.apk
+
+      - name: Export unsigned APK and signer
+        run: |
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" apksigner.jar
+
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: KhanehRemap-SmartOBD-v3.0.6-UNSIGNED
+          path: |
+            KhanehRemap-SmartOBD-v3.0.6-aligned.apk
+            apksigner.jar
+          retention-days: 1
