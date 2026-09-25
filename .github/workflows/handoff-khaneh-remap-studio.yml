@@ -1,0 +1,35 @@
+name: Handoff Khaneh Remap Studio
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/handoff-khaneh-remap-studio.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  handoff:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download latest release installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download khaneh-remap-studio-latest --repo "$env:GITHUB_REPOSITORY" -p "KhanehRemapStudio-Setup-x64.exe"
+          if (!(Test-Path "KhanehRemapStudio-Setup-x64.exe")) { throw "Installer not found" }
+          Get-Item "KhanehRemapStudio-Setup-x64.exe" | Format-List Name,Length
+          Get-FileHash "KhanehRemapStudio-Setup-x64.exe" -Algorithm SHA256
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KhanehRemapStudio-Installer
+          path: KhanehRemapStudio-Setup-x64.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
