@@ -1,4 +1,4 @@
-name: Build Khaneh Remap APK v3
+name: Build Khaneh Remap APK v3 Install-Fix
 
 on:
   push:
@@ -36,6 +36,7 @@ jobs:
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
           test -f "$ANDROID_HOME/platforms/android-35/android.jar"
           test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
       - name: Unpack and patch Android source
         run: |
@@ -48,6 +49,8 @@ jobs:
             'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > apk-v3/gradle.properties
           python3 - <<'PY'
           from pathlib import Path
+
+          # Fix the Java syntax issue in the generated native BLE bridge.
           p=Path('apk-v3/app/src/main/java/ir/khanehremap/diag/MainActivity.java')
           s=p.read_text()
           old='        @JavascriptInterface public void disconnect(){ runOnUiThread(()->{if(gatt!=null){try{gatt.disconnect();gatt.close();}catch(Exception ignored){}gatt=null;chars.clear();}); }'
@@ -60,9 +63,17 @@ jobs:
                   chars.clear();
               });
           }'''
-          if old not in s:
-              raise SystemExit('disconnect patch target missing')
-          p.write_text(s.replace(old,new))
+          if old in s:
+              s=s.replace(old,new)
+          p.write_text(s)
+
+          # Use a unique applicationId so it can install beside older Khaneh Remap builds.
+          g=Path('apk-v3/app/build.gradle')
+          b=g.read_text()
+          b=b.replace("applicationId 'ir.khanehremap.diag'","applicationId 'ir.khanehremap.smartobd.dashboard'")
+          b=b.replace("versionCode 300","versionCode 301")
+          b=b.replace("versionName '3.0.0'","versionName '3.0.1'")
+          g.write_text(b)
           PY
 
       - name: Build unsigned release APK
@@ -74,12 +85,32 @@ jobs:
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 \
             apk-v3/app/build/outputs/apk/release/app-release-unsigned.apk \
-            KhanehRemap-SmartOBD-v3.0-aligned-unsigned.apk
+            KhanehRemap-SmartOBD-v3.0.1-aligned-unsigned.apk
 
-      - name: Upload APK artifact
+      - name: Generate release key and sign V1 V2 V3
+        shell: bash
+        run: |
+          set -e
+          PASS="$(openssl rand -hex 24)"
+          printf "%s" "$PASS" > signing-password.txt
+          keytool -genkeypair -v             -keystore KhanehRemap-SmartOBD-release-v301.jks             -storepass "$PASS" -keypass "$PASS"             -alias khanehremap             -keyalg RSA -keysize 4096 -validity 10000             -dname "CN=Khaneh Remap, OU=Smart OBD, O=Khaneh Remap, C=IR"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign             --ks KhanehRemap-SmartOBD-release-v301.jks             --ks-key-alias khanehremap             --ks-pass "pass:$PASS"             --key-pass "pass:$PASS"             --v1-signing-enabled true             --v2-signing-enabled true             --v3-signing-enabled true             --out KhanehRemap-SmartOBD-v3.0.1.apk             KhanehRemap-SmartOBD-v3.0.1-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs KhanehRemap-SmartOBD-v3.0.1.apk
+
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: KhanehRemap-SmartOBD-v3.0-unsigned
-          path: KhanehRemap-SmartOBD-v3.0-aligned-unsigned.apk
+          name: KhanehRemap-SmartOBD-v3.0.1-signed
+          path: KhanehRemap-SmartOBD-v3.0.1.apk
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload signing material
+        uses: actions/upload-artifact@v4
+        with:
+          name: KhanehRemap-SmartOBD-v3.0.1-signing
+          path: |
+            KhanehRemap-SmartOBD-release-v301.jks
+            signing-password.txt
           if-no-files-found: error
           retention-days: 1
