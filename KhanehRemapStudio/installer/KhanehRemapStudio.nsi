@@ -3,6 +3,9 @@ Unicode true
 !define COMPANY "Khaneh Remap"
 !define EXE "KhanehRemapStudio.exe"
 
+Name "${APPNAME}"
+Caption "${APPNAME} Setup"
+
 OutFile "KhanehRemapStudio-Setup-x64.exe"
 InstallDir "$LOCALAPPDATA\Programs\KhanehRemapStudio"
 RequestExecutionLevel user
@@ -22,7 +25,7 @@ Section "Install"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KhanehRemapStudio" "DisplayName" "${APPNAME}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KhanehRemapStudio" "Publisher" "${COMPANY}"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KhanehRemapStudio" "DisplayVersion" "1.0.0"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KhanehRemapStudio" "DisplayVersion" "2.0.0"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KhanehRemapStudio" "UninstallString" "$INSTDIR\Uninstall.exe"
 SectionEnd
 
