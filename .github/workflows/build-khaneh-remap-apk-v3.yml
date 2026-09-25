@@ -76,14 +76,6 @@ jobs:
           s=s.replace('                injectNativeUpdateHook();\\n','')
           s=re.sub(r'\\n    private void injectNativeUpdateHook\\(\\)\\{.*?\\n    \\}\\n','\\n',s,flags=re.S)
           s=s.replace('@JavascriptInterface public void checkForAppUpdate(String token){checkUpdate(token);}','@JavascriptInterface public void checkForAppUpdate(String token){checkUpdate(token);}\\n        @JavascriptInterface public String getVersion(){return currentVersion();}')
-          old_update='String ver=j.optString("version","");String url=j.optString("url","");String sha=j.optString("sha256","");\\n                if(compareVersion(ver,"3.0.0")<=0){toastUi("برنامه به‌روز است");return;}\\n                toastUi("در حال دریافت نسخه "+ver);\\n                downloadAndInstall(url,sha,ver);'
-          new_update='String ver=j.optString("version","");String url=j.optString("url","");String sha=j.optString("sha256","");\\n                String notes=j.optString("notes","");\\n                if(compareVersion(ver,currentVersion())<=0)return;\\n                runOnUiThread(()->new AlertDialog.Builder(MainActivity.this).setTitle("آپدیت جدید").setMessage("نسخه "+ver+" آماده است."+(notes.isEmpty()?"":"\\\\n\\\\n"+notes)).setNegativeButton("بعداً",null).setPositiveButton("دانلود و نصب",(dlg,which)->new Thread(()->{try{toastUi("در حال دریافت نسخه "+ver);downloadAndInstall(url,sha,ver);}catch(Exception ex){toastUi("دریافت آپدیت انجام نشد");}}).start()).show());'
-          if old_update not in s:
-              raise SystemExit('update block missing')
-          s=s.replace(old_update,new_update)
-          marker='    private void downloadAndInstall(String url,String sha,String ver)throws Exception{'
-          if 'private String currentVersion()' not in s:
-              s=s.replace(marker,'    private String currentVersion(){\\n        try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}\\n        catch(Exception e){return "0";}\\n    }\\n\\n'+marker)
           p.write_text(s)
 
           # Completely fresh package identity and conservative release settings.
