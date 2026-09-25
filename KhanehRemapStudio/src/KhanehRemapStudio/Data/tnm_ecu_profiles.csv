@@ -1,0 +1,66 @@
+index,id,vendor,family,variants,vehicle_makers,vehicles,buses,manual_pages,confidence,programming_methods,obd_programming,auto_identification,aliases
+0,BOSCH_ME744,Bosch,ME7.4.4,ME7.4.4,ایران خودرو; Peugeot,Peugeot 206; Peugeot Pars; Peugeot 405,KLINE,16,high,OBD; BENCH/JTAG,True,,ME744; ME7.4.4; m206me744; mPars744
+1,BOSCH_M744,Bosch,M7.4.4,M7.4.4,ایران خودرو; Peugeot,Peugeot/IKCO variants,KLINE,17,high,OBD; BENCH/JTAG,True,,M744; M7.4.4
+2,BOSCH_ME745,Bosch,ME7.4.5,ME7.4.5,ایران خودرو; Peugeot,Peugeot 206,KLINE,18,high,OBD; BENCH/JTAG,True,,ME745; ME7.4.5; m206me745
+3,BOSCH_ME749,Bosch,ME7.4.9,ME7.4.9,ایران خودرو,Samand; IKCO variants,KLINE,19,high,OBD; BENCH/JTAG,True,,ME749; ME7.4.9; mSamand749
+4,BOSCH_M7411,Bosch,M7.4.11,M7.4.11,سایپا,Pride,KLINE,19,high,OBD; BENCH/JTAG,True,,M7411; M7.4.11; mPride7411
+5,BOSCH_M797,Bosch,M7.9.7,M7.9.7; M7.9.7.1,سایپا; زامیاد; Nissan; MVM,Pride; Zamyad; Nissan variants; MVM 530; MVM X33,KLINE,20; 73,high,OBD; JTAG,True,,M797; M7.9.7; M7971; M7.9.7.1; mPride797; mNissanZ7971
+6,VALEO_S2000,Valeo/Sagem,S2000,S2000-10; S2000-11; S2000-12; S2000-35; S2000-3E; S2000-3F,ایران خودرو; Peugeot,Peugeot 206; Peugeot 405; Peykan,KLINE,11,high,OBD; BENCH,True,,S2000; m206S2000; m405S2000; mPeykanS2000
+7,VALEO_PL4,Valeo/Sagem,PL4,PL4,ایران خودرو; Peugeot,Peugeot variants,KLINE,16,high,OBD; BENCH,True,,PL4; 4PL
+8,VALEO_J34,Valeo,J34,J34; J34P,ایران خودرو; Peugeot,Peugeot 206,KLINE,23,high,OBD; BENCH,True,,J34; J34P; m206j34
+9,VALEO_SAX500,Valeo,SAX500,SAX500,ایران خودرو; Renault,Peugeot 405; L90/Tondar 90,KLINE,25,high,OBD; BENCH,True,,SAX500; m405Sax500; mL90Sax500
+10,VALEO_44VB,Valeo,44VB,44VB CNG,ایران خودرو,CNG variants,KLINE,62,high,BENCH,False,,44VB
+11,SIEMENS_LEGACY,Siemens/Continental,Siemens Iranian,CI4; CIM; Continental old,ایران خودرو; سایپا,Pride; Tiba; Iranian variants,KLINE,30; 31; 32,high,OBD; BENCH/JTAG,True,,SIEMENS; SIEMENCE; CI4; CIM
+12,CROUSE_CGT_CGX,Crouse,CGT/CGX,CGT; CGX,ایران خودرو; سایپا,Iranian variants,KLINE; CAN,45,medium,OBD; JTAG,True,,CGT; CGX
+13,CROUSE_CGD,Crouse,CGD,CGD,ایران خودرو; سایپا,Iranian variants,CAN; KLINE,47,medium,OBD; JTAG,True,,CGD
+14,CROUSE_CIX,Crouse,CIX / CCX48,CIX34; CIX48; CCX48,ایران خودرو; سایپا,Iranian variants,CAN; KLINE,48; 90,high,OBD,True,True,CIX34; CIX48; CCX48; 48CCX
+15,SSAT_MULTI,SSAT,SSAT,SSAT K-Line; SSAT CAN,سایپا; ایران خودرو,Iranian variants,KLINE; CAN,40,high,OBD,True,,SSAT
+16,EZU,EasyU/EZU,EZU,EZU,ایران خودرو; سایپا,21 TNM-supported variants,CAN; KLINE,90,high,OBD,True,True,EZU; EASYU
+17,MAW,West Steel/MAW,MAW,MAW,ایران خودرو; سایپا,Iranian variants,CAN; KLINE,90,high,OBD; BENCH,True,True,MAW
+18,KESENS_SHAHIN,Kesens/Kesense,Kesens Shahin,Shahin TC1728,سایپا,Shahin,CAN,88,high,OBD; JTAG,True,,KESENS; KESENSE; SHAHIN; TC1728
+19,KESENS_TARA,Kesens/Kesense,Kesens Tara,Tara,ایران خودرو,Tara,CAN,90,high,OBD,True,True,KESENS; KESENSE; TARA
+20,SIM2K34,Siemens/Continental,SIM2K-34,SIM2K-34,Hyundai; Kia,Sonata; IX55; Sportage,CAN,39,high,OBD; JTAG,True,,SIM2K34; SIM2K-34
+21,SIM2K141_343,Siemens/Continental,SIM2K,SIM2K-141; SIM2K-341; SIM2K-342; SIM2K-343,Hyundai; Kia,4-cylinder models up to 2015 (TNM manual),CAN; KLINE,98,high,OBD,True,,SIM2K141; SIM2K341; SIM2K342; SIM2K343; SIM2K-141; SIM2K-341; SIM2K-342; SIM2K-343
+22,SIM2K241,Siemens/Continental,SIM2K-241,SIM2K-241,Hyundai; Kia,Elantra; Sportage; Hyundai/Kia variants,CAN,77; 97,high,OBD; JTAG,True,,SIM2K241; SIM2K-241
+23,SIM2K240_TGD,Siemens/Continental,SIM2K-240 TGD,SIM2K240TGD,Kia,automatic transmission variants,CAN,74,high,JTAG,False,,SIM2K240; SIM2K240TGD
+24,DELPHI_MT38_KLINE,Delphi,MT38,MT38 K-Line,Hyundai; Kia,6-cylinder variants,KLINE,76; 98,high,OBD; JTAG,True,,MT38; MT38-KLINE
+25,DELPHI_MT38_CAN,Delphi,MT38,MT38 CAN,Hyundai; Kia,6-cylinder variants,CAN,76; 98,high,OBD; JTAG,True,,MT38; MT38-CAN
+26,DELPHI_MT86,Delphi,MT86,MT86,Hyundai; Kia,6-cylinder variants,CAN; KLINE,71; 98,high,OBD; JTAG,True,,MT86
+27,DELPHI_MT20U2,Delphi,MT20U2,MT20U2,Great Wall; Capra,Capra; Wingle,KLINE; CAN,72; 98,high,OBD; JTAG,True,,MT20U2; MT20
+28,DELPHI_MT22,Delphi,MT22,MT2; MT22; MT22.3,Lifan; JAC; Foton; Dayun,Lifan X60; Lifan 820; JAC S3; Foton/JAC/Dayun variants,CAN; KLINE,78; 98,high,OBD,True,,MT22; MT22.3; MT2
+29,DELPHI_MT62_1,Delphi,MT62.1,MT62.1,Foton; JAC; Dayun,Foton; JAC T8; Dayun; Kalut,CAN,90,high,OBD; JTAG,True,,MT62.1; MT621
+30,DELPHI_MT92_1,Delphi,MT92.1,MT92.1,JAC,JAC K7,CAN,90,high,OBD; JTAG,True,,MT92.1; MT921
+31,DELPHI_MT80,Delphi,MT80,MT80,JAC,JAC variants,CAN,97,high,OBD,True,,MT80
+32,BOSCH_ME17_CHINA,Bosch,ME17 China,ME17 Chinese,Chery; MVM; Chinese vehicles,Arrizo 6; Chinese variants,CAN,78; 97,high,OBD; JTAG/GPT,True,,ME17; ME17-CHINA
+33,BOSCH_MED1744,Bosch,MED17.4.4,MED17.4.4 TC1793,Peugeot,Peugeot 2008,CAN,81,high,GPT/JTAG,False,,MED17.4.4; TC1793
+34,BOSCH_ME1791_KEFICO,Bosch/Kefico,ME17.9.1,ME17.9.1,Hyundai; Kia,Hyundai/Kia variants,CAN,90,high,JTAG/GPT,False,,ME17.9.1; KEFICO
+35,BOSCH_MEDG1798,Bosch/Kefico,MEDG17.9.8,MEDG17.9.8,Hyundai; Kia,Hyundai/Kia variants,CAN,90,high,JTAG/GPT,False,,MEDG17.9.8
+36,BOSCH_EDC17CV54,Bosch,EDC17CV54,EDC17CV54 TC1767,AMICO; FAW,Amico/FAW diesel,CAN,90,high,GPT/JTAG,False,,EDC17CV54; TC1767
+37,BOSCH_EDC17C53,Bosch,EDC17C53,EDC17C53,زامیاد,Zamyad diesel Euro 5,CAN,84,high,GPT/JTAG,False,,EDC17C53
+38,BOSCH_MSE6,Bosch,MSE6,MSE6,Motorcycle/Chinese,TNM-supported variants,CAN; KLINE,89,medium,GPT/JTAG,False,,MSE6
+39,BOSCH_ME17S2,Bosch,ME17S2,ME17S2,Chinese vehicles,TNM-supported variants,CAN,89,high,GPT/JTAG,False,,ME17S2
+40,BOSCH_M78,Bosch,M7.8 / M7.8.1,M7.8; M7.8.1,Brilliance; Ario; JAC; MVM; Besturn,Chinese variants,CAN,70; 98,high,OBD; JTAG,True,,M7.8; M7.8.1; ME7; M78
+41,HITACHI_MEC63770,Hitachi,MEC63-770,MEC63-770,Nissan,Murano,CAN,90,high,JTAG,False,,MEC63-770; MEC63770
+42,CONTINENTAL_JAC_S5,Continental,JAC S5,Continental JAC S5 A2-C762,JAC,JAC S5,CAN,90,high,JTAG,False,,Continental-JAC-S5; A2-C762
+43,FOTON_HJZK,HJZK,FOTON Gear HJZK,HJZK,Foton,Foton transmission,CAN,90,high,JTAG,False,,HJZK; FOTON-Gear-HJZK
+44,MAGNETI_X22,Magneti Marelli,MVM X22,MVM X22,MVM/Chery,MVM X22,CAN,79; 89,medium,OBD,True,True,MAGNETI; MARELLI; MVM-X22
+45,MAGNETI_MVM110,Magneti Marelli,MVM 110,MVM 110,MVM/Chery,MVM 110,KLINE,80,medium,OBD,True,,MVM-110; MARELLI
+46,DENSO_TOYOTA_GEN1,Denso,Toyota Gen1,Denso Toyota Gen1 CAN; Denso Toyota Gen1 K-Line,Toyota,Hilux; Camry; Hiace,CAN; KLINE,89,high,OBD; RECOVERY/JTAG,True,,DENSO; TOYOTA; HIACE; HILUX; CAMRY
+47,NISSAN_MAXIMA_KLINE,Nissan/Hitachi,Maxima K-Line,Nissan Maxima K-Line,Nissan,Maxima,KLINE,89,high,OBD; JTAG,True,,NISSAN-MAXIMA; MAXIMA
+48,SAGEM_S3000,Sagem,S3000,S3000,Renault,Megane,CAN,82; 98,high,OBD; JTAG,True,,S3000; MEGAN3000
+49,L90_CAL,Renault/Sagem,L90 Calibration,L90 gasoline; L90 automatic,Renault,L90/Tondar 90; Sandero,CAN; KLINE,97; 98,high,OBD,True,,L90; Tondar; Sandero
+50,SIEMENS_RIO,Siemens,Rio ECU,Siemens Rio,Kia,Rio,,26,manual-index,TNM_MANUAL_PROFILE_REQUIRED,False,,RIO; SIEMENS RIO
+51,SIEMENS_L90,Siemens,L90 ECU,L90 gasoline; L90 bifuel,Renault,L90/Tondar 90,,28,manual-index,OBD,True,,L90; SIEMENS L90
+52,MAGNETI_6LP202,Magneti Marelli,6LP2.02,6LP2.02,Peugeot; Citroen,Peugeot 407; Citroen C5,,29,manual-index,TNM_MANUAL_PROFILE_REQUIRED,False,,6LP2.02; 6LP202
+53,BOSCH_EDC16C39,Bosch,EDC16C39,EDC16C39,زامیاد,Zamyad diesel,CAN,41,manual-index,JTAG/BENCH,False,,EDC16C39; 16C39
+54,BOSCH_MED174,Bosch,ME/MED17.4,Bosch 17.4 TC1796,Peugeot/Citroen,PSA variants,CAN,44,manual-index,JTAG/GPT,False,,17.4; TC1796
+55,DELPHI_CRD235,Delphi,CRD-2.35,CRD-2.35,Mercedes-Benz,Sprinter,CAN,46; 95,high,JTAG,False,,CRD-2.35; CRD235; SPRINTER
+56,JAC_J5_15MT,JAC/Delphi,JAC J5 1.5MT,J5 1.5MT,JAC,JAC J5 1.5,,56,manual-index,TNM_MANUAL_PROFILE_REQUIRED,False,,J5; 1.5MT
+57,BMD_ARIO,BMD,BMD Ario,BMD Ario,Saipa/Ario,Ario,,79,manual-index,TNM_MANUAL_PROFILE_REQUIRED,False,,BMD; ARIO
+58,EF7_S2,S2/AECS,EF7-S2,S2; AECS,ایران خودرو,Dena EF7; EF7 variants,CAN,80; 95,medium,OBD; JTAG,True,,EF7-S2; S2; AECS
+59,DELPHI_LIFAN_X60,Delphi,Lifan X60 ECU,Delphi Lifan X60,Lifan,Lifan X60,CAN; KLINE,61; 85; 100,medium,OBD; JTAG,True,,LIFAN X60; X60; MT22
+60,DELPHI_MT05_BENELLI,Delphi,MT05,MT05,Benelli,Benelli motorcycle,KLINE,87,high,OBD; JTAG,True,,MT05; BENELLI
+61,PEUGEOT_206_J35,Valeo/Sagem,J35 Dual Fuel,J35,ایران خودرو; Peugeot,Peugeot 206 CNG,,36,manual-index,TNM_MANUAL_PROFILE_REQUIRED,False,,J35; 206 CNG
+62,WESTSTEEL_GAS,West Steel,Gas ECU,West Steel gas,ایران خودرو,Samand CNG,,47; 67,manual-index,BENCH/JTAG,False,,WEST STEEL; GAS; MAW
+63,LANDIRENZO_OMEGAS,Landi Renzo,Omegas,Omegas,ایران خودرو,Samand CNG,,47,manual-index,TNM_MANUAL_PROFILE_REQUIRED,False,,LANDI RENZO; OMEGAS
+64,AECS_DENA_TURBO,AECS,Dena Turbo EF7,AECS Dena Turbo,ایران خودرو,Dena Turbo,CAN,95,medium,OBD/JTAG,True,,AECS; DENA TURBO; EF7
