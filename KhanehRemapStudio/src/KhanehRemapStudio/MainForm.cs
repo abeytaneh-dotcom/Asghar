@@ -52,6 +52,7 @@ public sealed class MainForm : Form
         tool.Items.Add(new ToolStripSeparator());
         AddTool(tool,"ورود XDF/A2L",(_,_)=>ImportDefinition(),false);
         AddTool(tool,"ایندکس بانک دامپ",(_,_)=>IndexDumpFolder(),false);
+        AddTool(tool,"ایندکس RAR/ZIP/7z",(_,_)=>IndexDumpArchive(),false);
         tool.Items.Add(new ToolStripSeparator());
         AddTool(tool,"ویرایش گروهی",(_,_)=>BatchEdit(),false);
         AddTool(tool,"مقایسه",(_,_)=>Compare(),false);
@@ -223,6 +224,45 @@ public sealed class MainForm : Form
         if(d.ShowDialog(this)!=DialogResult.OK)return;
         try{Cursor=Cursors.WaitCursor;int n=_catalog.IndexFolder(d.SelectedPath,true);_bank.Text=$"بانک دامپ: {_catalog.Count:N0}";SetStatus($"بانک دامپ به‌روزرسانی شد: {n:N0} فایل جدید.");if(_doc.HasFile){_id=_catalog.Identify(_doc.Working,_doc.Sha256);_identify.Text=_id.IsExact?$"تشخیص دقیق: {_id.DisplayName}":$"نزدیک‌ترین: {_id.DisplayName} • {_id.Similarity:P0}";UpdateChecksumLabel();}}
         catch(Exception ex){MessageBox.Show(this,ex.Message,"خطای ایندکس",MessageBoxButtons.OK,MessageBoxIcon.Error);}finally{Cursor=Cursors.Default;}
+    }
+
+    private void IndexDumpArchive()
+    {
+        using var d=new OpenFileDialog
+        {
+            Title="انتخاب آرشیو بانک دامپ",
+            Filter="Archives|*.rar;*.zip;*.7z;*.001|RAR|*.rar|ZIP|*.zip|7-Zip|*.7z;*.001|All files|*.*"
+        };
+        if(d.ShowDialog(this)!=DialogResult.OK)return;
+
+        try
+        {
+            Cursor=Cursors.WaitCursor;
+            SetStatus("در حال ایندکس آرشیو دامپ‌ها...");
+            int n=_catalog.IndexArchive(d.FileName,true);
+            _bank.Text=$"بانک دامپ: {_catalog.Count:N0} • پروفایل دقیق: {_profileStore.CountProfiles():N0}";
+
+            if(_doc.HasFile)
+            {
+                _id=_catalog.Identify(_doc.Working,_doc.Sha256);
+                _identify.Text=_id.IsExact
+                    ? $"تشخیص دقیق: {_id.DisplayName}"
+                    : _id.BestCandidate!=null
+                        ? $"نزدیک‌ترین: {_id.DisplayName} • {_id.Similarity:P0}"
+                        : "تشخیص دقیق: پیدا نشد";
+                UpdateChecksumLabel();
+            }
+
+            MessageBox.Show(this,
+                $"ایندکس آرشیو تمام شد.\n\nفایل جدید: {n:N0}\nکل بانک: {_catalog.Count:N0}",
+                "بانک دامپ",MessageBoxButtons.OK,MessageBoxIcon.Information);
+            SetStatus($"آرشیو ایندکس شد: {n:N0} دامپ جدید.");
+        }
+        catch(Exception ex)
+        {
+            MessageBox.Show(this,ex.Message,"خطای ایندکس آرشیو",MessageBoxButtons.OK,MessageBoxIcon.Error);
+        }
+        finally{Cursor=Cursors.Default;}
     }
 
     private void RefreshCategories()
