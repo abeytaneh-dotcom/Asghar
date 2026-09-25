@@ -47,6 +47,18 @@ jobs:
           -p:DebugType=None
           -p:DebugSymbols=false
 
+      - name: Startup self-test
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path "KhanehRemapStudio/src/KhanehRemapStudio/bin/Release/net8.0-windows/win-x64/publish/KhanehRemapStudio.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--self-test" -PassThru -Wait
+          if ($p.ExitCode -ne 0) {
+            $log = Join-Path $env:LOCALAPPDATA "KhanehRemapStudio\startup.log"
+            if (Test-Path $log) { Get-Content $log }
+            throw "Startup self-test failed with exit code $($p.ExitCode)"
+          }
+          Write-Host "STARTUP_SELF_TEST_OK"
+
       - name: Install NSIS
         shell: pwsh
         run: choco install nsis -y --no-progress
