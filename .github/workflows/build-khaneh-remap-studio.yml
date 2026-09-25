@@ -1,0 +1,85 @@
+name: Build Khaneh Remap Studio Pro
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'KhanehRemapStudio/**'
+      - '.github/workflows/build-khaneh-remap-studio.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: khaneh-remap-studio-release
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore "KhanehRemapStudio/src/KhanehRemapStudio/KhanehRemapStudio.csproj"
+
+      - name: Build
+        shell: pwsh
+        run: dotnet build "KhanehRemapStudio/src/KhanehRemapStudio/KhanehRemapStudio.csproj" -c Release --no-restore
+
+      - name: Publish win-x64 self-contained
+        shell: pwsh
+        run: >-
+          dotnet publish "KhanehRemapStudio/src/KhanehRemapStudio/KhanehRemapStudio.csproj"
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:PublishTrimmed=false
+          -p:DebugType=None
+          -p:DebugSymbols=false
+
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis -y --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (!(Test-Path $makensis)) { $makensis = "C:\Program Files\NSIS\makensis.exe" }
+          if (!(Test-Path $makensis)) { throw "NSIS not found" }
+          Push-Location "KhanehRemapStudio/installer"
+          & $makensis "KhanehRemapStudio.nsi"
+          if ($LASTEXITCODE -ne 0) { throw "NSIS failed" }
+          Pop-Location
+
+      - name: Collect
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "KhanehRemapStudio/installer/KhanehRemapStudio-Setup-x64.exe" "dist/KhanehRemapStudio-Setup-x64.exe"
+          Copy-Item "KhanehRemapStudio/src/KhanehRemapStudio/bin/Release/net8.0-windows/win-x64/publish/KhanehRemapStudio.exe" "dist/KhanehRemapStudio-Portable-x64.exe"
+          $a=Get-FileHash "dist/KhanehRemapStudio-Setup-x64.exe" -Algorithm SHA256
+          $b=Get-FileHash "dist/KhanehRemapStudio-Portable-x64.exe" -Algorithm SHA256
+          "Setup  $($a.Hash.ToLower())" | Out-File "dist/SHA256.txt" -Encoding ascii
+          "Portable  $($b.Hash.ToLower())" | Out-File "dist/SHA256.txt" -Encoding ascii -Append
+          Get-Item "dist/KhanehRemapStudio-Setup-x64.exe" | Format-List Name,Length
+          Get-Content "dist/SHA256.txt"
+
+      - name: Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag="khaneh-remap-studio-latest"
+          gh release delete $tag --repo "$env:GITHUB_REPOSITORY" --yes --cleanup-tag 2>$null
+          gh release create $tag "dist/KhanehRemapStudio-Setup-x64.exe" "dist/KhanehRemapStudio-Portable-x64.exe" "dist/SHA256.txt" --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "Khaneh Remap Studio Pro" --notes "Professional ECU binary editor with map definitions, dump identification, checksum plugins, compare, 2D/3D and batch editing."
