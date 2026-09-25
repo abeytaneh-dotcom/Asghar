@@ -42,7 +42,7 @@ jobs:
         with:
           name: KhanehRemap-SmartOBD-v3.0.5-CLEAN-signing
           path: signing
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
           repository: abeytaneh-dotcom/Asghar
           run-id: 36186243145
 
