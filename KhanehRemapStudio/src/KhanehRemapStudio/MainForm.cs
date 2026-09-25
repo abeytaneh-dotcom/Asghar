@@ -74,7 +74,19 @@ public sealed class MainForm : Form
         header.Controls.Add(cards);header.Controls.Add(brand);Controls.Add(header);
 
         var workspace=new Panel{Dock=DockStyle.Fill,BackColor=Bg,Padding=new Padding(8)};
-        var split=new SplitContainer{Dock=DockStyle.Fill,SplitterDistance=360,SplitterWidth=6,Panel1MinSize=300,Panel2MinSize=650,BackColor=Color.FromArgb(6,11,18),RightToLeft=RightToLeft.No};
+        var split=new SplitContainer
+        {
+            Dock=DockStyle.Fill,
+            SplitterWidth=6,
+            BackColor=Color.FromArgb(6,11,18),
+            RightToLeft=RightToLeft.No
+        };
+        // Do not set SplitterDistance/Panel minimums while the control still has
+        // its tiny design-time default size; that can throw before the window opens.
+        split.Size=new Size(1200,700);
+        split.Panel1MinSize=280;
+        split.Panel2MinSize=500;
+        split.SplitterDistance=340;
 
         var leftOuter=new Panel{Dock=DockStyle.Fill,BackColor=Color.FromArgb(33,50,68),Padding=new Padding(1)};
         var left=new Panel{Dock=DockStyle.Fill,BackColor=Panel,Padding=new Padding(12)};
