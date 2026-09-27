@@ -42,6 +42,10 @@
             </intent-filter>
         </receiver>
         <activity
+            android:name=".RegistrationActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+        <activity
             android:name=".CommandEditorActivity"
             android:screenOrientation="portrait"
             android:exported="false" />
