@@ -35,6 +35,15 @@ function init_schema(PDO $db): void {
         last_seen_at TEXT
     )");
 
+    $db->exec("CREATE TABLE IF NOT EXISTS patient_ids (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        patient_id TEXT NOT NULL UNIQUE,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )");
+
     $db->exec("CREATE TABLE IF NOT EXISTS otp_codes (
         phone TEXT PRIMARY KEY,
         code_hash TEXT NOT NULL,
