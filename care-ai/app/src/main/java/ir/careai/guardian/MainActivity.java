@@ -8,7 +8,8 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
-import android.speech.tts.TextToSpeech;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -19,26 +20,28 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.util.Locale;
-
-public class MainActivity extends Activity implements TextToSpeech.OnInitListener {
+public class MainActivity extends Activity {
     private SharedPreferences prefs;
-    private TextToSpeech tts;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private boolean autoLaunchScheduled = false;
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         getWindow().getDecorView().setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         prefs = getSharedPreferences("careai", MODE_PRIVATE);
-        tts = new TextToSpeech(this, this);
         route();
     }
 
     private void route() {
         String role = prefs.getString("role", "");
-        if ("patient".equals(role)) showPatientDashboard();
-        else if ("caregiver".equals(role)) showCaregiverDashboard();
-        else showRolePicker();
+        if ("patient".equals(role)) {
+            showPatientDashboard(true);
+        } else if ("caregiver".equals(role)) {
+            showCaregiverDashboard();
+        } else {
+            showRolePicker();
+        }
     }
 
     private ScrollView shell() {
@@ -102,6 +105,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private void showRolePicker() {
+        autoLaunchScheduled = false;
+        handler.removeCallbacksAndMessages(null);
+
         ScrollView sc = shell();
         LinearLayout l = column();
         l.addView(title("Care AI"));
@@ -112,7 +118,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         l.addView(patient);
         l.addView(caregiver);
 
-        l.addView(note("این نسخه ابزار کمکی است و جایگزین پزشک، پرستار یا تجهیزات پزشکی تأییدشده نیست."));
+        l.addView(note("پس از تنظیم بیمار، Care Mode می‌تواند بدون لمس و فقط با چشم و پلک کنترل شود."));
 
         patient.setOnClickListener(v -> showPatientSetup());
         caregiver.setOnClickListener(v -> showCaregiverSetup());
@@ -122,6 +128,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private void showPatientSetup() {
+        autoLaunchScheduled = false;
+        handler.removeCallbacksAndMessages(null);
+
         ScrollView sc = shell();
         LinearLayout l = column();
         l.addView(title("تنظیم بیمار"));
@@ -157,15 +166,21 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             prefs.edit()
                     .putString("role", "patient")
                     .putString("patient_name",
-                            name.getText().toString().trim().isEmpty() ? "بیمار" : name.getText().toString().trim())
+                            name.getText().toString().trim().isEmpty()
+                                    ? "بیمار"
+                                    : name.getText().toString().trim())
                     .putString("patient_phone", own.getText().toString().trim())
                     .putString("trusted1", t1.getText().toString().trim())
                     .putString("trusted2", t2.getText().toString().trim())
                     .putString("trusted3", t3.getText().toString().trim())
                     .apply();
 
-            requestCorePermissions();
-            showPatientDashboard();
+            if (checkSelfPermission(Manifest.permission.CAMERA)
+                    != PackageManager.PERMISSION_GRANTED) {
+                requestCorePermissions();
+            } else {
+                launchCareMode(false);
+            }
         });
 
         sc.addView(l);
@@ -173,6 +188,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private void showCaregiverSetup() {
+        autoLaunchScheduled = false;
+        handler.removeCallbacksAndMessages(null);
+
         ScrollView sc = shell();
         LinearLayout l = column();
         l.addView(title("تنظیم همراه"));
@@ -191,7 +209,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         l.addView(note("در نسخه سروری، شماره همراه با OTP و شناسه دستگاه با بیمار جفت می‌شود."));
 
         save.setOnClickListener(v -> {
-            if (own.getText().toString().trim().isEmpty() || patient.getText().toString().trim().isEmpty()) {
+            if (own.getText().toString().trim().isEmpty()
+                    || patient.getText().toString().trim().isEmpty()) {
                 Toast.makeText(this, "شماره همراه و بیمار را وارد کنید", Toast.LENGTH_LONG).show();
                 return;
             }
@@ -209,42 +228,33 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         setContentView(sc);
     }
 
-    private void showPatientDashboard() {
+    private void showPatientDashboard(boolean autoStart) {
         ScrollView sc = shell();
         LinearLayout l = column();
 
         String name = prefs.getString("patient_name", "بیمار");
         l.addView(title("Care AI — " + name));
-        l.addView(note("حالت بیمار فعال است • مخاطبان اضطراری از تنظیمات خوانده می‌شوند"));
+        l.addView(note(
+                "حالت چشم فعال است: گزینه‌ها خودکار حرکت می‌کنند و بستن ارادی چشم‌ها حدود ۰٫۶ تا ۱٫۶ ثانیه، گزینه را انتخاب می‌کند."
+        ));
 
-        Button monitor = button("شروع پایش با دوربین جلو");
+        Button monitor = button("شروع Care Mode چشمی");
+        Button talk = button("صحبت با من — کنترل با چشم");
         Button sos = button("SOS — درخواست کمک فوری");
-        Button speak = button("صحبت با من");
         Button settings = button("ویرایش شماره‌های اضطراری");
         Button reset = button("خروج از حالت بیمار");
 
         l.addView(monitor);
+        l.addView(talk);
         l.addView(sos);
-        l.addView(speak);
         l.addView(settings);
         l.addView(reset);
 
-        monitor.setOnClickListener(v -> {
-            if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                requestCorePermissions();
-            } else {
-                startActivity(new Intent(this, CameraMonitorActivity.class));
-            }
-        });
-
+        monitor.setOnClickListener(v -> launchCareMode(false));
+        talk.setOnClickListener(v -> launchCareMode(true));
         sos.setOnClickListener(v ->
                 EmergencyManager.sendEmergency(this, "درخواست مستقیم بیمار", true));
-
-        speak.setOnClickListener(v ->
-                speak("من اینجا هستم. اگر کمک می‌خواهید دکمه درخواست کمک را انتخاب کنید."));
-
         settings.setOnClickListener(v -> showPatientSetup());
-
         reset.setOnClickListener(v -> {
             prefs.edit().remove("role").apply();
             showRolePicker();
@@ -252,9 +262,25 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
         sc.addView(l);
         setContentView(sc);
+
+        if (autoStart && !autoLaunchScheduled) {
+            autoLaunchScheduled = true;
+            handler.postDelayed(() -> {
+                if (isFinishing()) return;
+                if (checkSelfPermission(Manifest.permission.CAMERA)
+                        == PackageManager.PERMISSION_GRANTED) {
+                    launchCareMode(false);
+                } else {
+                    requestCorePermissions();
+                }
+            }, 2500L);
+        }
     }
 
     private void showCaregiverDashboard() {
+        autoLaunchScheduled = false;
+        handler.removeCallbacksAndMessages(null);
+
         ScrollView sc = shell();
         LinearLayout l = column();
 
@@ -264,7 +290,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
         Button call = button("تماس تلفنی با بیمار");
         Button sms = button("ارسال پیام به بیمار");
-        Button video = button("تماس تصویری امن — نیازمند سرور M2");
+        Button video = button("تماس تصویری امن — نیازمند سرور");
         Button reset = button("تغییر نقش");
 
         l.addView(call);
@@ -281,9 +307,11 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                         Uri.parse("smsto:" + Uri.encode(patient)))));
 
         video.setOnClickListener(v ->
-                Toast.makeText(this,
-                        "WebRTC و Push در نسخه M2 پس از اتصال سرور فعال می‌شود.",
-                        Toast.LENGTH_LONG).show());
+                Toast.makeText(
+                        this,
+                        "WebRTC و Push پس از اتصال سرور فعال می‌شود.",
+                        Toast.LENGTH_LONG
+                ).show());
 
         reset.setOnClickListener(v -> {
             prefs.edit().remove("role").apply();
@@ -294,38 +322,53 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         setContentView(sc);
     }
 
-    private void requestCorePermissions() {
-        String[] perms = new String[]{
-                Manifest.permission.CAMERA,
-                Manifest.permission.SEND_SMS,
-                Manifest.permission.CALL_PHONE
-        };
-        requestPermissions(perms, 100);
+    private void launchCareMode(boolean talkMode) {
+        if (checkSelfPermission(Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestCorePermissions();
+            return;
+        }
+
+        Intent i = new Intent(this, CameraMonitorActivity.class);
+        i.putExtra("talk_mode", talkMode);
+        startActivity(i);
     }
 
-    private void speak(String s) {
-        if (tts != null) {
-            tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, "careai");
-        }
+    private void requestCorePermissions() {
+        requestPermissions(
+                new String[]{
+                        Manifest.permission.CAMERA,
+                        Manifest.permission.SEND_SMS,
+                        Manifest.permission.CALL_PHONE
+                },
+                100
+        );
     }
 
     @Override
-    public void onInit(int status) {
-        if (status == TextToSpeech.SUCCESS) {
-            tts.setLanguage(new Locale("fa", "IR"));
+    public void onRequestPermissionsResult(
+            int requestCode,
+            String[] permissions,
+            int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == 100
+                && checkSelfPermission(Manifest.permission.CAMERA)
+                == PackageManager.PERMISSION_GRANTED
+                && "patient".equals(prefs.getString("role", ""))) {
+            launchCareMode(false);
         }
     }
 
     @Override
     protected void onDestroy() {
-        if (tts != null) {
-            tts.stop();
-            tts.shutdown();
-        }
+        handler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
 
     private int dp(int v) {
-        return (int) (v * getResources().getDisplayMetrics().density + 0.5f);
+        return (int) (
+                v * getResources().getDisplayMetrics().density + 0.5f
+        );
     }
 }
