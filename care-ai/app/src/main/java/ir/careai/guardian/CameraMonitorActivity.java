@@ -399,64 +399,30 @@ public class CameraMonitorActivity extends Activity
         speak(reason + ". دوباره مستقیم به صفحه نگاه کنید.");
     }
 
-    private List<Prompt> currentPrompts() {
-        ArrayList<Prompt> out = new ArrayList<>();
-
-        // اکشن‌های واقعی همیشه اول چرخه هستند تا در هر حالت قابل دسترسی باشند.
-        for (int i = 1; i <= 3; i++) {
-            String number = prefs.getString("trusted" + i, "").trim();
-            if (!number.isEmpty()) {
-                String name = prefs.getString("trusted_name" + i, "").trim();
-                if (name.isEmpty()) name = "همراه " + i;
-                out.add(new Prompt(
-                        "می‌خواهی به " + name + " زنگ بزنم؟",
-                        name,
-                        ACTION_CALL,
-                        number
-                ));
+    private List<CommandStore.Command> currentCommands() {
+        ArrayList<CommandStore.Command> out = new ArrayList<>();
+        for (CommandStore.Command cmd : CommandStore.load(this)) {
+            if (cmd.enabled
+                    && cmd.question != null
+                    && !cmd.question.trim().isEmpty()) {
+                out.add(cmd);
             }
         }
-
-        out.add(new Prompt(
-                "می‌خواهی برات ویدیو پخش کنم؟",
-                "ویدیو",
-                ACTION_VIDEO,
-                ""
-        ));
-
-        out.add(new Prompt(
-                "می‌خواهی برات آهنگ پخش کنم؟",
-                "آهنگ",
-                ACTION_AUDIO,
-                ""
-        ));
-
-        // ارتباط و نیازهای روزمره
-        out.add(new Prompt("می‌خواهی صحبت کنی؟", "", ACTION_TALK_MODE, ""));
-        out.add(new Prompt("بله؟", "بله", ACTION_SPEAK, ""));
-        out.add(new Prompt("خیر؟", "خیر", ACTION_SPEAK, ""));
-        out.add(new Prompt("آب می‌خواهی؟", "آب می‌خواهم", ACTION_SPEAK, ""));
-        out.add(new Prompt("غذا می‌خواهی؟", "غذا می‌خواهم", ACTION_SPEAK, ""));
-        out.add(new Prompt("درد داری؟", "درد دارم", ACTION_SPEAK, ""));
-        out.add(new Prompt("دستشویی می‌خواهی؟", "دستشویی می‌خواهم", ACTION_SPEAK, ""));
-        out.add(new Prompt("سردت است؟", "سردم است", ACTION_SPEAK, ""));
-        out.add(new Prompt("گرمت است؟", "گرمم است", ACTION_SPEAK, ""));
-        out.add(new Prompt("کمک فوری می‌خواهی؟", "", ACTION_EMERGENCY, ""));
-
-        if (talkMode) {
-            out.add(new Prompt("از حالت صحبت خارج شویم؟", "", ACTION_BACK, ""));
-        }
-
         return out;
     }
 
     private void showPrompt(int index) {
         if (calibrationStage != 2 || mediaMode || sleepMode) return;
 
-        List<Prompt> prompts = currentPrompts();
-        if (prompts.isEmpty()) return;
+        List<CommandStore.Command> commands = currentCommands();
+        if (commands.isEmpty()) {
+            modeState.setText("Care Mode");
+            promptText.setText("هیچ دستور فعالی ثبت نشده است");
+            instruction.setText("از بخش مدیریت دستورات، فرمان اضافه کنید");
+            return;
+        }
 
-        promptIndex = (index + prompts.size()) % prompts.size();
+        promptIndex = (index + commands.size()) % commands.size();
 
         handler.removeCallbacks(promptTimeout);
         handler.removeCallbacks(countdown);
@@ -468,23 +434,17 @@ public class CameraMonitorActivity extends Activity
         blinkCount = 0;
         firstBlinkAt = 0L;
 
-        Prompt p = prompts.get(promptIndex);
+        CommandStore.Command cmd = commands.get(promptIndex);
 
         panel.setVisibility(View.VISIBLE);
         setPanelFull();
         promptText.setBackgroundColor(0xFF1A5688);
-        String category;
-        if (p.action == ACTION_CALL) category = "تماس تلفنی";
-        else if (p.action == ACTION_VIDEO) category = "پخش ویدیو";
-        else if (p.action == ACTION_AUDIO) category = "پخش موسیقی";
-        else if (p.action == ACTION_EMERGENCY) category = "کمک اضطراری";
-        else category = talkMode ? "ارتباط با بیمار" : "Care Mode";
 
-        modeState.setText(category + " • دو پلک = اجرا");
-        promptText.setText(p.question);
+        modeState.setText(CommandStore.actionLabel(cmd.action) + " • دو پلک = اجرا");
+        promptText.setText(cmd.question);
         faceState.setText("در حال انتظار برای تصمیم بیمار");
 
-        speak(p.question);
+        speak(cmd.question);
 
         handler.postDelayed(promptTimeout, PROMPT_DURATION_MS);
         handler.post(countdown);
@@ -503,8 +463,8 @@ public class CameraMonitorActivity extends Activity
         lastActionAt = now;
 
         faceState.setText("نگاه راست تشخیص داده شد • رد شد");
-        speak("باشه. سؤال بعدی.");
-        advancePrompt(900L);
+        speak("باشه");
+        advancePrompt(650L);
     }
 
     private void confirmCurrentByDoubleBlink() {
@@ -515,75 +475,85 @@ public class CameraMonitorActivity extends Activity
             return;
         }
 
-        if (sleepMode || now - lastActionAt < 1200L) return;
+        if (sleepMode || now - lastActionAt < 900L) return;
         lastActionAt = now;
 
         handler.removeCallbacks(promptTimeout);
         handler.removeCallbacks(countdown);
 
-        List<Prompt> prompts = currentPrompts();
-        if (promptIndex < 0 || promptIndex >= prompts.size()) return;
+        List<CommandStore.Command> commands = currentCommands();
+        if (promptIndex < 0 || promptIndex >= commands.size()) return;
 
-        Prompt p = prompts.get(promptIndex);
+        CommandStore.Command cmd = commands.get(promptIndex);
+        String resultText =
+                cmd.output == null || cmd.output.trim().isEmpty()
+                        ? cmd.question
+                        : cmd.output.trim();
 
         promptText.setBackgroundColor(0xFF1E7A46);
-        promptText.setText("✓ فرمان دریافت شد");
-        faceState.setText("دو پلک تأیید شد • در حال اجرای فرمان واقعی");
+        promptText.setText("✓ " + resultText);
+        faceState.setText("فرمان تأیید شد • صدا و پیامک در حال ارسال");
 
-        if (p.action == ACTION_TALK_MODE) {
-            talkMode = true;
-            speak("تأیید شد. حالت صحبت را فعال می‌کنم.");
-            handler.postDelayed(() -> showPrompt(0), 3800L);
+        // هر فرمان همیشه دو خروجی پایه دارد:
+        // ۱) پخش صوتی متن نتیجه
+        // ۲) ارسال همان متن به تمام شماره‌های اضطراری
+        speak(resultText);
+        EmergencyManager.notifyTrusted(this, resultText);
+
+        if (CommandStore.ACTION_CALL_1.equals(cmd.action)
+                || CommandStore.ACTION_CALL_2.equals(cmd.action)
+                || CommandStore.ACTION_CALL_3.equals(cmd.action)) {
+
+            int slot = CommandStore.ACTION_CALL_1.equals(cmd.action)
+                    ? 1
+                    : (CommandStore.ACTION_CALL_2.equals(cmd.action) ? 2 : 3);
+
+            String number = prefs.getString("trusted" + slot, "").trim();
+            String name = prefs.getString("trusted_name" + slot, "").trim();
+            if (name.isEmpty()) name = "همراه " + slot;
+
+            if (number.isEmpty()) {
+                faceState.setText("شماره همراه " + slot + " ثبت نشده است");
+                handler.postDelayed(() -> showPrompt(promptIndex + 1), 2600L);
+                return;
+            }
+
+            promptText.setText("☎ " + resultText);
+            final String finalNumber = number;
+            handler.postDelayed(() -> placeSpeakerCall(finalNumber), 900L);
             return;
         }
 
-        if (p.action == ACTION_BACK) {
-            talkMode = false;
-            speak("تأیید شد. به منوی اصلی برمی‌گردیم.");
-            handler.postDelayed(() -> showPrompt(0), 3800L);
+        if (CommandStore.ACTION_VIDEO.equals(cmd.action)) {
+            promptText.setText("▶ " + resultText);
+            handler.postDelayed(this::playLatestVideo, 1200L);
             return;
         }
 
-        if (p.action == ACTION_EMERGENCY) {
+        if (CommandStore.ACTION_AUDIO.equals(cmd.action)) {
+            promptText.setText("♫ " + resultText);
+            handler.postDelayed(this::playLatestAudio, 1200L);
+            return;
+        }
+
+        if (CommandStore.ACTION_EMERGENCY.equals(cmd.action)) {
             promptText.setBackgroundColor(0xFF9B1C31);
-            promptText.setText("✓ کمک فوری ارسال شد");
-            speak("تأیید شد. درخواست کمک فوری را ارسال می‌کنم.");
-            EmergencyManager.sendEmergency(
-                    this,
-                    "درخواست کمک با دو پلک بیمار",
-                    true
-            );
-            handler.postDelayed(() -> showPrompt(promptIndex + 1), 5000L);
+            promptText.setText("⚠ " + resultText);
+
+            String number = prefs.getString("trusted1", "").trim();
+            if (!number.isEmpty()) {
+                handler.postDelayed(() -> placeSpeakerCall(number), 1000L);
+            } else {
+                handler.postDelayed(() -> showPrompt(promptIndex + 1), 3200L);
+            }
             return;
         }
 
-        if (p.action == ACTION_CALL) {
-            promptText.setText("☎ در حال تماس با " + p.output);
-            faceState.setText("در حال ارسال فرمان تماس به سیستم تلفن");
-            speak("تأیید شد. الان به " + p.output + " زنگ می‌زنم و تماس را روی بلندگو می‌گذارم.");
-            handler.postDelayed(() -> placeSpeakerCall(p.data), 700L);
-            return;
-        }
-
-        if (p.action == ACTION_VIDEO) {
-            promptText.setText("▶ در حال باز کردن ویدیو");
-            faceState.setText("فرمان پخش ویدیو اجرا شد");
-            speak("تأیید شد. الان ویدیو را پخش می‌کنم.");
-            handler.postDelayed(this::playLatestVideo, 1100L);
-            return;
-        }
-
-        if (p.action == ACTION_AUDIO) {
-            promptText.setText("♫ در حال پخش آهنگ");
-            faceState.setText("فرمان پخش موسیقی اجرا شد");
-            speak("تأیید شد. الان آهنگ را پخش می‌کنم.");
-            handler.postDelayed(this::playLatestAudio, 1100L);
-            return;
-        }
-
-        promptText.setText("✓ " + p.output);
-        speak("تأیید شد. " + p.output);
-        handler.postDelayed(() -> showPrompt(promptIndex + 1), 4500L);
+        // فرمان اعلامی: بعد از صوت و پیامک، به فرمان بعدی می‌رود.
+        handler.postDelayed(
+                () -> showPrompt(promptIndex + 1),
+                4200L
+        );
     }
 
     private void initCallStateMonitor() {
@@ -1596,17 +1566,4 @@ public class CameraMonitorActivity extends Activity
         );
     }
 
-    private static final class Prompt {
-        final String question;
-        final String output;
-        final int action;
-        final String data;
-
-        Prompt(String question, String output, int action, String data) {
-            this.question = question;
-            this.output = output;
-            this.action = action;
-            this.data = data;
-        }
-    }
 }
