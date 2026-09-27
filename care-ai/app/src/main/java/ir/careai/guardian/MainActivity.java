@@ -235,7 +235,7 @@ public class MainActivity extends Activity {
         String name = prefs.getString("patient_name", "بیمار");
         l.addView(title("Care AI — " + name));
         l.addView(note(
-                "حالت چشم فعال است: گزینه‌ها خودکار حرکت می‌کنند و بستن ارادی چشم‌ها حدود ۰٫۶ تا ۱٫۶ ثانیه، گزینه را انتخاب می‌کند."
+                "کنترل چشمی فعال است: هر سؤال زمان کافی روی صفحه می‌ماند؛ بستن ارادی چشم‌ها یعنی تأیید و نگاه به راست یعنی رد و رفتن به سؤال بعدی."
         ));
 
         Button monitor = button("شروع Care Mode چشمی");
