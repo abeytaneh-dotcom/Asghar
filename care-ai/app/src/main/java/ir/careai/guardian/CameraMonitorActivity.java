@@ -12,6 +12,8 @@ import android.graphics.Color;
 import android.graphics.SurfaceTexture;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
+import android.media.AudioManager;
+import android.media.AudioDeviceInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -594,7 +596,28 @@ public class CameraMonitorActivity extends Activity
                     Uri.fromParts("tel", number, null),
                     extras
             );
+
+            handler.postDelayed(() -> {
+                try {
+                    AudioManager am =
+                            (AudioManager) getSystemService(AUDIO_SERVICE);
+
+                    if (Build.VERSION.SDK_INT >= 31) {
+                        for (AudioDeviceInfo d : am.getAvailableCommunicationDevices()) {
+                            if (d.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                                am.setCommunicationDevice(d);
+                                break;
+                            }
+                        }
+                    } else {
+                        am.setMode(AudioManager.MODE_IN_COMMUNICATION);
+                        am.setSpeakerphoneOn(true);
+                    }
+                } catch (Exception ignored) {}
+            }, 1200L);
+
         } catch (Exception e) {
+            faceState.setText("تماس برقرار نشد: " + e.getClass().getSimpleName());
             speak("تماس برقرار نشد.");
         }
     }
