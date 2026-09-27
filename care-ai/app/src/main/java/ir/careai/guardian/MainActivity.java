@@ -280,8 +280,7 @@ public class MainActivity extends Activity {
             autoLaunchScheduled = true;
             handler.postDelayed(() -> {
                 if (isFinishing()) return;
-                if (checkSelfPermission(Manifest.permission.CAMERA)
-                        == PackageManager.PERMISSION_GRANTED) {
+                if (allCorePermissionsGranted()) {
                     launchCareMode(false);
                 } else {
                     requestCorePermissions();
@@ -345,6 +344,26 @@ public class MainActivity extends Activity {
         Intent i = new Intent(this, CameraMonitorActivity.class);
         i.putExtra("talk_mode", talkMode);
         startActivity(i);
+    }
+
+    private boolean allCorePermissionsGranted() {
+        if (checkSelfPermission(Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) return false;
+
+        if (checkSelfPermission(Manifest.permission.CALL_PHONE)
+                != PackageManager.PERMISSION_GRANTED) return false;
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO)
+                    != PackageManager.PERMISSION_GRANTED) return false;
+            if (checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO)
+                    != PackageManager.PERMISSION_GRANTED) return false;
+        } else {
+            if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) return false;
+        }
+
+        return true;
     }
 
     private void requestCorePermissions() {
