@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Environment;
@@ -14,79 +13,151 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
 public final class UpdateManager {
-    public static final String UPDATE_URL =
+
+    private static final String FALLBACK_UPDATE_URL =
             "https://raw.githubusercontent.com/abeytaneh-dotcom/Asghar/care-ai-eye-m2/dist/update.json";
 
     private UpdateManager() {}
 
     public static void check(Activity activity, boolean manual) {
         new Thread(() -> {
-            try {
-                HttpURLConnection con =
-                        (HttpURLConnection) new URL(UPDATE_URL).openConnection();
-                con.setConnectTimeout(7000);
-                con.setReadTimeout(7000);
-                con.setRequestProperty("Cache-Control", "no-cache");
+            JSONObject info = fetchFromAdminServer();
 
-                int code = con.getResponseCode();
-                if (code < 200 || code >= 300) {
-                    throw new Exception("HTTP " + code);
+            if (info == null || info.optInt("version_code", 0) <= 0) {
+                info = fetchFallback();
+            }
+
+            JSONObject finalInfo = info;
+
+            activity.runOnUiThread(() -> {
+                if (finalInfo == null) {
+                    if (manual) {
+                        Toast.makeText(
+                                activity,
+                                "بررسی بروزرسانی انجام نشد.",
+                                Toast.LENGTH_LONG
+                        ).show();
+                    }
+                    return;
                 }
 
-                BufferedReader br =
-                        new BufferedReader(new InputStreamReader(con.getInputStream()));
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = br.readLine()) != null) sb.append(line);
-                br.close();
-                con.disconnect();
-
-                JSONObject o = new JSONObject(sb.toString());
-                int latest = o.optInt("version_code", 0);
-                String versionName = o.optString("version_name", "");
-                String apkUrl = o.optString("apk_url", "");
-                String notes = o.optString("notes", "نسخه جدید Care AI آماده است.");
+                int latest = finalInfo.optInt("version_code", 0);
+                String versionName = finalInfo.optString("version_name", "");
+                String apkUrl = finalInfo.optString("apk_url", "");
+                String notes = finalInfo.optString(
+                        "notes",
+                        "نسخه جدید Care AI آماده است."
+                );
 
                 SharedPreferences p =
                         activity.getSharedPreferences("careai", Context.MODE_PRIVATE);
+
                 int downloaded = p.getInt("downloaded_update_version", 0);
 
-                activity.runOnUiThread(() -> {
-                    if (latest > BuildConfig.VERSION_CODE
-                            && latest > downloaded
-                            && !apkUrl.isEmpty()) {
-                        showUpdateDialog(
-                                activity,
-                                latest,
-                                versionName,
-                                apkUrl,
-                                notes
-                        );
-                    } else if (manual) {
-                        Toast.makeText(
-                                activity,
-                                "آخرین نسخه روی گوشی نصب است.",
-                                Toast.LENGTH_SHORT
-                        ).show();
-                    }
-                });
+                if (latest > BuildConfig.VERSION_CODE
+                        && latest > downloaded
+                        && !apkUrl.trim().isEmpty()) {
 
-            } catch (Exception e) {
-                if (manual) {
-                    activity.runOnUiThread(() ->
-                            Toast.makeText(
-                                    activity,
-                                    "بررسی بروزرسانی انجام نشد. اینترنت را بررسی کنید.",
-                                    Toast.LENGTH_LONG
-                            ).show()
+                    showUpdateDialog(
+                            activity,
+                            latest,
+                            versionName,
+                            apkUrl,
+                            notes
                     );
+
+                } else if (manual) {
+                    Toast.makeText(
+                            activity,
+                            "آخرین نسخه روی گوشی نصب است.",
+                            Toast.LENGTH_SHORT
+                    ).show();
                 }
-            }
+            });
         }).start();
+    }
+
+    private static JSONObject fetchFromAdminServer() {
+        HttpURLConnection con = null;
+
+        try {
+            con = (HttpURLConnection) new URL(AuthManager.API_URL).openConnection();
+            con.setConnectTimeout(7000);
+            con.setReadTimeout(7000);
+            con.setRequestMethod("POST");
+            con.setDoOutput(true);
+            con.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            con.setRequestProperty("Accept", "application/json");
+
+            JSONObject req = new JSONObject();
+            req.put("action", "update_check");
+
+            byte[] body = req.toString().getBytes(StandardCharsets.UTF_8);
+            try (OutputStream os = con.getOutputStream()) {
+                os.write(body);
+            }
+
+            int status = con.getResponseCode();
+            if (status < 200 || status >= 300) return null;
+
+            BufferedReader br =
+                    new BufferedReader(new InputStreamReader(
+                            con.getInputStream(),
+                            StandardCharsets.UTF_8
+                    ));
+
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+            br.close();
+
+            JSONObject result = new JSONObject(sb.toString());
+            if (!result.optBoolean("ok", false)) return null;
+            return result;
+
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (con != null) con.disconnect();
+        }
+    }
+
+    private static JSONObject fetchFallback() {
+        HttpURLConnection con = null;
+
+        try {
+            con = (HttpURLConnection) new URL(FALLBACK_UPDATE_URL).openConnection();
+            con.setConnectTimeout(7000);
+            con.setReadTimeout(7000);
+            con.setRequestProperty("Cache-Control", "no-cache");
+
+            int code = con.getResponseCode();
+            if (code < 200 || code >= 300) return null;
+
+            BufferedReader br =
+                    new BufferedReader(new InputStreamReader(
+                            con.getInputStream(),
+                            StandardCharsets.UTF_8
+                    ));
+
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+            br.close();
+
+            return new JSONObject(sb.toString());
+
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (con != null) con.disconnect();
+        }
     }
 
     private static void showUpdateDialog(
@@ -103,11 +174,17 @@ public final class UpdateManager {
                                 ? ""
                                 : "نسخه " + versionName + "\n\n")
                                 + notes
-                                + "\n\nبا دانلود بروزرسانی، اطلاعات و دستورات ذخیره‌شده شما حذف نمی‌شوند."
+                                + "\n\nاطلاعات بیمار، دستورات و تنظیمات قبلی حفظ می‌شوند."
                 )
                 .setNegativeButton("بعداً", null)
-                .setPositiveButton("دانلود مستقیم", (d, w) ->
-                        startDownload(activity, versionCode, versionName, apkUrl)
+                .setPositiveButton(
+                        "دانلود مستقیم",
+                        (d, w) -> startDownload(
+                                activity,
+                                versionCode,
+                                versionName,
+                                apkUrl
+                        )
                 )
                 .show();
     }
