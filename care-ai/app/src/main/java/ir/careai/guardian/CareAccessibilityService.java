@@ -83,9 +83,21 @@ public class CareAccessibilityService extends AccessibilityService {
         if (instance == null) return;
 
         instance.handler.postDelayed(() -> {
-            if (!instance.clickReelsNode()) {
-                instance.handler.postDelayed(instance::clickReelsNode, 1200L);
-            }
+            if (instance.clickReelsNode()) return;
+
+            instance.handler.postDelayed(() -> {
+                if (instance.clickReelsNode()) return;
+
+                try {
+                    Intent i = new Intent(
+                            Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://www.instagram.com/reels/")
+                    );
+                    i.setPackage("com.instagram.android");
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    instance.startActivity(i);
+                } catch (Exception ignored) {}
+            }, 1200L);
         }, 1100L);
     }
 
