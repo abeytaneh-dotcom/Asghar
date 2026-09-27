@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.PictureInPictureParams;
 import android.content.ContentUris;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -1688,6 +1689,25 @@ public class CameraMonitorActivity extends Activity
                     callInProgress = false;
                     releaseSpeakerRoute();
                     returnFromCall();
+                }
+            } catch (Exception ignored) {}
+        }
+    }
+
+    @Override
+    protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+
+        if (calibrationStage == 2
+                && !isFinishing()
+                && Build.VERSION.SDK_INT >= 26) {
+            try {
+                if (!isInPictureInPictureMode()) {
+                    PictureInPictureParams params =
+                            new PictureInPictureParams.Builder()
+                                    .setAspectRatio(new Rational(9, 16))
+                                    .build();
+                    enterPictureInPictureMode(params);
                 }
             } catch (Exception ignored) {}
         }
