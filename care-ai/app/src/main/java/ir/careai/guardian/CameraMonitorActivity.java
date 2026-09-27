@@ -492,13 +492,19 @@ public class CameraMonitorActivity extends Activity
 
         promptText.setBackgroundColor(0xFF1E7A46);
         promptText.setText("✓ " + resultText);
-        faceState.setText("فرمان تأیید شد • صدا و پیامک در حال ارسال");
+        faceState.setText(
+                cmd.notifyContacts
+                        ? "فرمان تأیید شد • پخش صوتی و اطلاع‌رسانی"
+                        : "فرمان تأیید شد • در حال اجرای دستور"
+        );
 
-        // هر فرمان همیشه دو خروجی پایه دارد:
-        // ۱) پخش صوتی متن نتیجه
-        // ۲) ارسال همان متن به تمام شماره‌های اضطراری
+        // همه فرمان‌ها پاسخ صوتی دارند.
         speak(resultText);
-        EmergencyManager.notifyTrusted(this, resultText);
+
+        // فقط فرمان‌های اطلاع‌رسانی/اضطراری برای مخاطبان SMS می‌فرستند.
+        if (cmd.notifyContacts) {
+            EmergencyManager.notifyTrusted(this, resultText);
+        }
 
         if (CommandStore.ACTION_CALL_1.equals(cmd.action)
                 || CommandStore.ACTION_CALL_2.equals(cmd.action)
