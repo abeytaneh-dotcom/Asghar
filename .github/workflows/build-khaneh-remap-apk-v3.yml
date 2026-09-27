@@ -7,6 +7,7 @@ on:
     paths:
       - apk-v3-src.zip.b64
       - .github/workflows/build-khaneh-remap-apk-v3.yml
+      - patch-no-url-update-v309.py
 
 jobs:
   build:
