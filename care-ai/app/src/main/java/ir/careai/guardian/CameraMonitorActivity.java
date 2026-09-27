@@ -2,23 +2,24 @@ package ir.careai.guardian;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ContentUris;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.SurfaceTexture;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
-import android.hardware.camera2.CameraCaptureSession;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraDevice;
-import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CaptureRequest;
+import android.media.AudioAttributes;
+import android.media.MediaPlayer;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.MediaStore;
 import android.speech.tts.TextToSpeech;
+import android.telecom.TelecomManager;
 import android.view.Gravity;
 import android.view.Surface;
 import android.view.TextureView;
@@ -28,6 +29,17 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.VideoView;
+
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.hardware.camera2.CameraCaptureSession;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraDevice;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CaptureRequest;
 
 import com.google.mediapipe.framework.image.BitmapImageBuilder;
 import com.google.mediapipe.framework.image.MPImage;
@@ -37,6 +49,7 @@ import com.google.mediapipe.tasks.vision.core.RunningMode;
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker;
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -50,47 +63,31 @@ public class CameraMonitorActivity extends Activity
     private static final long PROMPT_DURATION_MS = 20000L;
     private static final long READING_LOCK_MS = 4000L;
     private static final long RIGHT_GAZE_HOLD_MS = 1000L;
-    private static final long BLINK_MIN_MS = 700L;
-    private static final long BLINK_MAX_MS = 3000L;
+
+    private static final long BLINK_MIN_MS = 90L;
+    private static final long BLINK_MAX_MS = 750L;
+    private static final long DOUBLE_BLINK_WINDOW_MS = 1800L;
+    private static final long SLEEP_HOLD_MS = 6000L;
+    private static final long WAKE_OPEN_MS = 1800L;
 
     private static final int ACTION_SPEAK = 0;
     private static final int ACTION_TALK_MODE = 1;
     private static final int ACTION_EMERGENCY = 2;
     private static final int ACTION_BACK = 3;
+    private static final int ACTION_CALL = 4;
+    private static final int ACTION_VIDEO = 5;
+    private static final int ACTION_AUDIO = 6;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService visionExecutor = Executors.newSingleThreadExecutor();
 
-    private final Prompt[] mainPrompts = new Prompt[] {
-            new Prompt("می‌خواهی صحبت کنی؟", "", ACTION_TALK_MODE),
-            new Prompt("آب می‌خواهی؟", "آب می‌خواهم", ACTION_SPEAK),
-            new Prompt("درد داری؟", "درد دارم", ACTION_SPEAK),
-            new Prompt("دستشویی می‌خواهی؟", "دستشویی می‌خواهم", ACTION_SPEAK),
-            new Prompt("سردت است؟", "سردم است", ACTION_SPEAK),
-            new Prompt("گرمت است؟", "گرمم است", ACTION_SPEAK),
-            new Prompt("کسی از خانواده را می‌خواهی؟", "خانواده‌ام را می‌خواهم", ACTION_SPEAK),
-            new Prompt("کمک فوری می‌خواهی؟", "", ACTION_EMERGENCY)
-    };
-
-    private final Prompt[] talkPrompts = new Prompt[] {
-            new Prompt("بله؟", "بله", ACTION_SPEAK),
-            new Prompt("خیر؟", "خیر", ACTION_SPEAK),
-            new Prompt("آب می‌خواهی؟", "آب می‌خواهم", ACTION_SPEAK),
-            new Prompt("غذا می‌خواهی؟", "غذا می‌خواهم", ACTION_SPEAK),
-            new Prompt("درد داری؟", "درد دارم", ACTION_SPEAK),
-            new Prompt("سرت درد می‌کند؟", "سرم درد می‌کند", ACTION_SPEAK),
-            new Prompt("قفسه سینه‌ات درد می‌کند؟", "قفسه سینه‌ام درد می‌کند", ACTION_SPEAK),
-            new Prompt("دستشویی می‌خواهی؟", "دستشویی می‌خواهم", ACTION_SPEAK),
-            new Prompt("سردت است؟", "سردم است", ACTION_SPEAK),
-            new Prompt("گرمت است؟", "گرمم است", ACTION_SPEAK),
-            new Prompt("خانواده‌ات را می‌خواهی؟", "خانواده‌ام را می‌خواهم", ACTION_SPEAK),
-            new Prompt("برگردیم به منوی اصلی؟", "", ACTION_BACK)
-    };
-
     private TextureView texture;
+    private FrameLayout root;
+    private LinearLayout panel;
+    private VideoView videoView;
+
     private CameraDevice camera;
     private CameraCaptureSession session;
-
     private FaceLandmarker faceLandmarker;
     private boolean processingFrame = false;
 
@@ -102,6 +99,8 @@ public class CameraMonitorActivity extends Activity
     private TextView modeState;
     private TextView promptText;
     private TextView instruction;
+
+    private SharedPreferences prefs;
 
     private boolean talkMode = false;
     private int promptIndex = 0;
@@ -121,12 +120,17 @@ public class CameraMonitorActivity extends Activity
 
     private float openEarBaseline = 0.24f;
     private boolean eyesClosed = false;
-    private boolean blinkActionFired = false;
-    private long blinkStartedAt = 0L;
+    private long eyeClosedStartedAt = 0L;
+    private int blinkCount = 0;
+    private long firstBlinkAt = 0L;
     private long rightGazeStartedAt = 0L;
     private long lastActionAt = 0L;
-    private long lastFaceSeenAt = 0L;
 
+    private boolean sleepMode = false;
+    private long wakeOpenStartedAt = 0L;
+
+    private boolean mediaMode = false;
+    private MediaPlayer audioPlayer;
     private SensorManager sensorManager;
     private long lastMotionPrompt = 0L;
 
@@ -141,8 +145,8 @@ public class CameraMonitorActivity extends Activity
     private final Runnable promptTimeout = new Runnable() {
         @Override
         public void run() {
-            if (calibrationStage == 2) {
-                faceState.setText("پاسخی ثبت نشد • می‌رویم سراغ سؤال بعدی");
+            if (calibrationStage == 2 && !mediaMode && !sleepMode) {
+                faceState.setText("پاسخی ثبت نشد • سؤال بعدی");
                 advancePrompt(900L);
             }
         }
@@ -151,19 +155,17 @@ public class CameraMonitorActivity extends Activity
     private final Runnable countdown = new Runnable() {
         @Override
         public void run() {
-            if (calibrationStage != 2 || promptDeadline <= 0L) return;
+            if (calibrationStage != 2 || mediaMode || sleepMode || promptDeadline <= 0L) return;
 
             long left = Math.max(0L, promptDeadline - System.currentTimeMillis());
             long seconds = (left + 999L) / 1000L;
 
             instruction.setText(
-                    "چشم‌ها را ۰٫۷ ثانیه ببند = انتخاب  •  نگاه راست = رد  •  زمان باقی‌مانده: "
+                    "دو پلک پشت سر هم = تأیید  •  نگاه راست = رد  •  "
                             + seconds + " ثانیه"
             );
 
-            if (left > 0L) {
-                handler.postDelayed(this, 1000L);
-            }
+            if (left > 0L) handler.postDelayed(this, 1000L);
         }
     };
 
@@ -174,6 +176,7 @@ public class CameraMonitorActivity extends Activity
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getDecorView().setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
 
+        prefs = getSharedPreferences("careai", MODE_PRIVATE);
         talkMode = getIntent().getBooleanExtra("talk_mode", false);
 
         initTts();
@@ -201,13 +204,11 @@ public class CameraMonitorActivity extends Activity
                             .setRunningMode(RunningMode.IMAGE)
                             .build();
 
-            faceLandmarker =
-                    FaceLandmarker.createFromOptions(this, options);
-
+            faceLandmarker = FaceLandmarker.createFromOptions(this, options);
             startCalibration();
 
         } catch (Exception e) {
-            faceStateSafe("راه‌اندازی تشخیص دقیق چشم ناموفق بود");
+            faceStateSafe("راه‌اندازی تشخیص چشم ناموفق بود");
             Toast.makeText(
                     this,
                     "مدل تشخیص چشم اجرا نشد: " + e.getMessage(),
@@ -221,57 +222,42 @@ public class CameraMonitorActivity extends Activity
     }
 
     private void buildUi() {
-        FrameLayout root = new FrameLayout(this);
+        root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
 
         texture = new TextureView(this);
         root.addView(texture, new FrameLayout.LayoutParams(-1, -1));
 
-        faceState = new TextView(this);
-        faceState.setText("در حال آماده‌سازی تشخیص چشم...");
-        faceState.setTextColor(Color.WHITE);
-        faceState.setTextSize(16);
-        faceState.setGravity(Gravity.CENTER);
-        faceState.setBackgroundColor(0xAA101820);
-        faceState.setPadding(dp(10), dp(10), dp(10), dp(10));
+        videoView = new VideoView(this);
+        videoView.setVisibility(View.GONE);
+        root.addView(videoView, new FrameLayout.LayoutParams(-1, -1));
 
-        FrameLayout.LayoutParams fp =
-                new FrameLayout.LayoutParams(
-                        -1,
-                        FrameLayout.LayoutParams.WRAP_CONTENT,
-                        Gravity.BOTTOM
-                );
-        root.addView(faceState, fp);
-
-        LinearLayout panel = new LinearLayout(this);
+        panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(16), dp(14), dp(16), dp(18));
-        panel.setBackgroundColor(0xEE101820);
+        panel.setPadding(dp(14), dp(12), dp(14), dp(14));
+        panel.setBackgroundColor(0xE8111822);
 
         modeState = new TextView(this);
         modeState.setTextColor(0xFF9CCBFF);
-        modeState.setTextSize(16);
+        modeState.setTextSize(15);
         modeState.setGravity(Gravity.CENTER);
-        modeState.setPadding(0, 0, 0, dp(8));
+        modeState.setPadding(0, 0, 0, dp(6));
 
         promptText = new TextView(this);
         promptText.setTextColor(Color.WHITE);
-        promptText.setTextSize(32);
+        promptText.setTextSize(30);
         promptText.setGravity(Gravity.CENTER);
         promptText.setBackgroundColor(0xFF1A5688);
-        promptText.setPadding(dp(12), dp(18), dp(12), dp(18));
+        promptText.setPadding(dp(10), dp(16), dp(10), dp(16));
 
         instruction = new TextView(this);
         instruction.setTextColor(0xFFE9F0F7);
-        instruction.setTextSize(16);
+        instruction.setTextSize(15);
         instruction.setGravity(Gravity.CENTER);
-        instruction.setPadding(dp(6), dp(12), dp(6), 0);
+        instruction.setPadding(dp(4), dp(8), dp(4), 0);
 
         panel.addView(modeState);
-        panel.addView(
-                promptText,
-                new LinearLayout.LayoutParams(-1, dp(115))
-        );
+        panel.addView(promptText, new LinearLayout.LayoutParams(-1, dp(105)));
         panel.addView(instruction);
 
         FrameLayout.LayoutParams pp =
@@ -282,23 +268,34 @@ public class CameraMonitorActivity extends Activity
                 );
         root.addView(panel, pp);
 
+        faceState = new TextView(this);
+        faceState.setText("در حال آماده‌سازی...");
+        faceState.setTextColor(Color.WHITE);
+        faceState.setTextSize(15);
+        faceState.setGravity(Gravity.CENTER);
+        faceState.setBackgroundColor(0xAA101820);
+        faceState.setPadding(dp(8), dp(8), dp(8), dp(8));
+
+        FrameLayout.LayoutParams fp =
+                new FrameLayout.LayoutParams(
+                        -1,
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        Gravity.BOTTOM
+                );
+        root.addView(faceState, fp);
+
         setContentView(root);
 
         texture.setSurfaceTextureListener(
                 new TextureView.SurfaceTextureListener() {
                     @Override
                     public void onSurfaceTextureAvailable(
-                            SurfaceTexture s,
-                            int w,
-                            int h) {
+                            SurfaceTexture s, int w, int h) {
                         openFrontCamera();
                     }
 
-                    @Override
-                    public void onSurfaceTextureSizeChanged(
-                            SurfaceTexture s,
-                            int w,
-                            int h) {}
+                    @Override public void onSurfaceTextureSizeChanged(
+                            SurfaceTexture s, int w, int h) {}
 
                     @Override
                     public boolean onSurfaceTextureDestroyed(
@@ -306,8 +303,7 @@ public class CameraMonitorActivity extends Activity
                         return true;
                     }
 
-                    @Override
-                    public void onSurfaceTextureUpdated(
+                    @Override public void onSurfaceTextureUpdated(
                             SurfaceTexture s) {}
                 }
         );
@@ -320,14 +316,10 @@ public class CameraMonitorActivity extends Activity
         centerGazeCount = 0;
         rightGazeSum = 0.0;
         rightGazeCount = 0;
-        eyesClosed = false;
 
         modeState.setText("کالیبراسیون چشم — مرحله ۱ از ۲");
         promptText.setText("مستقیم به صفحه نگاه کن");
-        instruction.setText(
-                "فقط راحت و مستقیم نگاه کن. حدود ۶ ثانیه زمان داری."
-        );
-
+        instruction.setText("حدود ۶ ثانیه مستقیم نگاه کن.");
         speak("لطفاً چند ثانیه مستقیم به صفحه نگاه کنید.");
     }
 
@@ -339,11 +331,8 @@ public class CameraMonitorActivity extends Activity
 
         modeState.setText("کالیبراسیون چشم — مرحله ۲ از ۲");
         promptText.setText("فقط چشم‌ها را به سمت راست ببر");
-        instruction.setText(
-                "سر را تا جای ممکن ثابت نگه دار و فقط چشم‌ها را به راست حرکت بده. حدود ۷ ثانیه."
-        );
-
-        speak("حالا فقط چشم‌ها را به سمت راست ببرید و چند ثانیه نگه دارید.");
+        instruction.setText("سر ثابت؛ فقط چشم‌ها به راست. حدود ۷ ثانیه.");
+        speak("حالا فقط چشم‌ها را به سمت راست ببرید و نگه دارید.");
     }
 
     private void finishCalibration() {
@@ -358,33 +347,23 @@ public class CameraMonitorActivity extends Activity
 
         if (Math.abs(diff) < 0.018f && calibrationRetry < 1) {
             calibrationRetry++;
-            retryCalibration("حرکت نگاه راست واضح نبود، یک بار دیگر");
+            retryCalibration("حرکت نگاه راست واضح نبود");
             return;
         }
 
         neutralGaze = center;
         rightDirectionSign = diff >= 0f ? 1 : -1;
         rightThreshold =
-                Math.max(
-                        0.018f,
-                        Math.min(0.075f, Math.abs(diff) * 0.45f)
-                );
+                Math.max(0.018f, Math.min(0.075f, Math.abs(diff) * 0.45f));
 
         calibrationStage = 2;
-        modeState.setText(
-                talkMode
-                        ? "حالت صحبت با چشم"
-                        : "Care Mode — کنترل فقط با چشم"
-        );
-
-        faceState.setText("کالیبراسیون انجام شد • کنترل چشمی فعال است");
 
         speak(
-                "کالیبراسیون انجام شد. هر سؤال مدتی روی صفحه می‌ماند. "
-                        + "بستن چشم‌ها یعنی بله و انتخاب. نگاه به راست یعنی خیر و رفتن به سؤال بعدی."
+                "کالیبراسیون انجام شد. دو پلک پشت سر هم یعنی تأیید. "
+                        + "نگاه به راست یعنی رد. بسته ماندن چشم‌ها یعنی خواب."
         );
 
-        handler.postDelayed(() -> showPrompt(0), 2500L);
+        handler.postDelayed(() -> showPrompt(0), 2600L);
     }
 
     private void retryCalibration(String reason) {
@@ -398,18 +377,61 @@ public class CameraMonitorActivity extends Activity
 
         modeState.setText("کالیبراسیون دوباره");
         promptText.setText("مستقیم به صفحه نگاه کن");
-        instruction.setText("چند ثانیه فقط مستقیم نگاه کن.");
+        instruction.setText("چند ثانیه مستقیم نگاه کن.");
+        speak(reason + ". دوباره مستقیم به صفحه نگاه کنید.");
+    }
 
-        speak(reason + ". لطفاً دوباره مستقیم به صفحه نگاه کنید.");
+    private List<Prompt> currentPrompts() {
+        ArrayList<Prompt> out = new ArrayList<>();
+
+        if (talkMode) {
+            out.add(new Prompt("بله؟", "بله", ACTION_SPEAK, ""));
+            out.add(new Prompt("خیر؟", "خیر", ACTION_SPEAK, ""));
+            out.add(new Prompt("آب می‌خواهی؟", "آب می‌خواهم", ACTION_SPEAK, ""));
+            out.add(new Prompt("غذا می‌خواهی؟", "غذا می‌خواهم", ACTION_SPEAK, ""));
+            out.add(new Prompt("درد داری؟", "درد دارم", ACTION_SPEAK, ""));
+            out.add(new Prompt("دستشویی می‌خواهی؟", "دستشویی می‌خواهم", ACTION_SPEAK, ""));
+            out.add(new Prompt("سردت است؟", "سردم است", ACTION_SPEAK, ""));
+            out.add(new Prompt("گرمت است؟", "گرمم است", ACTION_SPEAK, ""));
+            out.add(new Prompt("برگردیم به منوی اصلی؟", "", ACTION_BACK, ""));
+            return out;
+        }
+
+        out.add(new Prompt("می‌خواهی صحبت کنی؟", "", ACTION_TALK_MODE, ""));
+
+        for (int i = 1; i <= 3; i++) {
+            String number = prefs.getString("trusted" + i, "").trim();
+            if (!number.isEmpty()) {
+                String name = prefs.getString("trusted_name" + i, "").trim();
+                if (name.isEmpty()) name = "همراه " + i;
+                out.add(new Prompt(
+                        "می‌خواهی به " + name + " زنگ بزنم؟",
+                        name,
+                        ACTION_CALL,
+                        number
+                ));
+            }
+        }
+
+        out.add(new Prompt("می‌خواهی برات ویدیو پخش کنم؟", "", ACTION_VIDEO, ""));
+        out.add(new Prompt("می‌خواهی برات آهنگ پخش کنم؟", "", ACTION_AUDIO, ""));
+        out.add(new Prompt("آب می‌خواهی؟", "آب می‌خواهم", ACTION_SPEAK, ""));
+        out.add(new Prompt("درد داری؟", "درد دارم", ACTION_SPEAK, ""));
+        out.add(new Prompt("دستشویی می‌خواهی؟", "دستشویی می‌خواهم", ACTION_SPEAK, ""));
+        out.add(new Prompt("سردت است؟", "سردم است", ACTION_SPEAK, ""));
+        out.add(new Prompt("گرمت است؟", "گرمم است", ACTION_SPEAK, ""));
+        out.add(new Prompt("کمک فوری می‌خواهی؟", "", ACTION_EMERGENCY, ""));
+
+        return out;
     }
 
     private void showPrompt(int index) {
-        if (calibrationStage != 2) return;
+        if (calibrationStage != 2 || mediaMode || sleepMode) return;
 
-        Prompt[] prompts = currentPrompts();
-        if (prompts.length == 0) return;
+        List<Prompt> prompts = currentPrompts();
+        if (prompts.isEmpty()) return;
 
-        promptIndex = (index + prompts.length) % prompts.length;
+        promptIndex = (index + prompts.size()) % prompts.size();
 
         handler.removeCallbacks(promptTimeout);
         handler.removeCallbacks(countdown);
@@ -417,19 +439,19 @@ public class CameraMonitorActivity extends Activity
         promptShownAt = System.currentTimeMillis();
         promptDeadline = promptShownAt + PROMPT_DURATION_MS;
         rightGazeStartedAt = 0L;
-        if (!eyesClosed) {
-            blinkActionFired = false;
-        }
+        blinkCount = 0;
+        firstBlinkAt = 0L;
+
+        Prompt p = prompts.get(promptIndex);
+
+        panel.setVisibility(View.VISIBLE);
+        setPanelFull();
         promptText.setBackgroundColor(0xFF1A5688);
-
-        Prompt p = prompts[promptIndex];
-
         modeState.setText(
                 talkMode
-                        ? "حالت صحبت • ۲۰ ثانیه برای تصمیم"
-                        : "Care Mode • ۲۰ ثانیه برای تصمیم"
+                        ? "حالت صحبت • دو پلک = تأیید"
+                        : "Care Mode • دو پلک = تأیید"
         );
-
         promptText.setText(p.question);
         faceState.setText("در حال انتظار برای تصمیم بیمار");
 
@@ -439,87 +461,344 @@ public class CameraMonitorActivity extends Activity
         handler.post(countdown);
     }
 
-    private Prompt[] currentPrompts() {
-        return talkMode ? talkPrompts : mainPrompts;
-    }
-
     private void advancePrompt(long delayMs) {
         handler.removeCallbacks(promptTimeout);
         handler.removeCallbacks(countdown);
-
-        int next = promptIndex + 1;
-
-        handler.postDelayed(
-                () -> showPrompt(next),
-                delayMs
-        );
+        final int next = promptIndex + 1;
+        handler.postDelayed(() -> showPrompt(next), delayMs);
     }
 
     private void rejectCurrentByGaze() {
         long now = System.currentTimeMillis();
-        if (now - lastActionAt < 1200L) return;
+        if (now - lastActionAt < 1200L || mediaMode || sleepMode) return;
         lastActionAt = now;
 
-        faceState.setText("نگاه راست تشخیص داده شد • گزینه رد شد");
+        faceState.setText("نگاه راست تشخیص داده شد • رد شد");
         speak("باشه. سؤال بعدی.");
-        advancePrompt(850L);
+        advancePrompt(900L);
     }
 
-    private void confirmCurrentByBlink() {
+    private void confirmCurrentByDoubleBlink() {
         long now = System.currentTimeMillis();
-        if (now - lastActionAt < 1200L) return;
+
+        if (mediaMode) {
+            stopMediaAndReturn("پخش متوقف شد.");
+            return;
+        }
+
+        if (sleepMode || now - lastActionAt < 1200L) return;
         lastActionAt = now;
 
         handler.removeCallbacks(promptTimeout);
         handler.removeCallbacks(countdown);
 
-        Prompt[] prompts = currentPrompts();
-        if (promptIndex < 0 || promptIndex >= prompts.length) return;
+        List<Prompt> prompts = currentPrompts();
+        if (promptIndex < 0 || promptIndex >= prompts.size()) return;
 
-        Prompt p = prompts[promptIndex];
-        faceState.setText("✓ انتخاب شد: " + p.question);
+        Prompt p = prompts.get(promptIndex);
+
         promptText.setBackgroundColor(0xFF1E7A46);
+        promptText.setText("✓ تأیید شد");
+        faceState.setText("دو پلک تأیید شد • دستور اجرا شد");
 
         if (p.action == ACTION_TALK_MODE) {
             talkMode = true;
-            modeState.setText("حالت صحبت با چشم");
-            promptText.setText("✓ حالت صحبت فعال شد");
-            speak("حالت صحبت فعال شد.");
-            handler.postDelayed(() -> showPrompt(0), 3500L);
+            speak("تأیید شد. حالت صحبت را فعال می‌کنم.");
+            handler.postDelayed(() -> showPrompt(0), 3800L);
             return;
         }
 
         if (p.action == ACTION_BACK) {
             talkMode = false;
-            modeState.setText("Care Mode");
-            promptText.setText("✓ بازگشت به منوی اصلی");
-            speak("به منوی اصلی برگشتیم.");
-            handler.postDelayed(() -> showPrompt(0), 3500L);
+            speak("تأیید شد. به منوی اصلی برمی‌گردیم.");
+            handler.postDelayed(() -> showPrompt(0), 3800L);
             return;
         }
 
         if (p.action == ACTION_EMERGENCY) {
             promptText.setBackgroundColor(0xFF9B1C31);
-            promptText.setText("✓ درخواست کمک فوری ارسال شد");
-            speak("درخواست کمک فوری ارسال شد.");
+            promptText.setText("✓ کمک فوری ارسال شد");
+            speak("تأیید شد. درخواست کمک فوری را ارسال می‌کنم.");
             EmergencyManager.sendEmergency(
                     this,
-                    "درخواست کمک با تأیید چشمی بیمار",
+                    "درخواست کمک با دو پلک بیمار",
                     true
             );
-            handler.postDelayed(
-                    () -> showPrompt(promptIndex + 1),
-                    4500L
-            );
+            handler.postDelayed(() -> showPrompt(promptIndex + 1), 5000L);
+            return;
+        }
+
+        if (p.action == ACTION_CALL) {
+            promptText.setText("✓ تماس با " + p.output);
+            speak("تأیید شد. به " + p.output + " زنگ می‌زنم و تماس را روی بلندگو می‌گذارم.");
+            handler.postDelayed(() -> placeSpeakerCall(p.data), 1200L);
+            handler.postDelayed(() -> showPrompt(promptIndex + 1), 6500L);
+            return;
+        }
+
+        if (p.action == ACTION_VIDEO) {
+            promptText.setText("✓ ویدیو پخش می‌شود");
+            speak("تأیید شد. ویدیو را پخش می‌کنم.");
+            handler.postDelayed(this::playLatestVideo, 1100L);
+            return;
+        }
+
+        if (p.action == ACTION_AUDIO) {
+            promptText.setText("✓ آهنگ پخش می‌شود");
+            speak("تأیید شد. آهنگ را پخش می‌کنم.");
+            handler.postDelayed(this::playLatestAudio, 1100L);
             return;
         }
 
         promptText.setText("✓ " + p.output);
-        speak(p.output);
-        handler.postDelayed(
-                () -> showPrompt(promptIndex + 1),
-                4500L
+        speak("تأیید شد. " + p.output);
+        handler.postDelayed(() -> showPrompt(promptIndex + 1), 4500L);
+    }
+
+    private void placeSpeakerCall(String number) {
+        if (number == null || number.trim().isEmpty()) {
+            speak("شماره تماس ثبت نشده است.");
+            return;
+        }
+
+        if (checkSelfPermission(Manifest.permission.CALL_PHONE)
+                != PackageManager.PERMISSION_GRANTED) {
+            speak("مجوز تماس تلفنی داده نشده است.");
+            return;
+        }
+
+        try {
+            TelecomManager telecom =
+                    (TelecomManager) getSystemService(TELECOM_SERVICE);
+
+            Bundle extras = new Bundle();
+            extras.putBoolean(
+                    TelecomManager.EXTRA_START_CALL_WITH_SPEAKERPHONE,
+                    true
+            );
+
+            telecom.placeCall(
+                    Uri.fromParts("tel", number, null),
+                    extras
+            );
+        } catch (Exception e) {
+            speak("تماس برقرار نشد.");
+        }
+    }
+
+    private boolean hasAudioPermission() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            return checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO)
+                    == PackageManager.PERMISSION_GRANTED;
+        }
+        return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean hasVideoPermission() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            return checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO)
+                    == PackageManager.PERMISSION_GRANTED;
+        }
+        return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private Uri latestMediaUri(boolean video) {
+        Uri collection = video
+                ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                : MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+
+        String[] projection = new String[] {
+                MediaStore.MediaColumns._ID
+        };
+
+        Cursor cursor = null;
+        try {
+            cursor = getContentResolver().query(
+                    collection,
+                    projection,
+                    null,
+                    null,
+                    MediaStore.MediaColumns.DATE_ADDED + " DESC"
+            );
+
+            if (cursor != null && cursor.moveToFirst()) {
+                long id = cursor.getLong(0);
+                return ContentUris.withAppendedId(collection, id);
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+
+        return null;
+    }
+
+    private void playLatestVideo() {
+        if (!hasVideoPermission()) {
+            speak("مجوز دسترسی به ویدیوهای گوشی داده نشده است.");
+            handler.postDelayed(() -> showPrompt(promptIndex + 1), 3000L);
+            return;
+        }
+
+        Uri uri = latestMediaUri(true);
+        if (uri == null) {
+            speak("ویدیویی در گوشی پیدا نکردم.");
+            handler.postDelayed(() -> showPrompt(promptIndex + 1), 3000L);
+            return;
+        }
+
+        stopAudioOnly();
+        mediaMode = true;
+
+        videoView.setVisibility(View.VISIBLE);
+        videoView.setVideoURI(uri);
+        videoView.setOnPreparedListener(mp -> {
+            mp.setLooping(false);
+            videoView.start();
+        });
+        videoView.setOnCompletionListener(mp ->
+                stopMediaAndReturn("ویدیو تمام شد.")
         );
+        videoView.setOnErrorListener((mp, what, extra) -> {
+            stopMediaAndReturn("پخش ویدیو با خطا متوقف شد.");
+            return true;
+        });
+
+        setPanelCompact("Care AI • رصد فعال", "دو پلک = توقف و بازگشت");
+        faceState.setText("ویدیو در حال پخش • رصد چشم ادامه دارد");
+    }
+
+    private void playLatestAudio() {
+        if (!hasAudioPermission()) {
+            speak("مجوز دسترسی به آهنگ‌های گوشی داده نشده است.");
+            handler.postDelayed(() -> showPrompt(promptIndex + 1), 3000L);
+            return;
+        }
+
+        Uri uri = latestMediaUri(false);
+        if (uri == null) {
+            speak("آهنگی در گوشی پیدا نکردم.");
+            handler.postDelayed(() -> showPrompt(promptIndex + 1), 3000L);
+            return;
+        }
+
+        stopMediaSilently();
+        mediaMode = true;
+
+        try {
+            audioPlayer = new MediaPlayer();
+            audioPlayer.setAudioAttributes(
+                    new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build()
+            );
+            audioPlayer.setDataSource(this, uri);
+            audioPlayer.setOnPreparedListener(mp -> mp.start());
+            audioPlayer.setOnCompletionListener(mp ->
+                    stopMediaAndReturn("آهنگ تمام شد.")
+            );
+            audioPlayer.prepareAsync();
+
+            setPanelCompact("Care AI • موسیقی", "دو پلک = توقف و بازگشت");
+            faceState.setText("آهنگ در حال پخش • رصد چشم ادامه دارد");
+
+        } catch (Exception e) {
+            stopMediaAndReturn("پخش آهنگ انجام نشد.");
+        }
+    }
+
+    private void setPanelCompact(String title, String sub) {
+        modeState.setText(title);
+        promptText.setText("رصد فعال");
+        promptText.setTextSize(18);
+        instruction.setText(sub);
+
+        FrameLayout.LayoutParams lp =
+                new FrameLayout.LayoutParams(
+                        dp(190),
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        Gravity.TOP | Gravity.END
+                );
+        lp.setMargins(dp(8), dp(10), dp(8), 0);
+        panel.setLayoutParams(lp);
+    }
+
+    private void setPanelFull() {
+        promptText.setTextSize(30);
+
+        FrameLayout.LayoutParams lp =
+                new FrameLayout.LayoutParams(
+                        -1,
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        Gravity.TOP
+                );
+        panel.setLayoutParams(lp);
+    }
+
+    private void stopAudioOnly() {
+        if (audioPlayer != null) {
+            try { audioPlayer.stop(); } catch (Exception ignored) {}
+            try { audioPlayer.release(); } catch (Exception ignored) {}
+            audioPlayer = null;
+        }
+    }
+
+    private void stopMediaSilently() {
+        if (videoView != null) {
+            try { videoView.stopPlayback(); } catch (Exception ignored) {}
+            videoView.setVisibility(View.GONE);
+        }
+        stopAudioOnly();
+        mediaMode = false;
+    }
+
+    private void stopMediaAndReturn(String reason) {
+        stopMediaSilently();
+        setPanelFull();
+        panel.setVisibility(View.VISIBLE);
+        promptText.setBackgroundColor(0xFF1A5688);
+        modeState.setText("Care Mode");
+        promptText.setText("بازگشت به مراقبت");
+        instruction.setText("دو پلک = تأیید • نگاه راست = رد");
+        faceState.setText(reason);
+        speak(reason);
+        handler.postDelayed(() -> showPrompt(promptIndex + 1), 2200L);
+    }
+
+    private void enterSleepMode() {
+        if (sleepMode) return;
+
+        sleepMode = true;
+        blinkCount = 0;
+        firstBlinkAt = 0L;
+        rightGazeStartedAt = 0L;
+
+        handler.removeCallbacks(promptTimeout);
+        handler.removeCallbacks(countdown);
+
+        stopMediaSilently();
+
+        setPanelFull();
+        panel.setVisibility(View.VISIBLE);
+        promptText.setBackgroundColor(0xFF263238);
+        modeState.setText("حالت خواب");
+        promptText.setText("خواب تشخیص داده شد");
+        instruction.setText("رصد ادامه دارد • با بازشدن چشم‌ها سیستم برمی‌گردد");
+        faceState.setText("چشم‌ها طولانی بسته مانده‌اند • حالت خواب فعال شد");
+
+        // عمداً صوت پخش نمی‌شود تا بیمار بیدار نشود.
+    }
+
+    private void exitSleepMode() {
+        sleepMode = false;
+        wakeOpenStartedAt = 0L;
+        promptText.setBackgroundColor(0xFF1A5688);
+        faceState.setText("بیداری تشخیص داده شد");
+        speak("بیداری تشخیص داده شد. مراقبت ادامه دارد.");
+        handler.postDelayed(() -> showPrompt(0), 1800L);
     }
 
     private void analyzeTextureFrame() {
@@ -540,8 +819,7 @@ public class CameraMonitorActivity extends Activity
             Exception error = null;
 
             try {
-                MPImage image =
-                        new BitmapImageBuilder(bitmap).build();
+                MPImage image = new BitmapImageBuilder(bitmap).build();
                 result = faceLandmarker.detect(image);
             } catch (Exception e) {
                 error = e;
@@ -559,9 +837,7 @@ public class CameraMonitorActivity extends Activity
                     }
                 } finally {
                     processingFrame = false;
-                    if (!bitmap.isRecycled()) {
-                        bitmap.recycle();
-                    }
+                    if (!bitmap.isRecycled()) bitmap.recycle();
                 }
             });
         });
@@ -573,18 +849,12 @@ public class CameraMonitorActivity extends Activity
         if (result == null
                 || result.faceLandmarks() == null
                 || result.faceLandmarks().isEmpty()) {
-            faceState.setText(
-                    "چهره دیده نمی‌شود • گوشی را روبه‌روی صورت بیمار قرار بده"
-            );
-            eyesClosed = false;
+            faceState.setText("چهره دیده نمی‌شود • گوشی روبه‌روی بیمار باشد");
             rightGazeStartedAt = 0L;
             return;
         }
 
-        lastFaceSeenAt = now;
-
-        List<NormalizedLandmark> lm =
-                result.faceLandmarks().get(0);
+        List<NormalizedLandmark> lm = result.faceLandmarks().get(0);
 
         if (lm == null || lm.size() < 478) {
             faceState.setText("نقاط چشم کامل دریافت نشد");
@@ -594,13 +864,10 @@ public class CameraMonitorActivity extends Activity
         float ear = eyeAspectRatio(lm);
         float gaze = gazeRatio(lm);
 
-        if (Float.isNaN(ear) || Float.isNaN(gaze)) {
-            return;
-        }
+        if (Float.isNaN(ear) || Float.isNaN(gaze)) return;
 
         if (ear > openEarBaseline * 0.70f) {
-            openEarBaseline =
-                    openEarBaseline * 0.97f + ear * 0.03f;
+            openEarBaseline = openEarBaseline * 0.97f + ear * 0.03f;
         }
 
         boolean closed =
@@ -616,17 +883,12 @@ public class CameraMonitorActivity extends Activity
 
             long elapsed = now - calibrationStageStartedAt;
             long left = Math.max(0L, 6000L - elapsed);
-
             instruction.setText(
                     "مستقیم نگاه کن • "
-                            + ((left + 999L) / 1000L)
-                            + " ثانیه"
+                            + ((left + 999L) / 1000L) + " ثانیه"
             );
 
-            if (elapsed >= 6000L) {
-                beginRightCalibration();
-            }
-
+            if (elapsed >= 6000L) beginRightCalibration();
             return;
         }
 
@@ -638,47 +900,33 @@ public class CameraMonitorActivity extends Activity
 
             long elapsed = now - calibrationStageStartedAt;
             long left = Math.max(0L, 7000L - elapsed);
-
             instruction.setText(
                     "فقط چشم‌ها به راست • "
-                            + ((left + 999L) / 1000L)
-                            + " ثانیه"
+                            + ((left + 999L) / 1000L) + " ثانیه"
             );
 
-            if (elapsed >= 7000L) {
-                finishCalibration();
-            }
-
+            if (elapsed >= 7000L) finishCalibration();
             return;
         }
 
         if (closed) {
+            wakeOpenStartedAt = 0L;
             rightGazeStartedAt = 0L;
 
             if (!eyesClosed) {
                 eyesClosed = true;
-                blinkActionFired = false;
-                blinkStartedAt = now;
-                faceState.setText("چشم‌ها بسته شد • کمی نگه دار برای انتخاب");
-                return;
+                eyeClosedStartedAt = now;
             }
 
-            long duration = now - blinkStartedAt;
-            boolean readingFinished =
-                    blinkStartedAt >= promptShownAt + READING_LOCK_MS;
+            long held = now - eyeClosedStartedAt;
 
-            if (!blinkActionFired
-                    && readingFinished
-                    && duration >= BLINK_MIN_MS
-                    && duration <= BLINK_MAX_MS) {
-                blinkActionFired = true;
-                faceState.setText("✓ انتخاب با چشم ثبت شد • دستور در حال اجرا");
-                confirmCurrentByBlink();
-            } else if (!blinkActionFired && readingFinished) {
-                long percent =
-                        Math.min(100L, duration * 100L / BLINK_MIN_MS);
+            if (!sleepMode && held >= SLEEP_HOLD_MS) {
+                enterSleepMode();
+            } else if (!sleepMode && !mediaMode) {
                 faceState.setText(
-                        "چشم بسته • نگه دار برای انتخاب: " + percent + "%"
+                        held < 1000L
+                                ? "چشم بسته • اگر کوتاه باشد پلک محسوب می‌شود"
+                                : "چشم بسته مانده • اگر ادامه پیدا کند خواب محسوب می‌شود"
                 );
             }
 
@@ -686,21 +934,60 @@ public class CameraMonitorActivity extends Activity
         }
 
         if (eyesClosed && open) {
-            long duration = now - blinkStartedAt;
+            long duration = now - eyeClosedStartedAt;
             eyesClosed = false;
-            blinkStartedAt = 0L;
+            eyeClosedStartedAt = 0L;
 
-            if (!blinkActionFired && duration < BLINK_MIN_MS) {
-                faceState.setText("پلک طبیعی بود • انتخابی انجام نشد");
+            if (!sleepMode
+                    && duration >= BLINK_MIN_MS
+                    && duration <= BLINK_MAX_MS
+                    && now >= promptShownAt + READING_LOCK_MS) {
+
+                if (blinkCount == 1
+                        && now - firstBlinkAt <= DOUBLE_BLINK_WINDOW_MS) {
+                    blinkCount = 0;
+                    firstBlinkAt = 0L;
+                    faceState.setText("✓ دو پلک پشت سر هم تشخیص داده شد");
+                    confirmCurrentByDoubleBlink();
+                    return;
+                }
+
+                blinkCount = 1;
+                firstBlinkAt = now;
+                faceState.setText("پلک اول ثبت شد • یک پلک دیگر");
+                return;
             }
+        }
 
-            blinkActionFired = false;
+        if (blinkCount == 1
+                && now - firstBlinkAt > DOUBLE_BLINK_WINDOW_MS) {
+            blinkCount = 0;
+            firstBlinkAt = 0L;
+        }
+
+        if (sleepMode) {
+            if (open) {
+                if (wakeOpenStartedAt == 0L) wakeOpenStartedAt = now;
+
+                if (now - wakeOpenStartedAt >= WAKE_OPEN_MS) {
+                    exitSleepMode();
+                } else {
+                    faceState.setText("چشم‌ها باز شد • در حال بررسی بیداری");
+                }
+            } else {
+                wakeOpenStartedAt = 0L;
+            }
             return;
         }
 
-        if (!open) {
+        if (mediaMode) {
+            faceState.setText(
+                    "رصد فعال • دو پلک = توقف پخش • چشم بسته طولانی = خواب"
+            );
             return;
         }
+
+        if (!open) return;
 
         if (now - promptShownAt < READING_LOCK_MS) {
             rightGazeStartedAt = 0L;
@@ -708,17 +995,14 @@ public class CameraMonitorActivity extends Activity
             return;
         }
 
-        float rightScore =
-                (gaze - neutralGaze) * rightDirectionSign;
+        float rightScore = (gaze - neutralGaze) * rightDirectionSign;
 
         if (rightScore > rightThreshold) {
-            if (rightGazeStartedAt == 0L) {
-                rightGazeStartedAt = now;
-            }
+            if (rightGazeStartedAt == 0L) rightGazeStartedAt = now;
 
             long held = now - rightGazeStartedAt;
             faceState.setText(
-                    "نگاه راست دیده شد • "
+                    "نگاه راست • "
                             + Math.min(100L, held * 100L / RIGHT_GAZE_HOLD_MS)
                             + "%"
             );
@@ -730,7 +1014,7 @@ public class CameraMonitorActivity extends Activity
         } else {
             rightGazeStartedAt = 0L;
             faceState.setText(
-                    "در حال انتظار • چشم‌ها را ببند = انتخاب • نگاه راست = رد"
+                    "دو پلک = تأیید • نگاه راست = رد • چشم بسته طولانی = خواب"
             );
         }
     }
@@ -754,26 +1038,19 @@ public class CameraMonitorActivity extends Activity
     }
 
     private float gazeRatio(List<NormalizedLandmark> lm) {
-        float rightIrisX =
-                averageX(lm, 468, 469, 470, 471, 472);
-        float leftIrisX =
-                averageX(lm, 473, 474, 475, 476, 477);
+        float rightIrisX = averageX(lm, 468, 469, 470, 471, 472);
+        float leftIrisX = averageX(lm, 473, 474, 475, 476, 477);
 
-        float rightMin =
-                Math.min(lm.get(33).x(), lm.get(133).x());
-        float rightMax =
-                Math.max(lm.get(33).x(), lm.get(133).x());
+        float rightMin = Math.min(lm.get(33).x(), lm.get(133).x());
+        float rightMax = Math.max(lm.get(33).x(), lm.get(133).x());
 
-        float leftMin =
-                Math.min(lm.get(362).x(), lm.get(263).x());
-        float leftMax =
-                Math.max(lm.get(362).x(), lm.get(263).x());
+        float leftMin = Math.min(lm.get(362).x(), lm.get(263).x());
+        float leftMax = Math.max(lm.get(362).x(), lm.get(263).x());
 
         float rightWidth = rightMax - rightMin;
         float leftWidth = leftMax - leftMin;
 
-        if (rightWidth < 0.0001f
-                || leftWidth < 0.0001f) {
+        if (rightWidth < 0.0001f || leftWidth < 0.0001f) {
             return Float.NaN;
         }
 
@@ -783,15 +1060,9 @@ public class CameraMonitorActivity extends Activity
         return (r + l) / 2f;
     }
 
-    private float averageX(
-            List<NormalizedLandmark> lm,
-            int... indexes) {
+    private float averageX(List<NormalizedLandmark> lm, int... indexes) {
         float sum = 0f;
-
-        for (int index : indexes) {
-            sum += lm.get(index).x();
-        }
-
+        for (int index : indexes) sum += lm.get(index).x();
         return sum / indexes.length;
     }
 
@@ -833,8 +1104,7 @@ public class CameraMonitorActivity extends Activity
                 }
             }
 
-            if (selected == null
-                    && cm.getCameraIdList().length > 0) {
+            if (selected == null && cm.getCameraIdList().length > 0) {
                 selected = cm.getCameraIdList()[0];
             }
 
@@ -878,7 +1148,6 @@ public class CameraMonitorActivity extends Activity
             if (st == null || camera == null) return;
 
             st.setDefaultBufferSize(640, 480);
-
             Surface previewSurface = new Surface(st);
 
             CaptureRequest.Builder builder =
@@ -954,9 +1223,7 @@ public class CameraMonitorActivity extends Activity
         float y = e.values[1];
         float z = e.values[2];
 
-        double magnitude =
-                Math.sqrt(x * x + y * y + z * z);
-
+        double magnitude = Math.sqrt(x * x + y * y + z * z);
         long now = System.currentTimeMillis();
 
         if (magnitude > 31.0
@@ -983,7 +1250,7 @@ public class CameraMonitorActivity extends Activity
                 text,
                 TextToSpeech.QUEUE_FLUSH,
                 null,
-                "care-ai-gaze"
+                "care-ai-v5"
         );
     }
 
@@ -994,8 +1261,7 @@ public class CameraMonitorActivity extends Activity
             return;
         }
 
-        int result =
-                tts.setLanguage(new Locale("fa", "IR"));
+        int result = tts.setLanguage(new Locale("fa", "IR"));
 
         if (result == TextToSpeech.LANG_MISSING_DATA
                 || result == TextToSpeech.LANG_NOT_SUPPORTED) {
@@ -1013,27 +1279,23 @@ public class CameraMonitorActivity extends Activity
     }
 
     private void faceStateSafe(String text) {
-        if (faceState != null) {
-            faceState.setText(text);
-        }
+        if (faceState != null) faceState.setText(text);
     }
 
     @Override
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
 
+        stopMediaSilently();
+
         if (session != null) session.close();
         if (camera != null) camera.close();
 
-        if (faceLandmarker != null) {
-            faceLandmarker.close();
-        }
+        if (faceLandmarker != null) faceLandmarker.close();
 
         visionExecutor.shutdownNow();
 
-        if (sensorManager != null) {
-            sensorManager.unregisterListener(this);
-        }
+        if (sensorManager != null) sensorManager.unregisterListener(this);
 
         if (tts != null) {
             tts.stop();
@@ -1045,8 +1307,7 @@ public class CameraMonitorActivity extends Activity
 
     private int dp(int v) {
         return (int) (
-                v * getResources().getDisplayMetrics().density
-                        + 0.5f
+                v * getResources().getDisplayMetrics().density + 0.5f
         );
     }
 
@@ -1054,11 +1315,13 @@ public class CameraMonitorActivity extends Activity
         final String question;
         final String output;
         final int action;
+        final String data;
 
-        Prompt(String question, String output, int action) {
+        Prompt(String question, String output, int action, String data) {
             this.question = question;
             this.output = output;
             this.action = action;
+            this.data = data;
         }
     }
 }
