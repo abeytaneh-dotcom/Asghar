@@ -384,21 +384,7 @@ public class CameraMonitorActivity extends Activity
     private List<Prompt> currentPrompts() {
         ArrayList<Prompt> out = new ArrayList<>();
 
-        if (talkMode) {
-            out.add(new Prompt("بله؟", "بله", ACTION_SPEAK, ""));
-            out.add(new Prompt("خیر؟", "خیر", ACTION_SPEAK, ""));
-            out.add(new Prompt("آب می‌خواهی؟", "آب می‌خواهم", ACTION_SPEAK, ""));
-            out.add(new Prompt("غذا می‌خواهی؟", "غذا می‌خواهم", ACTION_SPEAK, ""));
-            out.add(new Prompt("درد داری؟", "درد دارم", ACTION_SPEAK, ""));
-            out.add(new Prompt("دستشویی می‌خواهی؟", "دستشویی می‌خواهم", ACTION_SPEAK, ""));
-            out.add(new Prompt("سردت است؟", "سردم است", ACTION_SPEAK, ""));
-            out.add(new Prompt("گرمت است؟", "گرمم است", ACTION_SPEAK, ""));
-            out.add(new Prompt("برگردیم به منوی اصلی؟", "", ACTION_BACK, ""));
-            return out;
-        }
-
-        out.add(new Prompt("می‌خواهی صحبت کنی؟", "", ACTION_TALK_MODE, ""));
-
+        // اکشن‌های واقعی همیشه اول چرخه هستند تا در هر حالت قابل دسترسی باشند.
         for (int i = 1; i <= 3; i++) {
             String number = prefs.getString("trusted" + i, "").trim();
             if (!number.isEmpty()) {
@@ -413,14 +399,35 @@ public class CameraMonitorActivity extends Activity
             }
         }
 
-        out.add(new Prompt("می‌خواهی برات ویدیو پخش کنم؟", "", ACTION_VIDEO, ""));
-        out.add(new Prompt("می‌خواهی برات آهنگ پخش کنم؟", "", ACTION_AUDIO, ""));
+        out.add(new Prompt(
+                "می‌خواهی برات ویدیو پخش کنم؟",
+                "ویدیو",
+                ACTION_VIDEO,
+                ""
+        ));
+
+        out.add(new Prompt(
+                "می‌خواهی برات آهنگ پخش کنم؟",
+                "آهنگ",
+                ACTION_AUDIO,
+                ""
+        ));
+
+        // ارتباط و نیازهای روزمره
+        out.add(new Prompt("می‌خواهی صحبت کنی؟", "", ACTION_TALK_MODE, ""));
+        out.add(new Prompt("بله؟", "بله", ACTION_SPEAK, ""));
+        out.add(new Prompt("خیر؟", "خیر", ACTION_SPEAK, ""));
         out.add(new Prompt("آب می‌خواهی؟", "آب می‌خواهم", ACTION_SPEAK, ""));
+        out.add(new Prompt("غذا می‌خواهی؟", "غذا می‌خواهم", ACTION_SPEAK, ""));
         out.add(new Prompt("درد داری؟", "درد دارم", ACTION_SPEAK, ""));
         out.add(new Prompt("دستشویی می‌خواهی؟", "دستشویی می‌خواهم", ACTION_SPEAK, ""));
         out.add(new Prompt("سردت است؟", "سردم است", ACTION_SPEAK, ""));
         out.add(new Prompt("گرمت است؟", "گرمم است", ACTION_SPEAK, ""));
         out.add(new Prompt("کمک فوری می‌خواهی؟", "", ACTION_EMERGENCY, ""));
+
+        if (talkMode) {
+            out.add(new Prompt("از حالت صحبت خارج شویم؟", "", ACTION_BACK, ""));
+        }
 
         return out;
     }
@@ -447,11 +454,14 @@ public class CameraMonitorActivity extends Activity
         panel.setVisibility(View.VISIBLE);
         setPanelFull();
         promptText.setBackgroundColor(0xFF1A5688);
-        modeState.setText(
-                talkMode
-                        ? "حالت صحبت • دو پلک = تأیید"
-                        : "Care Mode • دو پلک = تأیید"
-        );
+        String category;
+        if (p.action == ACTION_CALL) category = "تماس تلفنی";
+        else if (p.action == ACTION_VIDEO) category = "پخش ویدیو";
+        else if (p.action == ACTION_AUDIO) category = "پخش موسیقی";
+        else if (p.action == ACTION_EMERGENCY) category = "کمک اضطراری";
+        else category = talkMode ? "ارتباط با بیمار" : "Care Mode";
+
+        modeState.setText(category + " • دو پلک = اجرا");
         promptText.setText(p.question);
         faceState.setText("در حال انتظار برای تصمیم بیمار");
 
@@ -498,8 +508,8 @@ public class CameraMonitorActivity extends Activity
         Prompt p = prompts.get(promptIndex);
 
         promptText.setBackgroundColor(0xFF1E7A46);
-        promptText.setText("✓ تأیید شد");
-        faceState.setText("دو پلک تأیید شد • دستور اجرا شد");
+        promptText.setText("✓ فرمان دریافت شد");
+        faceState.setText("دو پلک تأیید شد • در حال اجرای فرمان واقعی");
 
         if (p.action == ACTION_TALK_MODE) {
             talkMode = true;
@@ -529,23 +539,26 @@ public class CameraMonitorActivity extends Activity
         }
 
         if (p.action == ACTION_CALL) {
-            promptText.setText("✓ تماس با " + p.output);
-            speak("تأیید شد. به " + p.output + " زنگ می‌زنم و تماس را روی بلندگو می‌گذارم.");
-            handler.postDelayed(() -> placeSpeakerCall(p.data), 1200L);
+            promptText.setText("☎ در حال تماس با " + p.output);
+            faceState.setText("در حال ارسال فرمان تماس به سیستم تلفن");
+            speak("تأیید شد. الان به " + p.output + " زنگ می‌زنم و تماس را روی بلندگو می‌گذارم.");
+            handler.postDelayed(() -> placeSpeakerCall(p.data), 700L);
             handler.postDelayed(() -> showPrompt(promptIndex + 1), 6500L);
             return;
         }
 
         if (p.action == ACTION_VIDEO) {
-            promptText.setText("✓ ویدیو پخش می‌شود");
-            speak("تأیید شد. ویدیو را پخش می‌کنم.");
+            promptText.setText("▶ در حال باز کردن ویدیو");
+            faceState.setText("فرمان پخش ویدیو اجرا شد");
+            speak("تأیید شد. الان ویدیو را پخش می‌کنم.");
             handler.postDelayed(this::playLatestVideo, 1100L);
             return;
         }
 
         if (p.action == ACTION_AUDIO) {
-            promptText.setText("✓ آهنگ پخش می‌شود");
-            speak("تأیید شد. آهنگ را پخش می‌کنم.");
+            promptText.setText("♫ در حال پخش آهنگ");
+            faceState.setText("فرمان پخش موسیقی اجرا شد");
+            speak("تأیید شد. الان آهنگ را پخش می‌کنم.");
             handler.postDelayed(this::playLatestAudio, 1100L);
             return;
         }
