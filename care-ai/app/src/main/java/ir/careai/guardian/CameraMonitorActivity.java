@@ -2,6 +2,7 @@ package ir.careai.guardian;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.PictureInPictureParams;
 import android.content.ContentUris;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -15,6 +16,7 @@ import android.media.MediaPlayer;
 import android.media.AudioManager;
 import android.media.AudioDeviceInfo;
 import android.net.Uri;
+import android.util.Rational;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -149,6 +151,7 @@ public class CameraMonitorActivity extends Activity
 
     private boolean externalActionInProgress = false;
     private int externalReturnPromptIndex = -1;
+    private String externalTarget = "";
     private SensorManager sensorManager;
     private long lastMotionPrompt = 0L;
 
@@ -377,6 +380,12 @@ public class CameraMonitorActivity extends Activity
         rightThreshold =
                 Math.max(0.010f, Math.min(0.050f, Math.abs(diff) * 0.28f));
 
+        prefs.edit()
+                .putFloat("gaze_neutral", neutralGaze)
+                .putInt("gaze_right_sign", rightDirectionSign)
+                .putFloat("gaze_threshold", rightThreshold)
+                .apply();
+
         calibrationStage = 2;
 
         speak(
@@ -475,6 +484,11 @@ public class CameraMonitorActivity extends Activity
 
         if (mediaMode) {
             stopMediaAndReturn("پخش متوقف شد.");
+            return;
+        }
+
+        if (externalActionInProgress) {
+            bringCareAIToFront();
             return;
         }
 
@@ -1211,6 +1225,44 @@ public class CameraMonitorActivity extends Activity
                 (smoothedGaze - neutralGaze) * rightDirectionSign;
         float leftScore = -rightScore;
 
+        if (externalActionInProgress) {
+            rightGazeStartedAt = 0L;
+
+            if (CareAccessibilityService.isInstagramActive()) {
+                if (leftScore > rightThreshold * 0.80f) {
+                    if (leftGazeStartedAt == 0L) {
+                        leftGazeStartedAt = now;
+                    }
+
+                    long held = now - leftGazeStartedAt;
+
+                    faceState.setText(
+                            "Instagram • نگاه چپ برای ریلز بعدی "
+                                    + Math.min(100L, held * 100L / LEFT_GAZE_HOLD_MS)
+                                    + "%"
+                    );
+
+                    if (held >= LEFT_GAZE_HOLD_MS) {
+                        leftGazeStartedAt = 0L;
+                        smoothedGaze = neutralGaze;
+                        CareAccessibilityService.nextInstagramReel();
+                    }
+                } else {
+                    leftGazeStartedAt = 0L;
+                    faceState.setText(
+                            "Care AI فعال • نگاه چپ = ریلز بعدی • دو پلک = بازگشت"
+                    );
+                }
+            } else {
+                leftGazeStartedAt = 0L;
+                faceState.setText(
+                        "Care AI روی برنامه فعال است • دو پلک = بازگشت به Care AI"
+                );
+            }
+
+            return;
+        }
+
         // هنگام پخش رسانه زمان خواندن سؤال اعمال نمی‌شود.
         if (mediaMode) {
             rightGazeStartedAt = 0L;
@@ -1541,54 +1593,82 @@ public class CameraMonitorActivity extends Activity
         if (faceState != null) faceState.setText(text);
     }
 
+    public void enterExternalPiP(String target) {
+        externalActionInProgress = true;
+        externalTarget = target == null ? "" : target;
+        externalReturnPromptIndex = promptIndex + 1;
+
+        handler.removeCallbacks(promptTimeout);
+        handler.removeCallbacks(countdown);
+
+        setPanelCompact(
+                "Care AI • رصد چشم فعال",
+                "نگاه چپ در Instagram = ریلز بعدی • دو پلک = بازگشت"
+        );
+
+        faceStateSafe("کنترل چشم روی برنامه دیگر فعال است");
+
+        if (Build.VERSION.SDK_INT >= 26) {
+            try {
+                PictureInPictureParams params =
+                        new PictureInPictureParams.Builder()
+                                .setAspectRatio(new Rational(9, 16))
+                                .build();
+                enterPictureInPictureMode(params);
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private void bringCareAIToFront() {
+        externalActionInProgress = false;
+        externalTarget = "";
+
+        try {
+            Intent i = new Intent(this, CameraMonitorActivity.class);
+            i.addFlags(
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                            | Intent.FLAG_ACTIVITY_SINGLE_TOP
+            );
+            startActivity(i);
+        } catch (Exception ignored) {}
+
+        final int next =
+                externalReturnPromptIndex >= 0
+                        ? externalReturnPromptIndex
+                        : promptIndex + 1;
+
+        externalReturnPromptIndex = -1;
+
+        handler.postDelayed(() -> {
+            setPanelFull();
+            faceStateSafe("Care AI دوباره فعال شد");
+            showPrompt(next);
+        }, 500L);
+    }
+
     @Override
-    protected void onPause() {
-        super.onPause();
+    public void onPictureInPictureModeChanged(
+            boolean isInPictureInPictureMode,
+            android.content.res.Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
 
-        if (externalActionInProgress) {
-            try {
-                if (session != null) {
-                    session.close();
-                    session = null;
-                }
-            } catch (Exception ignored) {}
-
-            try {
-                if (camera != null) {
-                    camera.close();
-                    camera = null;
-                }
-            } catch (Exception ignored) {}
+        if (!isInPictureInPictureMode && externalActionInProgress) {
+            externalActionInProgress = false;
+            final int next =
+                    externalReturnPromptIndex >= 0
+                            ? externalReturnPromptIndex
+                            : promptIndex + 1;
+            externalReturnPromptIndex = -1;
+            handler.postDelayed(() -> {
+                setPanelFull();
+                showPrompt(next);
+            }, 350L);
         }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-
-        if (externalActionInProgress) {
-            externalActionInProgress = false;
-
-            final int next =
-                    externalReturnPromptIndex >= 0
-                            ? externalReturnPromptIndex
-                            : promptIndex + 1;
-
-            externalReturnPromptIndex = -1;
-
-            handler.postDelayed(() -> {
-                try {
-                    if (camera == null
-                            && texture != null
-                            && texture.isAvailable()) {
-                        openFrontCamera();
-                    }
-                } catch (Exception ignored) {}
-
-                faceStateSafe("بازگشت از اجرای دستور • Care AI فعال شد");
-                showPrompt(next);
-            }, 550L);
-        }
 
         if (callInProgress
                 && telephonyManager != null
