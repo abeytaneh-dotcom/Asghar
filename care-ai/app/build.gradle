@@ -10,8 +10,8 @@ android {
         applicationId "ir.careai.guardian"
         minSdk 26
         targetSdk 35
-        versionCode 7
-        versionName "7.0-GAZE-CALL-FIX"
+        versionCode 8
+        versionName "8.0-EDITABLE-COMMANDS"
     }
 
     compileOptions {
