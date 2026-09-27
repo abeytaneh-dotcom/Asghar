@@ -16,11 +16,33 @@ if ($action === 'request_otp') {
 
     $db = db();
 
+    $pid = $db->prepare('SELECT enabled FROM patient_ids WHERE patient_id=? LIMIT 1');
+    $pid->execute([$patientId]);
+    $pidEnabled = $pid->fetchColumn();
+    if ($pidEnabled === false || (int)$pidEnabled !== 1) {
+        json_out([
+            'ok'=>false,
+            'code'=>'PATIENT_ID_NOT_ALLOWED',
+            'message'=>'این آیدی بیمار در پنل مدیریت ثبت یا فعال نشده است.'
+        ], 403);
+    }
+
     $s = $db->prepare('SELECT * FROM accounts WHERE phone=? OR patient_id=? OR device_id=? LIMIT 1');
     $s->execute([$phone, $patientId, $deviceId]);
     $existing = $s->fetch(PDO::FETCH_ASSOC);
 
     if ($existing) {
+        if ($existing['phone'] === $phone
+            && str_starts_with((string)$existing['device_id'], 'UNBOUND:')) {
+            if ($existing['patient_id'] !== $patientId) {
+                json_out(['ok'=>false,'code'=>'ACCOUNT_MISMATCH',
+                    'message'=>'این حساب برای بیمار دیگری ثبت شده است.'], 409);
+            }
+            $db->prepare('UPDATE accounts SET device_id=?,auth_token=NULL,updated_at=? WHERE id=?')
+                ->execute([$deviceId,now_iso(),$existing['id']]);
+            $existing['device_id'] = $deviceId;
+        }
+
         if ($existing['phone'] === $phone && $existing['device_id'] !== $deviceId) {
             json_out(['ok'=>false,'code'=>'ACCOUNT_BOUND_OTHER_DEVICE',
                 'message'=>'این حساب قبلاً روی گوشی دیگری ثبت شده است.'], 409);
