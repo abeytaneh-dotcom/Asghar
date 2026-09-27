@@ -71,7 +71,7 @@ jobs:
           if old in s:
               s=s.replace(old,new)
           s=s.replace('private static final String APP_URL = "https://achinu.ir/diag/";','private static final String APP_URL = "https://achinu.ir/amper/";')
-          s=s.replace('        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);','        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);\\n        s.setMediaPlaybackRequiresUserGesture(false);')
+          s=s.replace('        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);','        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);\n        s.setMediaPlaybackRequiresUserGesture(false);')
           s=s.replace('private static final String APP_ORIGIN = "https://achinu.ir";\\n','')
           s=s.replace('if(url.startsWith(APP_URL) && !u.getPath().contains("/manage-")) return false;','if(url.startsWith(APP_URL) && !u.getPath().contains("/panel-")) return false;')
           s=s.replace('                injectNativeUpdateHook();\\n','')
