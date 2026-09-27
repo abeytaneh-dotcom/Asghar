@@ -157,6 +157,41 @@ public class CommandEditorActivity extends Activity {
         enabled.setChecked(cmd.enabled);
         card.addView(enabled);
 
+        CheckBox notify = new CheckBox(this);
+        notify.setText("ارسال پیامک نتیجه به شماره‌های اضطراری");
+        notify.setChecked(cmd.notifyContacts);
+        card.addView(notify);
+
+        TextView classify = text(
+                "دسته: " + CommandStore.categoryLabel(cmd.action),
+                14
+        );
+        classify.setTextColor(Color.rgb(55, 115, 160));
+        card.addView(classify);
+
+        spinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                String action = ACTION_VALUES[position];
+                classify.setText("دسته: " + CommandStore.categoryLabel(action));
+
+                // انتخاب نوع عمل، رفتار پیش‌فرض پیامک را هوشمند می‌کند.
+                if (CommandStore.ACTION_VIDEO.equals(action)
+                        || CommandStore.ACTION_AUDIO.equals(action)
+                        || CommandStore.ACTION_CALL_1.equals(action)
+                        || CommandStore.ACTION_CALL_2.equals(action)
+                        || CommandStore.ACTION_CALL_3.equals(action)) {
+                    notify.setChecked(false);
+                } else if (CommandStore.ACTION_EMERGENCY.equals(action)
+                        || CommandStore.ACTION_SPEAK.equals(action)) {
+                    notify.setChecked(true);
+                }
+            }
+
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        });
+
         Button save = button("ذخیره این دستور");
         Button delete = button("حذف این دستور");
         card.addView(save);
@@ -167,6 +202,7 @@ public class CommandEditorActivity extends Activity {
             cmd.output = out.getText().toString().trim();
             cmd.action = ACTION_VALUES[spinner.getSelectedItemPosition()];
             cmd.enabled = enabled.isChecked();
+            cmd.notifyContacts = notify.isChecked();
 
             if (cmd.question.isEmpty()) {
                 Toast.makeText(this, "متن سؤال خالی است", Toast.LENGTH_SHORT).show();
