@@ -26,6 +26,36 @@ public final class EmergencyManager {
         return out;
     }
 
+    public static boolean notifyTrusted(Activity a, String message) {
+        List<String> nums = trustedNumbers(a);
+        if (nums.isEmpty()) {
+            Toast.makeText(a, "شماره اضطراری ثبت نشده است", Toast.LENGTH_LONG).show();
+            return false;
+        }
+
+        if (a.checkSelfPermission(Manifest.permission.SEND_SMS)
+                != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(a, "مجوز پیامک داده نشده است", Toast.LENGTH_LONG).show();
+            return false;
+        }
+
+        String patient = a.getSharedPreferences("careai", Context.MODE_PRIVATE)
+                .getString("patient_name", "بیمار");
+
+        String msg = patient + ": " + message;
+
+        try {
+            SmsManager sms = SmsManager.getDefault();
+            for (String n : nums) {
+                sms.sendTextMessage(n, null, msg, null, null);
+            }
+            return true;
+        } catch (Exception e) {
+            Toast.makeText(a, "ارسال پیامک ناموفق بود", Toast.LENGTH_LONG).show();
+            return false;
+        }
+    }
+
     public static void sendEmergency(Activity a, String reason, boolean callPrimary) {
         List<String> nums = trustedNumbers(a);
         if (nums.isEmpty()) {
