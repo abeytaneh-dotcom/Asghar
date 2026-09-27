@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
         getWindow().setNavigationBarColor(Color.WHITE);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         prefs = getSharedPreferences("careai", MODE_PRIVATE);
-        route();
+        verifyAccessThenRoute();
     }
 
     @Override
@@ -58,6 +58,48 @@ public class MainActivity extends Activity {
                 && !autoLaunchScheduled) {
             // فقط وقتی Activity در حال نمایش داشبورد است، بازسازی بی‌خطر است.
         }
+    }
+
+    private void verifyAccessThenRoute() {
+        if (!AuthManager.hasToken(this)) {
+            openRegistration();
+            return;
+        }
+
+        TextView loading = text(
+                "در حال بررسی فعال‌سازی Care AI...",
+                18,
+                C_TEXT,
+                true
+        );
+        loading.setGravity(Gravity.CENTER);
+        loading.setBackgroundColor(C_BG);
+        setContentView(loading);
+
+        AuthManager.checkStatus(this, (result, error) ->
+                runOnUiThread(() -> {
+                    if (error != null || result == null) {
+                        if (AuthManager.cachedActive(this)) {
+                            route();
+                        } else {
+                            openRegistration();
+                        }
+                        return;
+                    }
+
+                    if (result.optBoolean("ok")
+                            && result.optBoolean("active")) {
+                        route();
+                    } else {
+                        openRegistration();
+                    }
+                })
+        );
+    }
+
+    private void openRegistration() {
+        startActivity(new Intent(this, RegistrationActivity.class));
+        finish();
     }
 
     private void route() {
@@ -548,6 +590,23 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(this, CommandEditorActivity.class))
         );
         l.addView(addCommand);
+
+        l.addView(sectionTitle("کنترل روی برنامه‌های دیگر"));
+
+        boolean accessibilityOn = CareAccessibilityService.isEnabled(this);
+
+        LinearLayout access = wideCard(
+                android.R.drawable.ic_menu_view,
+                accessibilityOn
+                        ? "کنترل برنامه‌ها فعال است"
+                        : "فعال‌سازی کنترل برنامه‌ها",
+                accessibilityOn
+                        ? "Care AI می‌تواند روی Instagram و برنامه‌های دیگر با چشم فعال بماند"
+                        : "یک بار سرویس Care AI را در Accessibility روشن کنید",
+                accessibilityOn ? C_TEAL : C_RED,
+                v -> CareAccessibilityService.openSettings(this)
+        );
+        l.addView(access);
 
         l.addView(sectionTitle("بروزرسانی‌ها"));
 
