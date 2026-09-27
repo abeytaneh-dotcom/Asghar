@@ -1,0 +1,29 @@
+name: Package Care AI Server
+
+on:
+  push:
+    branches:
+      - care-ai-eye-m2
+    paths:
+      - 'care-ai/server/**'
+      - '.github/workflows/package-careai-server.yml'
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package server
+        run: |
+          cd care-ai
+          zip -r CareAI-Server-V11.zip server
+
+      - name: Upload server package
+        uses: actions/upload-artifact@v4
+        with:
+          name: CareAI-Server-V11
+          path: care-ai/CareAI-Server-V11.zip
+          retention-days: 7
