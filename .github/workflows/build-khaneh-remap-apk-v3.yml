@@ -1,4 +1,4 @@
-name: Build Khaneh Remap APK v3.0.6 Unsigned
+name: Build Khaneh Remap APK v3.0.7 Unsigned
 
 on:
   push:
@@ -40,20 +40,20 @@ jobs:
 
       - name: Unpack clean source
         run: |
-          rm -rf apk-v306
-          mkdir -p apk-v306
-          base64 -d apk-v3-src.zip.b64 > /tmp/apk-v306.zip
-          unzip -q /tmp/apk-v306.zip -d apk-v306
+          rm -rf apk-v307
+          mkdir -p apk-v307
+          base64 -d apk-v3-src.zip.b64 > /tmp/apk-v307.zip
+          unzip -q /tmp/apk-v307.zip -d apk-v307
 
           printf '%s\n' \
             'android.useAndroidX=true' \
             'android.nonTransitiveRClass=true' \
-            'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > apk-v306/gradle.properties
+            'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > apk-v307/gradle.properties
 
           python3 - <<'PY'
           from pathlib import Path
           import re
-          root=Path('apk-v306')
+          root=Path('apk-v307')
 
           # Fix native BLE bridge syntax.
           p=root/'app/src/main/java/ir/khanehremap/diag/MainActivity.java'
@@ -71,6 +71,7 @@ jobs:
           if old in s:
               s=s.replace(old,new)
           s=s.replace('private static final String APP_URL = "https://achinu.ir/diag/";','private static final String APP_URL = "https://achinu.ir/amper/";')
+          s=s.replace('        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);','        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);\\n        s.setMediaPlaybackRequiresUserGesture(false);')
           s=s.replace('private static final String APP_ORIGIN = "https://achinu.ir";\\n','')
           s=s.replace('if(url.startsWith(APP_URL) && !u.getPath().contains("/manage-")) return false;','if(url.startsWith(APP_URL) && !u.getPath().contains("/panel-")) return false;')
           s=s.replace('                injectNativeUpdateHook();\\n','')
@@ -84,8 +85,8 @@ jobs:
           s=re.sub(r"applicationId\s+'[^']+'","applicationId 'com.krdiag.kilometer.n202609252354'",s)
           s=re.sub(r"minSdk\s+\d+","minSdk 23",s)
           s=re.sub(r"targetSdk\s+\d+","targetSdk 34",s)
-          s=re.sub(r"versionCode\s+\d+","versionCode 306",s)
-          s=re.sub(r"versionName\s+'[^']+'","versionName '3.0.6'",s)
+          s=re.sub(r"versionCode\s+\d+","versionCode 307",s)
+          s=re.sub(r"versionName\s+'[^']+'","versionName '3.0.7'",s)
           s=s.replace('minifyEnabled true','minifyEnabled false')
           s=s.replace('shrinkResources true','shrinkResources false')
           p.write_text(s)
@@ -110,8 +111,8 @@ jobs:
           )
           PY
 
-          mkdir -p apk-v306/app/src/main/res/drawable
-          cat > apk-v306/app/src/main/res/drawable/kr_launcher.xml <<'XML'
+          mkdir -p apk-v307/app/src/main/res/drawable
+          cat > apk-v307/app/src/main/res/drawable/kr_launcher.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp" android:height="108dp"
@@ -135,14 +136,14 @@ jobs:
 
       - name: Build release
         run: |
-          cd apk-v306
+          cd apk-v307
           gradle --no-daemon clean :app:assembleRelease
 
       - name: Zipalign
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 \
-            apk-v306/app/build/outputs/apk/release/app-release-unsigned.apk \
-            KhanehRemap-SmartOBD-v3.0.6-aligned.apk
+            apk-v307/app/build/outputs/apk/release/app-release-unsigned.apk \
+            KhanehRemap-SmartOBD-v3.0.7-aligned.apk
 
       - name: Export unsigned APK and signer
         run: |
@@ -151,8 +152,8 @@ jobs:
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: KhanehRemap-SmartOBD-v3.0.6-UNSIGNED
+          name: KhanehRemap-SmartOBD-v3.0.7-UNSIGNED
           path: |
-            KhanehRemap-SmartOBD-v3.0.6-aligned.apk
+            KhanehRemap-SmartOBD-v3.0.7-aligned.apk
             apksigner.jar
           retention-days: 1
