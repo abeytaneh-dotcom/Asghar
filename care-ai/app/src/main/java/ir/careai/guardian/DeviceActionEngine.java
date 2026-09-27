@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.net.Uri;
 import android.provider.MediaStore;
 import android.provider.Settings;
+import android.os.Handler;
+import android.os.Looper;
 
 public final class DeviceActionEngine {
 
@@ -60,6 +62,8 @@ public final class DeviceActionEngine {
     private static boolean openApp(Activity activity, String target) {
         String raw = target == null ? "" : target.trim();
         if (raw.isEmpty()) return false;
+
+        prepareEyeControl(activity, raw);
 
         String normalized = normalize(raw);
 
@@ -122,15 +126,46 @@ public final class DeviceActionEngine {
             if (launch == null) return false;
 
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            activity.startActivity(launch);
+
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                try {
+                    activity.startActivity(launch);
+
+                    if ("com.instagram.android".equals(packageName)) {
+                        CareAccessibilityService.openInstagramReelsSoon();
+
+                        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                            if (!CareAccessibilityService.isInstagramActive()) {
+                                try {
+                                    Intent fallback = new Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse("https://www.instagram.com/reels/")
+                                    );
+                                    fallback.setPackage("com.instagram.android");
+                                    activity.startActivity(fallback);
+                                } catch (Exception ignored) {}
+                            }
+                        }, 2600L);
+                    }
+                } catch (Exception ignored) {}
+            }, 420L);
+
             return true;
         } catch (Exception e) {
             return false;
         }
     }
 
+    private static void prepareEyeControl(Activity activity, String target) {
+        if (activity instanceof CameraMonitorActivity) {
+            ((CameraMonitorActivity) activity).enterExternalPiP(target);
+        }
+    }
+
     private static boolean openUrl(Activity activity, String target) {
         if (target == null) return false;
+
+        prepareEyeControl(activity, target);
 
         String value = target.trim();
         if (value.isEmpty()) return false;
@@ -207,7 +242,7 @@ public final class DeviceActionEngine {
             return new AppTarget(
                     "com.instagram.android",
                     "instagram://app",
-                    "https://www.instagram.com/"
+                    "https://www.instagram.com/reels/"
             );
         }
 
