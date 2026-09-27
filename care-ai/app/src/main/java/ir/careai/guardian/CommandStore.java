@@ -17,6 +17,8 @@ public final class CommandStore {
     public static final String ACTION_VIDEO = "VIDEO";
     public static final String ACTION_AUDIO = "AUDIO";
     public static final String ACTION_EMERGENCY = "EMERGENCY";
+    public static final String ACTION_OPEN_APP = "OPEN_APP";
+    public static final String ACTION_OPEN_URL = "OPEN_URL";
 
     private static final String KEY = "commands_json";
 
@@ -29,18 +31,24 @@ public final class CommandStore {
         public String action;
         public boolean enabled;
         public boolean notifyContacts;
+        public String target;
 
         public Command(String id, String question, String output, String action, boolean enabled) {
-            this(id, question, output, action, enabled, defaultNotify(action));
+            this(id, question, output, action, enabled, defaultNotify(action), "");
         }
 
         public Command(String id, String question, String output, String action, boolean enabled, boolean notifyContacts) {
+            this(id, question, output, action, enabled, notifyContacts, "");
+        }
+
+        public Command(String id, String question, String output, String action, boolean enabled, boolean notifyContacts, String target) {
             this.id = id;
             this.question = question;
             this.output = output;
             this.action = action;
             this.enabled = enabled;
             this.notifyContacts = notifyContacts;
+            this.target = target == null ? "" : target;
         }
     }
 
@@ -66,7 +74,8 @@ public final class CommandStore {
                         o.optBoolean("enabled", true),
                         o.has("notifyContacts")
                                 ? o.optBoolean("notifyContacts", true)
-                                : defaultNotify(o.optString("action", ACTION_SPEAK))
+                                : defaultNotify(o.optString("action", ACTION_SPEAK)),
+                        o.optString("target", "")
                 ));
             }
         } catch (Exception ignored) {}
@@ -89,6 +98,7 @@ public final class CommandStore {
                 o.put("action", cmd.action);
                 o.put("enabled", cmd.enabled);
                 o.put("notifyContacts", cmd.notifyContacts);
+                o.put("target", cmd.target == null ? "" : cmd.target);
                 arr.put(o);
             }
         } catch (Exception ignored) {}
@@ -139,6 +149,7 @@ public final class CommandStore {
         if (ACTION_VIDEO.equals(action) || ACTION_AUDIO.equals(action)) return "رسانه";
         if (ACTION_CALL_1.equals(action) || ACTION_CALL_2.equals(action) || ACTION_CALL_3.equals(action)) return "تماس";
         if (ACTION_EMERGENCY.equals(action)) return "اضطراری";
+        if (ACTION_OPEN_APP.equals(action) || ACTION_OPEN_URL.equals(action)) return "اجرایی گوشی";
         return "اطلاع‌رسانی";
     }
 
@@ -149,6 +160,8 @@ public final class CommandStore {
         if (ACTION_VIDEO.equals(action)) return "پخش ویدیو";
         if (ACTION_AUDIO.equals(action)) return "پخش آهنگ";
         if (ACTION_EMERGENCY.equals(action)) return "کمک فوری";
+        if (ACTION_OPEN_APP.equals(action)) return "باز کردن اپلیکیشن";
+        if (ACTION_OPEN_URL.equals(action)) return "باز کردن لینک / سایت";
         return "اعلام صوتی + پیامک";
     }
 }
