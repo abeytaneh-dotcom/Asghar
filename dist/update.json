@@ -1,6 +1,6 @@
 {
-  "version_code": 10,
-  "version_name": "10.0-CUSTOM-ACTIONS",
+  "version_code": 11,
+  "version_name": "11.0-REMOTE-CARE",
   "apk_url": "https://raw.githubusercontent.com/abeytaneh-dotcom/Asghar/care-ai-eye-m2/dist/CareAI-latest.apk",
   "notes": "اجرای واقعی دستورات سفارشی، باز کردن اپلیکیشن و لینک، تشخیص خودکار فرمان‌های قدیمی مثل اینستاگرام باز بشه و حفظ سیستم بروزرسانی مستقیم."
 }
