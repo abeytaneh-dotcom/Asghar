@@ -38,6 +38,8 @@ public class CommandEditorActivity extends Activity {
             CommandStore.ACTION_CALL_3,
             CommandStore.ACTION_VIDEO,
             CommandStore.ACTION_AUDIO,
+            CommandStore.ACTION_OPEN_APP,
+            CommandStore.ACTION_OPEN_URL,
             CommandStore.ACTION_EMERGENCY
     };
 
@@ -48,6 +50,8 @@ public class CommandEditorActivity extends Activity {
             "تماس با همراه ۳",
             "پخش ویدیو",
             "پخش آهنگ",
+            "باز کردن اپلیکیشن",
+            "باز کردن لینک / سایت",
             "کمک فوری"
     };
 
@@ -233,6 +237,21 @@ public class CommandEditorActivity extends Activity {
         out.setText(cmd.output);
         card.addView(out);
 
+        TextView targetLabel = label("هدف اجرا (برای دستورهای اجرایی)");
+        card.addView(targetLabel);
+        EditText target = input("مثلاً Instagram یا com.instagram.android یا https://...");
+        target.setText(cmd.target == null ? "" : cmd.target);
+        card.addView(target);
+
+        TextView targetHint = text(
+                "برای «باز کردن اپلیکیشن» می‌توانی Instagram، WhatsApp، Telegram، YouTube یا package name برنامه را وارد کنی.",
+                12,
+                C_MUTED,
+                false
+        );
+        targetHint.setPadding(dp(3), dp(3), dp(3), dp(7));
+        card.addView(targetHint);
+
         TextView actionLabel = label("نوع عملکرد");
         card.addView(actionLabel);
 
@@ -332,6 +351,7 @@ public class CommandEditorActivity extends Activity {
             cmd.action = ACTION_VALUES[spinner.getSelectedItemPosition()];
             cmd.enabled = enabledTop.isChecked();
             cmd.notifyContacts = notify.isChecked();
+            cmd.target = target.getText().toString().trim();
 
             if (cmd.question.isEmpty()) {
                 Toast.makeText(this, "متن سؤال خالی است", Toast.LENGTH_SHORT).show();
@@ -382,6 +402,9 @@ public class CommandEditorActivity extends Activity {
     private int accentFor(String action) {
         if (CommandStore.ACTION_VIDEO.equals(action)
                 || CommandStore.ACTION_AUDIO.equals(action)) return C_TEAL;
+
+        if (CommandStore.ACTION_OPEN_APP.equals(action)
+                || CommandStore.ACTION_OPEN_URL.equals(action)) return Color.rgb(29, 145, 165);
 
         if (CommandStore.ACTION_CALL_1.equals(action)
                 || CommandStore.ACTION_CALL_2.equals(action)
