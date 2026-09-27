@@ -65,7 +65,7 @@ public class CameraMonitorActivity extends Activity
 
     private static final long FRAME_INTERVAL_MS = 120L;
     private static final long PROMPT_DURATION_MS = 20000L;
-    private static final long READING_LOCK_MS = 4000L;
+    private static final long READING_LOCK_MS = 3000L;
     private static final long RIGHT_GAZE_HOLD_MS = 320L;
     private static final long LEFT_GAZE_HOLD_MS = 320L;
 
@@ -463,6 +463,7 @@ public class CameraMonitorActivity extends Activity
 
         promptShownAt = System.currentTimeMillis();
         promptDeadline = promptShownAt + PROMPT_DURATION_MS;
+        smoothedGaze = Float.NaN;
         rightGazeStartedAt = 0L;
         blinkCount = 0;
         firstBlinkAt = 0L;
@@ -801,6 +802,7 @@ public class CameraMonitorActivity extends Activity
     private void playLatestVideo() {
         mediaIndex = 0;
         mediaIsVideo = true;
+        smoothedGaze = Float.NaN;
         playVideoAtIndex();
     }
 
@@ -844,6 +846,7 @@ public class CameraMonitorActivity extends Activity
     private void playLatestAudio() {
         mediaIndex = 0;
         mediaIsVideo = false;
+        smoothedGaze = Float.NaN;
         playAudioAtIndex();
     }
 
@@ -1186,12 +1189,6 @@ public class CameraMonitorActivity extends Activity
 
         if (!open) return;
 
-        if (now - promptShownAt < READING_LOCK_MS) {
-            rightGazeStartedAt = 0L;
-            faceState.setText("زمان خواندن سؤال");
-            return;
-        }
-
         if (Float.isNaN(smoothedGaze)) {
             smoothedGaze = gaze;
         } else {
@@ -1202,10 +1199,11 @@ public class CameraMonitorActivity extends Activity
                 (smoothedGaze - neutralGaze) * rightDirectionSign;
         float leftScore = -rightScore;
 
+        // هنگام پخش رسانه زمان خواندن سؤال اعمال نمی‌شود.
         if (mediaMode) {
             rightGazeStartedAt = 0L;
 
-            if (leftScore > rightThreshold * 0.85f) {
+            if (leftScore > rightThreshold * 0.80f) {
                 if (leftGazeStartedAt == 0L) {
                     leftGazeStartedAt = now;
                 }
@@ -1220,6 +1218,7 @@ public class CameraMonitorActivity extends Activity
 
                 if (held >= LEFT_GAZE_HOLD_MS) {
                     leftGazeStartedAt = 0L;
+                    smoothedGaze = neutralGaze;
                     nextMedia();
                 }
             } else {
@@ -1233,6 +1232,13 @@ public class CameraMonitorActivity extends Activity
         }
 
         leftGazeStartedAt = 0L;
+
+        // فقط سؤال‌های متنی ۳ ثانیه زمان مطالعه دارند.
+        if (now - promptShownAt < READING_LOCK_MS) {
+            rightGazeStartedAt = 0L;
+            faceState.setText("زمان خواندن سؤال");
+            return;
+        }
 
         if (rightScore > rightThreshold) {
             if (rightGazeStartedAt == 0L) {
@@ -1249,6 +1255,7 @@ public class CameraMonitorActivity extends Activity
 
             if (held >= RIGHT_GAZE_HOLD_MS) {
                 rightGazeStartedAt = 0L;
+                smoothedGaze = neutralGaze;
                 rejectCurrentByGaze();
             }
         } else {
