@@ -143,7 +143,7 @@ new_update=r'''    private void checkUpdate(String token){
     }
 
     private void downloadAndInstall'''
-s2=re.sub(rx,new_update,s,flags=re.S)
+s2=re.sub(rx,lambda m:new_update,s,flags=re.S)
 if s2==s:
     raise SystemExit('native updater method patch point not found')
 s=s2
