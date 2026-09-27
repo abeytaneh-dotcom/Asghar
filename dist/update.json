@@ -1,6 +1,6 @@
 {
-  "version_code": 9,
-  "version_name": "9.0-PRO-UPDATE",
+  "version_code": 10,
+  "version_name": "10.0-CUSTOM-ACTIONS",
   "apk_url": "https://raw.githubusercontent.com/abeytaneh-dotcom/Asghar/care-ai-eye-m2/dist/CareAI-latest.apk",
-  "notes": "بهبود رابط کاربری، مدیریت حرفه‌ای دستورات، تفکیک دستورات اجرایی و اطلاع‌رسانی و سیستم بروزرسانی مستقیم."
+  "notes": "اجرای واقعی دستورات سفارشی، باز کردن اپلیکیشن و لینک، تشخیص خودکار فرمان‌های قدیمی مثل اینستاگرام باز بشه و حفظ سیستم بروزرسانی مستقیم."
 }
