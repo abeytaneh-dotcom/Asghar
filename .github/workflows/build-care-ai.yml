@@ -1,4 +1,4 @@
-name: Build Care AI V7 Gaze Call APK
+name: Build Care AI V8 Commands APK
 
 on:
   push:
@@ -45,11 +45,11 @@ jobs:
       - name: Copy APK
         run: |
           mkdir -p dist
-          cp care-ai/app/build/outputs/apk/debug/app-debug.apk dist/CareAI-V7-Gaze-Call-debug.apk
+          cp care-ai/app/build/outputs/apk/debug/app-debug.apk dist/CareAI-V8-Commands-debug.apk
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CareAI-V7-Gaze-Call-debug
+          name: CareAI-V8-Commands-debug
           path: care-ai/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
