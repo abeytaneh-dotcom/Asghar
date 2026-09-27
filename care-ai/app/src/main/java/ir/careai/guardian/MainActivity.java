@@ -353,6 +353,9 @@ public class MainActivity extends Activity {
         if (checkSelfPermission(Manifest.permission.CALL_PHONE)
                 != PackageManager.PERMISSION_GRANTED) return false;
 
+        if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE)
+                != PackageManager.PERMISSION_GRANTED) return false;
+
         if (Build.VERSION.SDK_INT >= 33) {
             if (checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO)
                     != PackageManager.PERMISSION_GRANTED) return false;
@@ -371,6 +374,7 @@ public class MainActivity extends Activity {
         permissions.add(Manifest.permission.CAMERA);
         permissions.add(Manifest.permission.SEND_SMS);
         permissions.add(Manifest.permission.CALL_PHONE);
+        permissions.add(Manifest.permission.READ_PHONE_STATE);
 
         if (Build.VERSION.SDK_INT >= 33) {
             permissions.add(Manifest.permission.READ_MEDIA_AUDIO);
