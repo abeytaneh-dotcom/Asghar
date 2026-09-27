@@ -190,7 +190,7 @@ new=r'''    private void checkUpdate(String token){
     }
 
     private void installApk'''
-s2=re.sub(rx,new,s,flags=re.S)
+s2=re.sub(rx,lambda m:new,s,flags=re.S)
 if s2==s:
     raise SystemExit('updater patch point not found')
 s=s2
