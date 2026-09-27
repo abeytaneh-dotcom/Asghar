@@ -22,6 +22,8 @@ import android.os.Looper;
 import android.provider.MediaStore;
 import android.speech.tts.TextToSpeech;
 import android.telecom.TelecomManager;
+import android.telephony.PhoneStateListener;
+import android.telephony.TelephonyManager;
 import android.view.Gravity;
 import android.view.Surface;
 import android.view.TextureView;
@@ -61,10 +63,11 @@ import java.util.concurrent.Executors;
 public class CameraMonitorActivity extends Activity
         implements TextToSpeech.OnInitListener, SensorEventListener {
 
-    private static final long FRAME_INTERVAL_MS = 250L;
+    private static final long FRAME_INTERVAL_MS = 120L;
     private static final long PROMPT_DURATION_MS = 20000L;
     private static final long READING_LOCK_MS = 4000L;
-    private static final long RIGHT_GAZE_HOLD_MS = 1000L;
+    private static final long RIGHT_GAZE_HOLD_MS = 320L;
+    private static final long LEFT_GAZE_HOLD_MS = 320L;
 
     private static final long BLINK_MIN_MS = 90L;
     private static final long BLINK_MAX_MS = 750L;
@@ -126,20 +129,32 @@ public class CameraMonitorActivity extends Activity
     private int blinkCount = 0;
     private long firstBlinkAt = 0L;
     private long rightGazeStartedAt = 0L;
+    private long leftGazeStartedAt = 0L;
     private long lastActionAt = 0L;
+    private float smoothedGaze = Float.NaN;
 
     private boolean sleepMode = false;
     private long wakeOpenStartedAt = 0L;
 
     private boolean mediaMode = false;
+    private boolean mediaIsVideo = false;
+    private int mediaIndex = 0;
     private MediaPlayer audioPlayer;
+
+    private TelephonyManager telephonyManager;
+    private PhoneStateListener phoneStateListener;
+    private boolean callInProgress = false;
+    private boolean callWasActive = false;
+    private long callStartedAt = 0L;
     private SensorManager sensorManager;
     private long lastMotionPrompt = 0L;
 
     private final Runnable frameLoop = new Runnable() {
         @Override
         public void run() {
-            analyzeTextureFrame();
+            if (!callInProgress) {
+                analyzeTextureFrame();
+            }
             handler.postDelayed(this, FRAME_INTERVAL_MS);
         }
     };
@@ -163,7 +178,7 @@ public class CameraMonitorActivity extends Activity
             long seconds = (left + 999L) / 1000L;
 
             instruction.setText(
-                    "دو پلک پشت سر هم = تأیید  •  نگاه راست = رد  •  "
+                    "دو پلک = تأیید  •  نگاه راست = رد  •  "
                             + seconds + " ثانیه"
             );
 
@@ -184,6 +199,7 @@ public class CameraMonitorActivity extends Activity
         initTts();
         buildUi();
         initMotionSensor();
+        initCallStateMonitor();
         initFaceLandmarker();
 
         handler.postDelayed(frameLoop, 500L);
@@ -356,7 +372,7 @@ public class CameraMonitorActivity extends Activity
         neutralGaze = center;
         rightDirectionSign = diff >= 0f ? 1 : -1;
         rightThreshold =
-                Math.max(0.018f, Math.min(0.075f, Math.abs(diff) * 0.45f));
+                Math.max(0.010f, Math.min(0.050f, Math.abs(diff) * 0.28f));
 
         calibrationStage = 2;
 
@@ -545,7 +561,6 @@ public class CameraMonitorActivity extends Activity
             faceState.setText("در حال ارسال فرمان تماس به سیستم تلفن");
             speak("تأیید شد. الان به " + p.output + " زنگ می‌زنم و تماس را روی بلندگو می‌گذارم.");
             handler.postDelayed(() -> placeSpeakerCall(p.data), 700L);
-            handler.postDelayed(() -> showPrompt(promptIndex + 1), 6500L);
             return;
         }
 
@@ -570,6 +585,52 @@ public class CameraMonitorActivity extends Activity
         handler.postDelayed(() -> showPrompt(promptIndex + 1), 4500L);
     }
 
+    private void initCallStateMonitor() {
+        telephonyManager =
+                (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+
+        if (telephonyManager == null) return;
+
+        if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE)
+                != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        phoneStateListener = new PhoneStateListener() {
+            @Override
+            public void onCallStateChanged(int state, String phoneNumber) {
+                super.onCallStateChanged(state, phoneNumber);
+
+                if (state == TelephonyManager.CALL_STATE_OFFHOOK) {
+                    callWasActive = true;
+                    callInProgress = true;
+                    forceSpeakerRoute();
+                    handler.postDelayed(() -> {
+                        if (callInProgress) forceSpeakerRoute();
+                    }, 900L);
+                    handler.postDelayed(() -> {
+                        if (callInProgress) forceSpeakerRoute();
+                    }, 1800L);
+                }
+
+                if (state == TelephonyManager.CALL_STATE_IDLE
+                        && callWasActive) {
+                    callWasActive = false;
+                    callInProgress = false;
+                    releaseSpeakerRoute();
+                    returnFromCall();
+                }
+            }
+        };
+
+        try {
+            telephonyManager.listen(
+                    phoneStateListener,
+                    PhoneStateListener.LISTEN_CALL_STATE
+            );
+        } catch (Exception ignored) {}
+    }
+
     private void placeSpeakerCall(String number) {
         if (number == null || number.trim().isEmpty()) {
             speak("شماره تماس ثبت نشده است.");
@@ -581,6 +642,13 @@ public class CameraMonitorActivity extends Activity
             speak("مجوز تماس تلفنی داده نشده است.");
             return;
         }
+
+        handler.removeCallbacks(promptTimeout);
+        handler.removeCallbacks(countdown);
+
+        callInProgress = true;
+        callWasActive = false;
+        callStartedAt = System.currentTimeMillis();
 
         try {
             TelecomManager telecom =
@@ -598,28 +666,82 @@ public class CameraMonitorActivity extends Activity
             );
 
             handler.postDelayed(() -> {
-                try {
-                    AudioManager am =
-                            (AudioManager) getSystemService(AUDIO_SERVICE);
+                if (callInProgress) forceSpeakerRoute();
+            }, 700L);
 
-                    if (Build.VERSION.SDK_INT >= 31) {
-                        for (AudioDeviceInfo d : am.getAvailableCommunicationDevices()) {
-                            if (d.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
-                                am.setCommunicationDevice(d);
-                                break;
-                            }
-                        }
-                    } else {
-                        am.setMode(AudioManager.MODE_IN_COMMUNICATION);
-                        am.setSpeakerphoneOn(true);
-                    }
-                } catch (Exception ignored) {}
-            }, 1200L);
+            handler.postDelayed(() -> {
+                if (callInProgress) forceSpeakerRoute();
+            }, 1600L);
 
         } catch (Exception e) {
+            callInProgress = false;
+            releaseSpeakerRoute();
             faceState.setText("تماس برقرار نشد: " + e.getClass().getSimpleName());
             speak("تماس برقرار نشد.");
+            handler.postDelayed(() -> showPrompt(promptIndex + 1), 1800L);
         }
+    }
+
+    private void forceSpeakerRoute() {
+        try {
+            AudioManager am =
+                    (AudioManager) getSystemService(AUDIO_SERVICE);
+
+            if (am == null) return;
+
+            if (Build.VERSION.SDK_INT >= 31) {
+                for (AudioDeviceInfo d :
+                        am.getAvailableCommunicationDevices()) {
+                    if (d.getType()
+                            == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                        am.setCommunicationDevice(d);
+                        break;
+                    }
+                }
+            } else {
+                am.setSpeakerphoneOn(true);
+            }
+
+            faceStateSafe("تماس روی بلندگو • Care AI منتظر پایان تماس است");
+
+        } catch (Exception ignored) {}
+    }
+
+    private void releaseSpeakerRoute() {
+        try {
+            AudioManager am =
+                    (AudioManager) getSystemService(AUDIO_SERVICE);
+
+            if (am == null) return;
+
+            if (Build.VERSION.SDK_INT >= 31) {
+                am.clearCommunicationDevice();
+            } else {
+                am.setSpeakerphoneOn(false);
+            }
+
+            am.setMode(AudioManager.MODE_NORMAL);
+
+        } catch (Exception ignored) {}
+    }
+
+    private void returnFromCall() {
+        releaseSpeakerRoute();
+
+        setPanelFull();
+        panel.setVisibility(View.VISIBLE);
+        promptText.setBackgroundColor(0xFF1A5688);
+        modeState.setText("Care Mode");
+        promptText.setText("تماس پایان یافت");
+        instruction.setText("در حال بازگشت به مراقبت");
+        faceState.setText("تماس پایان یافت • کنترل چشم دوباره فعال شد");
+
+        speak("تماس پایان یافت. مراقبت ادامه دارد.");
+
+        handler.postDelayed(
+                () -> showPrompt(promptIndex + 1),
+                1600L
+        );
     }
 
     private boolean hasAudioPermission() {
@@ -640,7 +762,7 @@ public class CameraMonitorActivity extends Activity
                 == PackageManager.PERMISSION_GRANTED;
     }
 
-    private Uri latestMediaUri(boolean video) {
+    private Uri mediaUriAt(boolean video, int index) {
         Uri collection = video
                 ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                 : MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
@@ -659,9 +781,14 @@ public class CameraMonitorActivity extends Activity
                     MediaStore.MediaColumns.DATE_ADDED + " DESC"
             );
 
-            if (cursor != null && cursor.moveToFirst()) {
-                long id = cursor.getLong(0);
-                return ContentUris.withAppendedId(collection, id);
+            if (cursor != null && cursor.getCount() > 0) {
+                int safeIndex = index % cursor.getCount();
+                if (safeIndex < 0) safeIndex = 0;
+
+                if (cursor.moveToPosition(safeIndex)) {
+                    long id = cursor.getLong(0);
+                    return ContentUris.withAppendedId(collection, id);
+                }
             }
         } catch (Exception ignored) {
         } finally {
@@ -672,21 +799,28 @@ public class CameraMonitorActivity extends Activity
     }
 
     private void playLatestVideo() {
+        mediaIndex = 0;
+        mediaIsVideo = true;
+        playVideoAtIndex();
+    }
+
+    private void playVideoAtIndex() {
         if (!hasVideoPermission()) {
             speak("مجوز دسترسی به ویدیوهای گوشی داده نشده است.");
             handler.postDelayed(() -> showPrompt(promptIndex + 1), 3000L);
             return;
         }
 
-        Uri uri = latestMediaUri(true);
+        Uri uri = mediaUriAt(true, mediaIndex);
         if (uri == null) {
             speak("ویدیویی در گوشی پیدا نکردم.");
-            handler.postDelayed(() -> showPrompt(promptIndex + 1), 3000L);
+            stopMediaAndReturn("ویدیویی پیدا نشد.");
             return;
         }
 
-        stopAudioOnly();
+        stopPlayersOnly();
         mediaMode = true;
+        mediaIsVideo = true;
 
         videoView.setVisibility(View.VISIBLE);
         videoView.setVideoURI(uri);
@@ -694,34 +828,42 @@ public class CameraMonitorActivity extends Activity
             mp.setLooping(false);
             videoView.start();
         });
-        videoView.setOnCompletionListener(mp ->
-                stopMediaAndReturn("ویدیو تمام شد.")
-        );
+        videoView.setOnCompletionListener(mp -> nextMedia());
         videoView.setOnErrorListener((mp, what, extra) -> {
-            stopMediaAndReturn("پخش ویدیو با خطا متوقف شد.");
+            nextMedia();
             return true;
         });
 
-        setPanelCompact("Care AI • رصد فعال", "دو پلک = توقف و بازگشت");
-        faceState.setText("ویدیو در حال پخش • رصد چشم ادامه دارد");
+        setPanelCompact(
+                "Care AI • ویدیو " + (mediaIndex + 1),
+                "نگاه چپ = بعدی • دو پلک = توقف"
+        );
+        faceState.setText("ویدیو در حال پخش • نگاه چپ = ویدیوی بعدی");
     }
 
     private void playLatestAudio() {
+        mediaIndex = 0;
+        mediaIsVideo = false;
+        playAudioAtIndex();
+    }
+
+    private void playAudioAtIndex() {
         if (!hasAudioPermission()) {
             speak("مجوز دسترسی به آهنگ‌های گوشی داده نشده است.");
             handler.postDelayed(() -> showPrompt(promptIndex + 1), 3000L);
             return;
         }
 
-        Uri uri = latestMediaUri(false);
+        Uri uri = mediaUriAt(false, mediaIndex);
         if (uri == null) {
             speak("آهنگی در گوشی پیدا نکردم.");
-            handler.postDelayed(() -> showPrompt(promptIndex + 1), 3000L);
+            stopMediaAndReturn("آهنگی پیدا نشد.");
             return;
         }
 
-        stopMediaSilently();
+        stopPlayersOnly();
         mediaMode = true;
+        mediaIsVideo = false;
 
         try {
             audioPlayer = new MediaPlayer();
@@ -733,16 +875,46 @@ public class CameraMonitorActivity extends Activity
             );
             audioPlayer.setDataSource(this, uri);
             audioPlayer.setOnPreparedListener(mp -> mp.start());
-            audioPlayer.setOnCompletionListener(mp ->
-                    stopMediaAndReturn("آهنگ تمام شد.")
-            );
+            audioPlayer.setOnCompletionListener(mp -> nextMedia());
             audioPlayer.prepareAsync();
 
-            setPanelCompact("Care AI • موسیقی", "دو پلک = توقف و بازگشت");
-            faceState.setText("آهنگ در حال پخش • رصد چشم ادامه دارد");
+            setPanelCompact(
+                    "Care AI • آهنگ " + (mediaIndex + 1),
+                    "نگاه چپ = بعدی • دو پلک = توقف"
+            );
+            faceState.setText("آهنگ در حال پخش • نگاه چپ = آهنگ بعدی");
 
         } catch (Exception e) {
-            stopMediaAndReturn("پخش آهنگ انجام نشد.");
+            nextMedia();
+        }
+    }
+
+    private void nextMedia() {
+        if (!mediaMode) return;
+
+        mediaIndex++;
+        leftGazeStartedAt = 0L;
+        rightGazeStartedAt = 0L;
+
+        faceState.setText("در حال رفتن به مورد بعدی");
+
+        if (mediaIsVideo) {
+            playVideoAtIndex();
+        } else {
+            playAudioAtIndex();
+        }
+    }
+
+    private void stopPlayersOnly() {
+        if (videoView != null) {
+            try { videoView.stopPlayback(); } catch (Exception ignored) {}
+            videoView.setVisibility(View.GONE);
+        }
+
+        if (audioPlayer != null) {
+            try { audioPlayer.stop(); } catch (Exception ignored) {}
+            try { audioPlayer.release(); } catch (Exception ignored) {}
+            audioPlayer = null;
         }
     }
 
@@ -783,11 +955,7 @@ public class CameraMonitorActivity extends Activity
     }
 
     private void stopMediaSilently() {
-        if (videoView != null) {
-            try { videoView.stopPlayback(); } catch (Exception ignored) {}
-            videoView.setVisibility(View.GONE);
-        }
-        stopAudioOnly();
+        stopPlayersOnly();
         mediaMode = false;
     }
 
@@ -1016,13 +1184,6 @@ public class CameraMonitorActivity extends Activity
             return;
         }
 
-        if (mediaMode) {
-            faceState.setText(
-                    "رصد فعال • دو پلک = توقف پخش • چشم بسته طولانی = خواب"
-            );
-            return;
-        }
-
         if (!open) return;
 
         if (now - promptShownAt < READING_LOCK_MS) {
@@ -1031,12 +1192,55 @@ public class CameraMonitorActivity extends Activity
             return;
         }
 
-        float rightScore = (gaze - neutralGaze) * rightDirectionSign;
+        if (Float.isNaN(smoothedGaze)) {
+            smoothedGaze = gaze;
+        } else {
+            smoothedGaze = smoothedGaze * 0.55f + gaze * 0.45f;
+        }
+
+        float rightScore =
+                (smoothedGaze - neutralGaze) * rightDirectionSign;
+        float leftScore = -rightScore;
+
+        if (mediaMode) {
+            rightGazeStartedAt = 0L;
+
+            if (leftScore > rightThreshold * 0.85f) {
+                if (leftGazeStartedAt == 0L) {
+                    leftGazeStartedAt = now;
+                }
+
+                long held = now - leftGazeStartedAt;
+
+                faceState.setText(
+                        "نگاه چپ • بعدی "
+                                + Math.min(100L, held * 100L / LEFT_GAZE_HOLD_MS)
+                                + "%"
+                );
+
+                if (held >= LEFT_GAZE_HOLD_MS) {
+                    leftGazeStartedAt = 0L;
+                    nextMedia();
+                }
+            } else {
+                leftGazeStartedAt = 0L;
+                faceState.setText(
+                        "رصد فعال • نگاه چپ = بعدی • دو پلک = توقف"
+                );
+            }
+
+            return;
+        }
+
+        leftGazeStartedAt = 0L;
 
         if (rightScore > rightThreshold) {
-            if (rightGazeStartedAt == 0L) rightGazeStartedAt = now;
+            if (rightGazeStartedAt == 0L) {
+                rightGazeStartedAt = now;
+            }
 
             long held = now - rightGazeStartedAt;
+
             faceState.setText(
                     "نگاه راست • "
                             + Math.min(100L, held * 100L / RIGHT_GAZE_HOLD_MS)
@@ -1319,6 +1523,33 @@ public class CameraMonitorActivity extends Activity
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (callInProgress
+                && telephonyManager != null
+                && checkSelfPermission(Manifest.permission.READ_PHONE_STATE)
+                == PackageManager.PERMISSION_GRANTED) {
+            try {
+                int state = telephonyManager.getCallState();
+
+                if (state == TelephonyManager.CALL_STATE_IDLE
+                        && callWasActive) {
+                    callWasActive = false;
+                    callInProgress = false;
+                    returnFromCall();
+                } else if (state == TelephonyManager.CALL_STATE_IDLE
+                        && !callWasActive
+                        && System.currentTimeMillis() - callStartedAt > 2500L) {
+                    callInProgress = false;
+                    releaseSpeakerRoute();
+                    returnFromCall();
+                }
+            } catch (Exception ignored) {}
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
 
@@ -1332,6 +1563,17 @@ public class CameraMonitorActivity extends Activity
         visionExecutor.shutdownNow();
 
         if (sensorManager != null) sensorManager.unregisterListener(this);
+
+        if (telephonyManager != null && phoneStateListener != null) {
+            try {
+                telephonyManager.listen(
+                        phoneStateListener,
+                        PhoneStateListener.LISTEN_NONE
+                );
+            } catch (Exception ignored) {}
+        }
+
+        releaseSpeakerRoute();
 
         if (tts != null) {
             tts.stop();
