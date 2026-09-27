@@ -47,10 +47,10 @@ public class CameraMonitorActivity extends Activity
         implements TextToSpeech.OnInitListener, SensorEventListener {
 
     private static final long FRAME_INTERVAL_MS = 250L;
-    private static final long PROMPT_DURATION_MS = 15000L;
-    private static final long READING_LOCK_MS = 2500L;
-    private static final long RIGHT_GAZE_HOLD_MS = 850L;
-    private static final long BLINK_MIN_MS = 600L;
+    private static final long PROMPT_DURATION_MS = 20000L;
+    private static final long READING_LOCK_MS = 4000L;
+    private static final long RIGHT_GAZE_HOLD_MS = 1000L;
+    private static final long BLINK_MIN_MS = 700L;
     private static final long BLINK_MAX_MS = 3000L;
 
     private static final int ACTION_SPEAK = 0;
@@ -121,6 +121,7 @@ public class CameraMonitorActivity extends Activity
 
     private float openEarBaseline = 0.24f;
     private boolean eyesClosed = false;
+    private boolean blinkActionFired = false;
     private long blinkStartedAt = 0L;
     private long rightGazeStartedAt = 0L;
     private long lastActionAt = 0L;
@@ -156,7 +157,7 @@ public class CameraMonitorActivity extends Activity
             long seconds = (left + 999L) / 1000L;
 
             instruction.setText(
-                    "چشم‌ها را ببند = تأیید  •  به راست نگاه کن = رد  •  زمان باقی‌مانده: "
+                    "چشم‌ها را ۰٫۷ ثانیه ببند = انتخاب  •  نگاه راست = رد  •  زمان باقی‌مانده: "
                             + seconds + " ثانیه"
             );
 
@@ -238,7 +239,7 @@ public class CameraMonitorActivity extends Activity
                 new FrameLayout.LayoutParams(
                         -1,
                         FrameLayout.LayoutParams.WRAP_CONTENT,
-                        Gravity.TOP
+                        Gravity.BOTTOM
                 );
         root.addView(faceState, fp);
 
@@ -277,7 +278,7 @@ public class CameraMonitorActivity extends Activity
                 new FrameLayout.LayoutParams(
                         -1,
                         FrameLayout.LayoutParams.WRAP_CONTENT,
-                        Gravity.BOTTOM
+                        Gravity.TOP
                 );
         root.addView(panel, pp);
 
@@ -416,14 +417,17 @@ public class CameraMonitorActivity extends Activity
         promptShownAt = System.currentTimeMillis();
         promptDeadline = promptShownAt + PROMPT_DURATION_MS;
         rightGazeStartedAt = 0L;
-        eyesClosed = false;
+        if (!eyesClosed) {
+            blinkActionFired = false;
+        }
+        promptText.setBackgroundColor(0xFF1A5688);
 
         Prompt p = prompts[promptIndex];
 
         modeState.setText(
                 talkMode
-                        ? "حالت صحبت • ۱۵ ثانیه برای تصمیم"
-                        : "Care Mode • ۱۵ ثانیه برای تصمیم"
+                        ? "حالت صحبت • ۲۰ ثانیه برای تصمیم"
+                        : "Care Mode • ۲۰ ثانیه برای تصمیم"
         );
 
         promptText.setText(p.question);
@@ -473,25 +477,30 @@ public class CameraMonitorActivity extends Activity
         if (promptIndex < 0 || promptIndex >= prompts.length) return;
 
         Prompt p = prompts[promptIndex];
-        faceState.setText("انتخاب شد: " + p.question);
+        faceState.setText("✓ انتخاب شد: " + p.question);
+        promptText.setBackgroundColor(0xFF1E7A46);
 
         if (p.action == ACTION_TALK_MODE) {
             talkMode = true;
             modeState.setText("حالت صحبت با چشم");
+            promptText.setText("✓ حالت صحبت فعال شد");
             speak("حالت صحبت فعال شد.");
-            handler.postDelayed(() -> showPrompt(0), 1400L);
+            handler.postDelayed(() -> showPrompt(0), 3500L);
             return;
         }
 
         if (p.action == ACTION_BACK) {
             talkMode = false;
             modeState.setText("Care Mode");
+            promptText.setText("✓ بازگشت به منوی اصلی");
             speak("به منوی اصلی برگشتیم.");
-            handler.postDelayed(() -> showPrompt(0), 1400L);
+            handler.postDelayed(() -> showPrompt(0), 3500L);
             return;
         }
 
         if (p.action == ACTION_EMERGENCY) {
+            promptText.setBackgroundColor(0xFF9B1C31);
+            promptText.setText("✓ درخواست کمک فوری ارسال شد");
             speak("درخواست کمک فوری ارسال شد.");
             EmergencyManager.sendEmergency(
                     this,
@@ -500,15 +509,16 @@ public class CameraMonitorActivity extends Activity
             );
             handler.postDelayed(
                     () -> showPrompt(promptIndex + 1),
-                    2500L
+                    4500L
             );
             return;
         }
 
+        promptText.setText("✓ " + p.output);
         speak(p.output);
         handler.postDelayed(
                 () -> showPrompt(promptIndex + 1),
-                2500L
+                4500L
         );
     }
 
@@ -642,32 +652,53 @@ public class CameraMonitorActivity extends Activity
             return;
         }
 
-        if (closed && !eyesClosed) {
-            eyesClosed = true;
-            blinkStartedAt = now;
+        if (closed) {
             rightGazeStartedAt = 0L;
-            faceState.setText("چشم‌ها بسته شد • در حال ثبت انتخاب");
+
+            if (!eyesClosed) {
+                eyesClosed = true;
+                blinkActionFired = false;
+                blinkStartedAt = now;
+                faceState.setText("چشم‌ها بسته شد • کمی نگه دار برای انتخاب");
+                return;
+            }
+
+            long duration = now - blinkStartedAt;
+            boolean readingFinished =
+                    blinkStartedAt >= promptShownAt + READING_LOCK_MS;
+
+            if (!blinkActionFired
+                    && readingFinished
+                    && duration >= BLINK_MIN_MS
+                    && duration <= BLINK_MAX_MS) {
+                blinkActionFired = true;
+                faceState.setText("✓ انتخاب با چشم ثبت شد • دستور در حال اجرا");
+                confirmCurrentByBlink();
+            } else if (!blinkActionFired && readingFinished) {
+                long percent =
+                        Math.min(100L, duration * 100L / BLINK_MIN_MS);
+                faceState.setText(
+                        "چشم بسته • نگه دار برای انتخاب: " + percent + "%"
+                );
+            }
+
             return;
         }
 
         if (eyesClosed && open) {
             long duration = now - blinkStartedAt;
             eyesClosed = false;
+            blinkStartedAt = 0L;
 
-            if (duration >= BLINK_MIN_MS
-                    && duration <= BLINK_MAX_MS) {
-                faceState.setText("تأیید با بستن چشم ثبت شد");
-                confirmCurrentByBlink();
-            } else if (duration < BLINK_MIN_MS) {
-                faceState.setText("پلک طبیعی بود • انتخاب نشد");
-            } else {
-                faceState.setText("بستن چشم خیلی طولانی بود • انتخاب نشد");
+            if (!blinkActionFired && duration < BLINK_MIN_MS) {
+                faceState.setText("پلک طبیعی بود • انتخابی انجام نشد");
             }
 
+            blinkActionFired = false;
             return;
         }
 
-        if (eyesClosed || !open) {
+        if (!open) {
             return;
         }
 
