@@ -1,4 +1,4 @@
-name: Build Khaneh Remap APK v3.0.8 Unsigned
+name: Build Khaneh Remap APK v3.0.9 Unsigned
 
 on:
   push:
@@ -40,20 +40,20 @@ jobs:
 
       - name: Unpack clean source
         run: |
-          rm -rf apk-v308
-          mkdir -p apk-v308
-          base64 -d apk-v3-src.zip.b64 > /tmp/apk-v308.zip
-          unzip -q /tmp/apk-v308.zip -d apk-v308
+          rm -rf apk-v309
+          mkdir -p apk-v309
+          base64 -d apk-v3-src.zip.b64 > /tmp/apk-v309.zip
+          unzip -q /tmp/apk-v309.zip -d apk-v309
 
           printf '%s\n' \
             'android.useAndroidX=true' \
             'android.nonTransitiveRClass=true' \
-            'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > apk-v308/gradle.properties
+            'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > apk-v309/gradle.properties
 
           python3 - <<'PY'
           from pathlib import Path
           import re
-          root=Path('apk-v308')
+          root=Path('apk-v309')
 
           # Fix native BLE bridge syntax.
           p=root/'app/src/main/java/ir/khanehremap/diag/MainActivity.java'
@@ -111,10 +111,11 @@ jobs:
           )
           PY
 
-          python3 patch-native-audio-v308.py apk-v308
+          python3 patch-native-audio-v308.py apk-v309
+          python3 patch-no-url-update-v309.py apk-v309
 
-          mkdir -p apk-v308/app/src/main/res/drawable
-          cat > apk-v308/app/src/main/res/drawable/kr_launcher.xml <<'XML'
+          mkdir -p apk-v309/app/src/main/res/drawable
+          cat > apk-v309/app/src/main/res/drawable/kr_launcher.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp" android:height="108dp"
@@ -138,14 +139,14 @@ jobs:
 
       - name: Build release
         run: |
-          cd apk-v308
+          cd apk-v309
           gradle --no-daemon clean :app:assembleRelease
 
       - name: Zipalign
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 \
-            apk-v308/app/build/outputs/apk/release/app-release-unsigned.apk \
-            KhanehRemap-SmartOBD-v3.0.8-aligned.apk
+            apk-v309/app/build/outputs/apk/release/app-release-unsigned.apk \
+            KhanehRemap-SmartOBD-v3.0.9-aligned.apk
 
       - name: Export unsigned APK and signer
         run: |
@@ -154,8 +155,8 @@ jobs:
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: KhanehRemap-SmartOBD-v3.0.8-UNSIGNED
+          name: KhanehRemap-SmartOBD-v3.0.9-UNSIGNED
           path: |
-            KhanehRemap-SmartOBD-v3.0.8-aligned.apk
+            KhanehRemap-SmartOBD-v3.0.9-aligned.apk
             apksigner.jar
           retention-days: 1
