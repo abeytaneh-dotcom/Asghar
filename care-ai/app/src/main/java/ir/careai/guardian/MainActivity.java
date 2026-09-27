@@ -254,12 +254,14 @@ public class MainActivity extends Activity {
         Button monitor = button("شروع Care Mode چشمی");
         Button talk = button("صحبت با من — کنترل با چشم");
         Button sos = button("SOS — درخواست کمک فوری");
+        Button commands = button("مدیریت دستورات");
         Button settings = button("ویرایش شماره‌های اضطراری");
         Button reset = button("خروج از حالت بیمار");
 
         l.addView(monitor);
         l.addView(talk);
         l.addView(sos);
+        l.addView(commands);
         l.addView(settings);
         l.addView(reset);
 
@@ -267,6 +269,8 @@ public class MainActivity extends Activity {
         talk.setOnClickListener(v -> launchCareMode(true));
         sos.setOnClickListener(v ->
                 EmergencyManager.sendEmergency(this, "درخواست مستقیم بیمار", true));
+        commands.setOnClickListener(v ->
+                startActivity(new Intent(this, CommandEditorActivity.class)));
         settings.setOnClickListener(v -> showPatientSetup());
         reset.setOnClickListener(v -> {
             prefs.edit().remove("role").apply();
