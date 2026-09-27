@@ -1,8 +1,14 @@
 package ir.careai.guardian;
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.media.AudioAttributes;
+import android.media.MediaPlayer;
+import android.media.MediaRecorder;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -17,6 +23,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -57,6 +64,16 @@ public class CommandEditorActivity extends Activity {
 
     private LinearLayout list;
     private List<CommandStore.Command> commands;
+
+    private MediaRecorder recorder;
+    private MediaPlayer previewPlayer;
+    private CommandStore.Command recordingCommand;
+    private Button recordingButton;
+    private TextView recordingStatus;
+
+    private CommandStore.Command pendingRecordCommand;
+    private Button pendingRecordButton;
+    private TextView pendingRecordStatus;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -109,7 +126,7 @@ public class CommandEditorActivity extends Activity {
         root.addView(hero);
 
         TextView info = text(
-                "دستورهای تماس، موسیقی و ویدیو به‌صورت پیش‌فرض فقط اجرا می‌شوند. برای دستورهای نیاز بیمار یا اضطراری می‌توانید ارسال SMS را فعال کنید.",
+                "برای هر دستور می‌توانی صدای واقعی ضبط کنی. هنگام تأیید بیمار، صدای ضبط‌شده پخش می‌شود؛ اگر ضبطی وجود نداشته باشد Care AI متن نتیجه را با صدای مصنوعی می‌خواند.",
                 13,
                 Color.rgb(52, 101, 128),
                 false
@@ -162,6 +179,9 @@ public class CommandEditorActivity extends Activity {
         Button reset = button("بازگردانی دستورات پیش‌فرض", C_PURPLE);
         root.addView(reset);
         reset.setOnClickListener(v -> {
+            stopRecordingIfNeeded(false);
+            stopPreview();
+            CommandStore.deleteAllVoiceFiles(this);
             commands = new ArrayList<>(CommandStore.defaults(this));
             CommandStore.save(this, commands);
             render();
@@ -236,6 +256,69 @@ public class CommandEditorActivity extends Activity {
         EditText out = input("مثلاً: آب می‌خواهم");
         out.setText(cmd.output);
         card.addView(out);
+
+        TextView voiceLabel = label("صدای اختصاصی این دستور");
+        card.addView(voiceLabel);
+
+        TextView voiceStatus = text(
+                CommandStore.hasVoice(this, cmd)
+                        ? "● صدای ضبط‌شده آماده است"
+                        : "برای این دستور هنوز صدایی ضبط نشده است",
+                12.5f,
+                CommandStore.hasVoice(this, cmd) ? C_TEAL : C_MUTED,
+                true
+        );
+        voiceStatus.setPadding(dp(3), dp(2), dp(3), dp(7));
+        card.addView(voiceStatus);
+
+        LinearLayout voiceActions = new LinearLayout(this);
+        voiceActions.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button recordVoice = smallButton(
+                CommandStore.hasVoice(this, cmd)
+                        ? "● ضبط مجدد"
+                        : "● ضبط صدا",
+                C_RED
+        );
+        Button playVoice = smallButton("▶ پخش نمونه", C_TEAL);
+        Button deleteVoice = smallButton("حذف صدا", Color.rgb(104, 120, 137));
+
+        LinearLayout.LayoutParams vp1 = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        vp1.setMargins(0, 0, dp(4), 0);
+        LinearLayout.LayoutParams vp2 = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        vp2.setMargins(dp(4), 0, dp(4), 0);
+        LinearLayout.LayoutParams vp3 = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        vp3.setMargins(dp(4), 0, 0, 0);
+
+        voiceActions.addView(recordVoice, vp1);
+        voiceActions.addView(playVoice, vp2);
+        voiceActions.addView(deleteVoice, vp3);
+        card.addView(voiceActions);
+
+        recordVoice.setOnClickListener(v -> {
+            if (recordingCommand == cmd) {
+                stopRecordingIfNeeded(true);
+            } else {
+                beginRecording(cmd, recordVoice, voiceStatus);
+            }
+        });
+
+        playVoice.setOnClickListener(v -> {
+            stopRecordingIfNeeded(true);
+            playRecordedVoice(cmd, voiceStatus);
+        });
+
+        deleteVoice.setOnClickListener(v -> {
+            if (recordingCommand == cmd) {
+                stopRecordingIfNeeded(false);
+            }
+            stopPreview();
+            CommandStore.deleteVoice(this, cmd);
+            CommandStore.save(this, commands);
+            voiceStatus.setText("صدای ضبط‌شده حذف شد");
+            voiceStatus.setTextColor(C_MUTED);
+            recordVoice.setText("● ضبط صدا");
+        });
 
         TextView targetLabel = label("هدف اجرا (برای دستورهای اجرایی)");
         card.addView(targetLabel);
@@ -369,12 +452,261 @@ public class CommandEditorActivity extends Activity {
         });
 
         delete.setOnClickListener(v -> {
+            if (recordingCommand == cmd) {
+                stopRecordingIfNeeded(false);
+            }
+            stopPreview();
+            CommandStore.deleteVoice(this, cmd);
             commands.remove(cmd);
             CommandStore.save(this, commands);
             render();
         });
 
         list.addView(card);
+    }
+
+    private void beginRecording(
+            CommandStore.Command cmd,
+            Button button,
+            TextView status) {
+
+        stopPreview();
+
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            pendingRecordCommand = cmd;
+            pendingRecordButton = button;
+            pendingRecordStatus = status;
+            requestPermissions(
+                    new String[]{Manifest.permission.RECORD_AUDIO},
+                    410
+            );
+            return;
+        }
+
+        if (recordingCommand != null) {
+            stopRecordingIfNeeded(true);
+        }
+
+        File file = CommandStore.newVoiceFile(this, cmd);
+
+        try {
+            if (file.exists()) file.delete();
+
+            recorder = Build.VERSION.SDK_INT >= 31
+                    ? new MediaRecorder(this)
+                    : new MediaRecorder();
+
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            recorder.setAudioSamplingRate(44100);
+            recorder.setAudioEncodingBitRate(96000);
+            recorder.setOutputFile(file.getAbsolutePath());
+            recorder.prepare();
+            recorder.start();
+
+            recordingCommand = cmd;
+            recordingButton = button;
+            recordingStatus = status;
+
+            button.setText("■ توقف و ذخیره");
+            status.setText("● در حال ضبط... جمله را واضح بگو");
+            status.setTextColor(C_RED);
+
+        } catch (Exception e) {
+            releaseRecorder();
+            recordingCommand = null;
+            recordingButton = null;
+            recordingStatus = null;
+            Toast.makeText(
+                    this,
+                    "شروع ضبط صدا انجام نشد",
+                    Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+    private void stopRecordingIfNeeded(boolean save) {
+        if (recorder == null || recordingCommand == null) return;
+
+        CommandStore.Command cmd = recordingCommand;
+        Button button = recordingButton;
+        TextView status = recordingStatus;
+
+        File file = CommandStore.newVoiceFile(this, cmd);
+        boolean stopped = false;
+
+        try {
+            recorder.stop();
+            stopped = true;
+        } catch (Exception ignored) {}
+
+        releaseRecorder();
+
+        if (save && stopped && file.isFile() && file.length() > 0) {
+            cmd.voiceFile = file.getName();
+            CommandStore.save(this, commands);
+
+            if (status != null) {
+                status.setText("● صدا ذخیره شد و هنگام اجرای دستور پخش می‌شود");
+                status.setTextColor(C_TEAL);
+            }
+            if (button != null) button.setText("● ضبط مجدد");
+
+            Toast.makeText(
+                    this,
+                    "صدای دستور ذخیره شد",
+                    Toast.LENGTH_SHORT
+            ).show();
+        } else {
+            try { if (file.exists()) file.delete(); } catch (Exception ignored) {}
+            if (status != null) {
+                status.setText(
+                        CommandStore.hasVoice(this, cmd)
+                                ? "● صدای قبلی حفظ شد"
+                                : "ضبط ذخیره نشد"
+                );
+                status.setTextColor(
+                        CommandStore.hasVoice(this, cmd) ? C_TEAL : C_MUTED
+                );
+            }
+            if (button != null) {
+                button.setText(
+                        CommandStore.hasVoice(this, cmd)
+                                ? "● ضبط مجدد"
+                                : "● ضبط صدا"
+                );
+            }
+        }
+
+        recordingCommand = null;
+        recordingButton = null;
+        recordingStatus = null;
+    }
+
+    private void releaseRecorder() {
+        if (recorder != null) {
+            try { recorder.reset(); } catch (Exception ignored) {}
+            try { recorder.release(); } catch (Exception ignored) {}
+            recorder = null;
+        }
+    }
+
+    private void playRecordedVoice(
+            CommandStore.Command cmd,
+            TextView status) {
+
+        stopPreview();
+
+        File file = CommandStore.voiceFile(this, cmd);
+        if (file == null || !file.isFile() || file.length() <= 0) {
+            status.setText("برای این دستور هنوز صدایی ضبط نشده است");
+            status.setTextColor(C_MUTED);
+            Toast.makeText(
+                    this,
+                    "اول صدای دستور را ضبط کنید",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        try {
+            previewPlayer = new MediaPlayer();
+            previewPlayer.setAudioAttributes(
+                    new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+            );
+            previewPlayer.setDataSource(file.getAbsolutePath());
+            previewPlayer.setOnPreparedListener(mp -> {
+                status.setText("▶ در حال پخش نمونه ضبط‌شده");
+                status.setTextColor(C_TEAL);
+                mp.start();
+            });
+            previewPlayer.setOnCompletionListener(mp -> {
+                stopPreview();
+                status.setText("● صدای ضبط‌شده آماده است");
+                status.setTextColor(C_TEAL);
+            });
+            previewPlayer.setOnErrorListener((mp, what, extra) -> {
+                stopPreview();
+                status.setText("پخش صدای ضبط‌شده ناموفق بود");
+                status.setTextColor(C_RED);
+                return true;
+            });
+            previewPlayer.prepareAsync();
+
+        } catch (Exception e) {
+            stopPreview();
+            status.setText("پخش صدای ضبط‌شده ناموفق بود");
+            status.setTextColor(C_RED);
+        }
+    }
+
+    private void stopPreview() {
+        if (previewPlayer != null) {
+            try { previewPlayer.stop(); } catch (Exception ignored) {}
+            try { previewPlayer.release(); } catch (Exception ignored) {}
+            previewPlayer = null;
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(
+            int requestCode,
+            String[] permissions,
+            int[] grantResults) {
+        super.onRequestPermissionsResult(
+                requestCode,
+                permissions,
+                grantResults
+        );
+
+        if (requestCode != 410) return;
+
+        if (grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                && pendingRecordCommand != null) {
+
+            CommandStore.Command cmd = pendingRecordCommand;
+            Button button = pendingRecordButton;
+            TextView status = pendingRecordStatus;
+
+            pendingRecordCommand = null;
+            pendingRecordButton = null;
+            pendingRecordStatus = null;
+
+            beginRecording(cmd, button, status);
+
+        } else {
+            pendingRecordCommand = null;
+            pendingRecordButton = null;
+            pendingRecordStatus = null;
+
+            Toast.makeText(
+                    this,
+                    "برای ضبط صدای دستور، مجوز میکروفن لازم است",
+                    Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        if (recordingCommand != null) {
+            stopRecordingIfNeeded(true);
+        }
+        stopPreview();
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        stopRecordingIfNeeded(true);
+        stopPreview();
+        super.onDestroy();
     }
 
     private TextView badgeFor(String action) {
