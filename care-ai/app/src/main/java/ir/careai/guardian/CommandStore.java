@@ -28,13 +28,19 @@ public final class CommandStore {
         public String output;
         public String action;
         public boolean enabled;
+        public boolean notifyContacts;
 
         public Command(String id, String question, String output, String action, boolean enabled) {
+            this(id, question, output, action, enabled, defaultNotify(action));
+        }
+
+        public Command(String id, String question, String output, String action, boolean enabled, boolean notifyContacts) {
             this.id = id;
             this.question = question;
             this.output = output;
             this.action = action;
             this.enabled = enabled;
+            this.notifyContacts = notifyContacts;
         }
     }
 
@@ -57,7 +63,10 @@ public final class CommandStore {
                         o.optString("question", ""),
                         o.optString("output", ""),
                         o.optString("action", ACTION_SPEAK),
-                        o.optBoolean("enabled", true)
+                        o.optBoolean("enabled", true),
+                        o.has("notifyContacts")
+                                ? o.optBoolean("notifyContacts", true)
+                                : defaultNotify(o.optString("action", ACTION_SPEAK))
                 ));
             }
         } catch (Exception ignored) {}
@@ -79,6 +88,7 @@ public final class CommandStore {
                 o.put("output", cmd.output);
                 o.put("action", cmd.action);
                 o.put("enabled", cmd.enabled);
+                o.put("notifyContacts", cmd.notifyContacts);
                 arr.put(o);
             }
         } catch (Exception ignored) {}
@@ -103,21 +113,33 @@ public final class CommandStore {
                         "می‌خواهی به " + name + " زنگ بزنم؟",
                         "می‌خواهم با " + name + " تماس بگیرم",
                         i == 1 ? ACTION_CALL_1 : (i == 2 ? ACTION_CALL_2 : ACTION_CALL_3),
-                        true
+                        true,
+                        false
                 ));
             }
         }
 
-        out.add(new Command("video", "می‌خواهی برات ویدیو پخش کنم؟", "ویدیو می‌خواهم", ACTION_VIDEO, true));
-        out.add(new Command("audio", "می‌خواهی برات آهنگ پخش کنم؟", "آهنگ می‌خواهم", ACTION_AUDIO, true));
+        out.add(new Command("video", "می‌خواهی برات ویدیو پخش کنم؟", "ویدیو پخش می‌کنم", ACTION_VIDEO, true, false));
+        out.add(new Command("audio", "می‌خواهی برات آهنگ پخش کنم؟", "آهنگ پخش می‌کنم", ACTION_AUDIO, true, false));
         out.add(new Command("water", "آب می‌خواهی؟", "آب می‌خواهم", ACTION_SPEAK, true));
         out.add(new Command("food", "غذا می‌خواهی؟", "غذا می‌خواهم", ACTION_SPEAK, true));
         out.add(new Command("pain", "درد داری؟", "درد دارم", ACTION_SPEAK, true));
         out.add(new Command("toilet", "دستشویی می‌خواهی؟", "دستشویی می‌خواهم", ACTION_SPEAK, true));
         out.add(new Command("cold", "سردت است؟", "سردم است", ACTION_SPEAK, true));
         out.add(new Command("hot", "گرمت است؟", "گرمم است", ACTION_SPEAK, true));
-        out.add(new Command("help", "کمک فوری می‌خواهی؟", "کمک فوری می‌خواهم", ACTION_EMERGENCY, true));
+        out.add(new Command("help", "کمک فوری می‌خواهی؟", "کمک فوری می‌خواهم", ACTION_EMERGENCY, true, true));
         return out;
+    }
+
+    public static boolean defaultNotify(String action) {
+        return ACTION_SPEAK.equals(action) || ACTION_EMERGENCY.equals(action);
+    }
+
+    public static String categoryLabel(String action) {
+        if (ACTION_VIDEO.equals(action) || ACTION_AUDIO.equals(action)) return "رسانه";
+        if (ACTION_CALL_1.equals(action) || ACTION_CALL_2.equals(action) || ACTION_CALL_3.equals(action)) return "تماس";
+        if (ACTION_EMERGENCY.equals(action)) return "اضطراری";
+        return "اطلاع‌رسانی";
     }
 
     public static String actionLabel(String action) {
