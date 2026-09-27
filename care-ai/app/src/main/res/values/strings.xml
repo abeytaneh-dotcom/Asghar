@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Care AI</string>
+    <string name="accessibility_desc">کنترل برنامه‌ها با حرکت چشم برای دسترسی‌پذیری بیمار</string>
+</resources>
