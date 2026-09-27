@@ -17,6 +17,10 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
         <activity
+            android:name=".CommandEditorActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+        <activity
             android:name=".CameraMonitorActivity"
             android:screenOrientation="portrait"
             android:exported="false" />
