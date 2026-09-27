@@ -1,4 +1,4 @@
-name: Build Care AI V8 Commands APK
+name: Build Care AI V9 Pro APK
 
 on:
   push:
@@ -9,8 +9,13 @@ on:
       - '.github/workflows/build-care-ai.yml'
   workflow_dispatch:
 
+concurrency:
+  group: care-ai-stable-build
+  cancel-in-progress: true
+
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build:
@@ -31,6 +36,30 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
+      - name: Restore or create stable signing key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          mkdir -p care-ai/signing /tmp/careai-key
+          ARTIFACT_ID=$(curl -fsSL             -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github+json"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=CareAI-Signing-Key&per_page=20"             | python3 -c "import sys,json; a=json.load(sys.stdin).get('artifacts',[]); a=[x for x in a if not x.get('expired')]; print(a[0]['id'] if a else '')")
+
+          if [ -n "$ARTIFACT_ID" ]; then
+            curl -fsSL -L               -H "Authorization: Bearer $GH_TOKEN"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/$ARTIFACT_ID/zip"               -o /tmp/careai-key/key.zip
+            unzip -o /tmp/careai-key/key.zip -d care-ai/signing
+          fi
+
+          if [ ! -s care-ai/signing/careai-update.jks ]; then
+            keytool -genkeypair -v               -keystore care-ai/signing/careai-update.jks               -storepass CareAI2026Key               -keypass CareAI2026Key               -alias careai               -keyalg RSA               -keysize 2048               -validity 10000               -dname "CN=Care AI, OU=Care AI, O=Care AI, L=Tehran, ST=Tehran, C=IR"
+          fi
+
+      - name: Save signing key for future updates
+        uses: actions/upload-artifact@v4
+        with:
+          name: CareAI-Signing-Key
+          path: care-ai/signing/careai-update.jks
+          retention-days: 90
+
       - name: Bundle MediaPipe face model
         run: |
           mkdir -p care-ai/app/src/main/assets
@@ -42,14 +71,34 @@ jobs:
           cd care-ai
           gradle :app:assembleDebug --no-daemon
 
-      - name: Copy APK
+      - name: Prepare stable download and update manifest
         run: |
           mkdir -p dist
-          cp care-ai/app/build/outputs/apk/debug/app-debug.apk dist/CareAI-V8-Commands-debug.apk
+          cp care-ai/app/build/outputs/apk/debug/app-debug.apk dist/CareAI-latest.apk
 
-      - name: Upload artifact
+          VERSION_CODE=$(grep -m1 'versionCode' care-ai/app/build.gradle | awk '{print $2}')
+          VERSION_NAME=$(grep -m1 'versionName' care-ai/app/build.gradle | sed -E 's/.*versionName "([^"]+)".*/\1/')
+
+          cat > dist/update.json <<EOF
+          {
+            "version_code": $VERSION_CODE,
+            "version_name": "$VERSION_NAME",
+            "apk_url": "https://raw.githubusercontent.com/abeytaneh-dotcom/Asghar/care-ai-eye-m2/dist/CareAI-latest.apk",
+            "notes": "بهبود رابط کاربری، مدیریت حرفه‌ای دستورات، تفکیک دستورات اجرایی و اطلاع‌رسانی و سیستم بروزرسانی مستقیم."
+          }
+          EOF
+
+      - name: Publish latest APK and update manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/CareAI-latest.apk dist/update.json
+          git diff --cached --quiet || git commit -m "Publish Care AI latest APK"
+          git push origin HEAD:care-ai-eye-m2
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CareAI-V8-Commands-debug
+          name: CareAI-V9-Pro-Update
           path: care-ai/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
