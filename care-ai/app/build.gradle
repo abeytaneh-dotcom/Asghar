@@ -10,8 +10,8 @@ android {
         applicationId "ir.careai.guardian"
         minSdk 26
         targetSdk 35
-        versionCode 5
-        versionName "5.0-CARE-ASSIST"
+        versionCode 6
+        versionName "6.0-ACTION-ENGINE"
     }
 
     compileOptions {
