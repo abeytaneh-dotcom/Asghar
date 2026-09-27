@@ -56,6 +56,7 @@ import com.google.mediapipe.tasks.vision.core.RunningMode;
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker;
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -143,6 +144,8 @@ public class CameraMonitorActivity extends Activity
     private boolean mediaIsVideo = false;
     private int mediaIndex = 0;
     private MediaPlayer audioPlayer;
+    private MediaPlayer commandVoicePlayer;
+    private boolean commandExecutionLocked = false;
 
     private TelephonyManager telephonyManager;
     private PhoneStateListener phoneStateListener;
@@ -493,16 +496,23 @@ public class CameraMonitorActivity extends Activity
             return;
         }
 
+        if (commandExecutionLocked) return;
         if (sleepMode || now - lastActionAt < 900L) return;
+
         lastActionAt = now;
+        commandExecutionLocked = true;
 
         handler.removeCallbacks(promptTimeout);
         handler.removeCallbacks(countdown);
 
         List<CommandStore.Command> commands = currentCommands();
-        if (promptIndex < 0 || promptIndex >= commands.size()) return;
+        if (promptIndex < 0 || promptIndex >= commands.size()) {
+            commandExecutionLocked = false;
+            return;
+        }
 
         CommandStore.Command cmd = commands.get(promptIndex);
+
         String resultText =
                 cmd.output == null || cmd.output.trim().isEmpty()
                         ? cmd.question
@@ -510,25 +520,43 @@ public class CameraMonitorActivity extends Activity
 
         promptText.setBackgroundColor(0xFF1E7A46);
         promptText.setText("✓ " + resultText);
+
         boolean deviceExecutable =
                 DeviceActionEngine.isExecutableCommand(cmd);
 
+        boolean hasRecordedVoice =
+                CommandStore.hasVoice(this, cmd);
+
         faceState.setText(
-                deviceExecutable
-                        ? "فرمان اجرایی تشخیص داده شد • در حال اجرای گوشی"
-                        : (cmd.notifyContacts
-                                ? "فرمان تأیید شد • پخش صوتی و اطلاع‌رسانی"
-                                : "فرمان تأیید شد • در حال اجرای دستور")
+                hasRecordedVoice
+                        ? "فرمان تأیید شد • در حال پخش صدای ضبط‌شده"
+                        : (deviceExecutable
+                                ? "فرمان اجرایی تأیید شد • پخش صوتی و سپس اجرا"
+                                : "فرمان تأیید شد • در حال پخش صوتی")
         );
 
-        // همه فرمان‌ها پاسخ صوتی دارند.
-        speak(resultText);
-
-        // فرمان‌های اجرایی گوشی مثل باز کردن اپ/لینک SMS نمی‌فرستند،
-        // حتی اگر یک دستور قدیمی V9 با notifyContacts=true ذخیره شده باشد.
+        // پیامک مستقل از صداست، ولی فرمان‌های اجرایی گوشی SMS نمی‌فرستند.
         if (cmd.notifyContacts && !deviceExecutable) {
             EmergencyManager.notifyTrusted(this, resultText);
         }
+
+        // اول صدای اختصاصی فرمان پخش می‌شود؛ در صورت نبود آن، TTS.
+        // بعد از پایان صوت، اکشن واقعی همان فرمان اجرا می‌شود.
+        playCommandVoice(
+                cmd,
+                resultText,
+                () -> executeConfirmedCommand(
+                        cmd,
+                        resultText,
+                        deviceExecutable
+                )
+        );
+    }
+
+    private void executeConfirmedCommand(
+            CommandStore.Command cmd,
+            String resultText,
+            boolean deviceExecutable) {
 
         if (CommandStore.ACTION_CALL_1.equals(cmd.action)
                 || CommandStore.ACTION_CALL_2.equals(cmd.action)
@@ -540,29 +568,36 @@ public class CameraMonitorActivity extends Activity
 
             String number = prefs.getString("trusted" + slot, "").trim();
             String name = prefs.getString("trusted_name" + slot, "").trim();
+
             if (name.isEmpty()) name = "همراه " + slot;
 
             if (number.isEmpty()) {
+                commandExecutionLocked = false;
                 faceState.setText("شماره همراه " + slot + " ثبت نشده است");
-                handler.postDelayed(() -> showPrompt(promptIndex + 1), 2600L);
+                handler.postDelayed(
+                        () -> showPrompt(promptIndex + 1),
+                        2200L
+                );
                 return;
             }
 
             promptText.setText("☎ " + resultText);
-            final String finalNumber = number;
-            handler.postDelayed(() -> placeSpeakerCall(finalNumber), 900L);
+            commandExecutionLocked = false;
+            placeSpeakerCall(number);
             return;
         }
 
         if (CommandStore.ACTION_VIDEO.equals(cmd.action)) {
             promptText.setText("▶ " + resultText);
-            handler.postDelayed(this::playLatestVideo, 1200L);
+            commandExecutionLocked = false;
+            playLatestVideo();
             return;
         }
 
         if (CommandStore.ACTION_AUDIO.equals(cmd.action)) {
             promptText.setText("♫ " + resultText);
-            handler.postDelayed(this::playLatestAudio, 1200L);
+            commandExecutionLocked = false;
+            playLatestAudio();
             return;
         }
 
@@ -571,10 +606,16 @@ public class CameraMonitorActivity extends Activity
             promptText.setText("⚠ " + resultText);
 
             String number = prefs.getString("trusted1", "").trim();
+
+            commandExecutionLocked = false;
+
             if (!number.isEmpty()) {
-                handler.postDelayed(() -> placeSpeakerCall(number), 1000L);
+                placeSpeakerCall(number);
             } else {
-                handler.postDelayed(() -> showPrompt(promptIndex + 1), 3200L);
+                handler.postDelayed(
+                        () -> showPrompt(promptIndex + 1),
+                        2200L
+                );
             }
             return;
         }
@@ -586,7 +627,10 @@ public class CameraMonitorActivity extends Activity
             externalActionInProgress = true;
             externalReturnPromptIndex = promptIndex + 1;
 
-            boolean executed = DeviceActionEngine.execute(this, cmd);
+            commandExecutionLocked = false;
+
+            boolean executed =
+                    DeviceActionEngine.execute(this, cmd);
 
             if (!executed) {
                 externalActionInProgress = false;
@@ -594,23 +638,117 @@ public class CameraMonitorActivity extends Activity
                 promptText.setBackgroundColor(0xFF9B1C31);
                 promptText.setText("اجرا نشد");
                 faceState.setText(
-                        "برنامه یا هدف اجرا پیدا نشد • در مدیریت دستور، نوع عمل و هدف اجرا را بررسی کنید"
+                        "برنامه یا هدف اجرا پیدا نشد • نوع عمل و هدف اجرا را بررسی کنید"
                 );
                 speak("اجرای این دستور ممکن نشد.");
+
                 handler.postDelayed(
                         () -> showPrompt(promptIndex + 1),
-                        3000L
+                        2600L
                 );
             }
 
             return;
         }
 
-        // فرمان اعلامی: بعد از صوت و پیامک، به فرمان بعدی می‌رود.
+        commandExecutionLocked = false;
+
+        // فرمان اعلامی مثل «آب می‌خواهم» بعد از پایان صوت به بعدی می‌رود.
         handler.postDelayed(
                 () -> showPrompt(promptIndex + 1),
-                4200L
+                900L
         );
+    }
+
+    private void playCommandVoice(
+            CommandStore.Command cmd,
+            String fallbackText,
+            Runnable onDone) {
+
+        stopCommandVoice();
+
+        File file = CommandStore.voiceFile(this, cmd);
+
+        if (file != null
+                && file.isFile()
+                && file.length() > 0) {
+
+            try {
+                if (tts != null) tts.stop();
+
+                commandVoicePlayer = new MediaPlayer();
+                commandVoicePlayer.setAudioAttributes(
+                        new AudioAttributes.Builder()
+                                .setUsage(
+                                        AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
+                                )
+                                .setContentType(
+                                        AudioAttributes.CONTENT_TYPE_SPEECH
+                                )
+                                .build()
+                );
+
+                commandVoicePlayer.setDataSource(
+                        file.getAbsolutePath()
+                );
+
+                commandVoicePlayer.setOnPreparedListener(
+                        MediaPlayer::start
+                );
+
+                commandVoicePlayer.setOnCompletionListener(mp -> {
+                    stopCommandVoice();
+                    if (onDone != null) onDone.run();
+                });
+
+                commandVoicePlayer.setOnErrorListener(
+                        (mp, what, extra) -> {
+                            stopCommandVoice();
+                            speakFallbackThen(
+                                    fallbackText,
+                                    onDone
+                            );
+                            return true;
+                        }
+                );
+
+                commandVoicePlayer.prepareAsync();
+                return;
+
+            } catch (Exception ignored) {
+                stopCommandVoice();
+            }
+        }
+
+        speakFallbackThen(fallbackText, onDone);
+    }
+
+    private void speakFallbackThen(
+            String text,
+            Runnable onDone) {
+
+        speak(text);
+
+        long estimate =
+                Math.max(
+                        1000L,
+                        Math.min(
+                                3500L,
+                                650L + (text == null ? 0 : text.length() * 85L)
+                        )
+                );
+
+        handler.postDelayed(() -> {
+            if (onDone != null) onDone.run();
+        }, estimate);
+    }
+
+    private void stopCommandVoice() {
+        if (commandVoicePlayer != null) {
+            try { commandVoicePlayer.stop(); } catch (Exception ignored) {}
+            try { commandVoicePlayer.release(); } catch (Exception ignored) {}
+            commandVoicePlayer = null;
+        }
     }
 
     private void initCallStateMonitor() {
@@ -1014,6 +1152,8 @@ public class CameraMonitorActivity extends Activity
         handler.removeCallbacks(countdown);
 
         stopMediaSilently();
+        stopCommandVoice();
+        commandExecutionLocked = false;
 
         setPanelFull();
         panel.setVisibility(View.VISIBLE);
@@ -1718,6 +1858,7 @@ public class CameraMonitorActivity extends Activity
         handler.removeCallbacksAndMessages(null);
 
         stopMediaSilently();
+        stopCommandVoice();
 
         if (session != null) session.close();
         if (camera != null) camera.close();
