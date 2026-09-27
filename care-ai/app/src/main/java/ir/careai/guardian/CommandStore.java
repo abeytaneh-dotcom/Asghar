@@ -3,6 +3,8 @@ package ir.careai.guardian;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import java.io.File;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -32,16 +34,21 @@ public final class CommandStore {
         public boolean enabled;
         public boolean notifyContacts;
         public String target;
+        public String voiceFile;
 
         public Command(String id, String question, String output, String action, boolean enabled) {
-            this(id, question, output, action, enabled, defaultNotify(action), "");
+            this(id, question, output, action, enabled, defaultNotify(action), "", "");
         }
 
         public Command(String id, String question, String output, String action, boolean enabled, boolean notifyContacts) {
-            this(id, question, output, action, enabled, notifyContacts, "");
+            this(id, question, output, action, enabled, notifyContacts, "", "");
         }
 
         public Command(String id, String question, String output, String action, boolean enabled, boolean notifyContacts, String target) {
+            this(id, question, output, action, enabled, notifyContacts, target, "");
+        }
+
+        public Command(String id, String question, String output, String action, boolean enabled, boolean notifyContacts, String target, String voiceFile) {
             this.id = id;
             this.question = question;
             this.output = output;
@@ -49,6 +56,7 @@ public final class CommandStore {
             this.enabled = enabled;
             this.notifyContacts = notifyContacts;
             this.target = target == null ? "" : target;
+            this.voiceFile = voiceFile == null ? "" : voiceFile;
         }
     }
 
@@ -75,7 +83,8 @@ public final class CommandStore {
                         o.has("notifyContacts")
                                 ? o.optBoolean("notifyContacts", true)
                                 : defaultNotify(o.optString("action", ACTION_SPEAK)),
-                        o.optString("target", "")
+                        o.optString("target", ""),
+                        o.optString("voiceFile", "")
                 ));
             }
         } catch (Exception ignored) {}
@@ -99,6 +108,7 @@ public final class CommandStore {
                 o.put("enabled", cmd.enabled);
                 o.put("notifyContacts", cmd.notifyContacts);
                 o.put("target", cmd.target == null ? "" : cmd.target);
+                o.put("voiceFile", cmd.voiceFile == null ? "" : cmd.voiceFile);
                 arr.put(o);
             }
         } catch (Exception ignored) {}
@@ -139,6 +149,51 @@ public final class CommandStore {
         out.add(new Command("hot", "گرمت است؟", "گرمم است", ACTION_SPEAK, true));
         out.add(new Command("help", "کمک فوری می‌خواهی؟", "کمک فوری می‌خواهم", ACTION_EMERGENCY, true, true));
         return out;
+    }
+
+    public static File voiceDirectory(Context c) {
+        File dir = new File(c.getFilesDir(), "command_voice");
+        if (!dir.exists()) dir.mkdirs();
+        return dir;
+    }
+
+    public static File voiceFile(Context c, Command cmd) {
+        if (cmd == null || cmd.voiceFile == null || cmd.voiceFile.trim().isEmpty()) {
+            return null;
+        }
+        return new File(voiceDirectory(c), cmd.voiceFile);
+    }
+
+    public static File newVoiceFile(Context c, Command cmd) {
+        String safeId = cmd == null || cmd.id == null
+                ? String.valueOf(System.currentTimeMillis())
+                : cmd.id.replaceAll("[^A-Za-z0-9_-]", "_");
+        return new File(
+                voiceDirectory(c),
+                "voice_" + safeId + ".m4a"
+        );
+    }
+
+    public static boolean hasVoice(Context c, Command cmd) {
+        File f = voiceFile(c, cmd);
+        return f != null && f.isFile() && f.length() > 0;
+    }
+
+    public static void deleteVoice(Context c, Command cmd) {
+        File f = voiceFile(c, cmd);
+        if (f != null && f.exists()) {
+            try { f.delete(); } catch (Exception ignored) {}
+        }
+        if (cmd != null) cmd.voiceFile = "";
+    }
+
+    public static void deleteAllVoiceFiles(Context c) {
+        File dir = voiceDirectory(c);
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            try { f.delete(); } catch (Exception ignored) {}
+        }
     }
 
     public static boolean defaultNotify(String action) {
