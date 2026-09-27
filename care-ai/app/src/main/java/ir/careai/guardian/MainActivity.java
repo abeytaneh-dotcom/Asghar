@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Build;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -137,20 +138,29 @@ public class MainActivity extends Activity {
 
         EditText name = input("نام بیمار", false);
         EditText own = input("شماره بیمار", true);
+        EditText n1 = input("نام همراه ۱", false);
         EditText t1 = input("شماره اضطراری ۱", true);
+        EditText n2 = input("نام همراه ۲", false);
         EditText t2 = input("شماره اضطراری ۲", true);
+        EditText n3 = input("نام همراه ۳", false);
         EditText t3 = input("شماره اضطراری ۳", true);
 
         name.setText(prefs.getString("patient_name", ""));
         own.setText(prefs.getString("patient_phone", ""));
+        n1.setText(prefs.getString("trusted_name1", ""));
         t1.setText(prefs.getString("trusted1", ""));
+        n2.setText(prefs.getString("trusted_name2", ""));
         t2.setText(prefs.getString("trusted2", ""));
+        n3.setText(prefs.getString("trusted_name3", ""));
         t3.setText(prefs.getString("trusted3", ""));
 
         l.addView(name);
         l.addView(own);
+        l.addView(n1);
         l.addView(t1);
+        l.addView(n2);
         l.addView(t2);
+        l.addView(n3);
         l.addView(t3);
 
         Button save = button("ذخیره و فعال‌سازی Care Mode");
@@ -170,8 +180,11 @@ public class MainActivity extends Activity {
                                     ? "بیمار"
                                     : name.getText().toString().trim())
                     .putString("patient_phone", own.getText().toString().trim())
+                    .putString("trusted_name1", n1.getText().toString().trim())
                     .putString("trusted1", t1.getText().toString().trim())
+                    .putString("trusted_name2", n2.getText().toString().trim())
                     .putString("trusted2", t2.getText().toString().trim())
+                    .putString("trusted_name3", n3.getText().toString().trim())
                     .putString("trusted3", t3.getText().toString().trim())
                     .apply();
 
@@ -335,12 +348,20 @@ public class MainActivity extends Activity {
     }
 
     private void requestCorePermissions() {
+        java.util.ArrayList<String> permissions = new java.util.ArrayList<>();
+        permissions.add(Manifest.permission.CAMERA);
+        permissions.add(Manifest.permission.SEND_SMS);
+        permissions.add(Manifest.permission.CALL_PHONE);
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            permissions.add(Manifest.permission.READ_MEDIA_AUDIO);
+            permissions.add(Manifest.permission.READ_MEDIA_VIDEO);
+        } else {
+            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+        }
+
         requestPermissions(
-                new String[]{
-                        Manifest.permission.CAMERA,
-                        Manifest.permission.SEND_SMS,
-                        Manifest.permission.CALL_PHONE
-                },
+                permissions.toArray(new String[0]),
                 100
         );
     }
