@@ -36,13 +36,68 @@ if (isset($_GET['logout'])) {
 
 $logged = !empty($_SESSION['careai_admin']);
 
+if ($logged && isset($_POST['patient_id_action'])) {
+    $action = (string)($_POST['patient_id_action'] ?? '');
+    $id = (int)($_POST['registry_id'] ?? 0);
+
+    if ($action === 'add') {
+        $newId = trim((string)($_POST['new_patient_id'] ?? ''));
+        $note = trim((string)($_POST['new_patient_note'] ?? ''));
+        if ($newId !== '') {
+            try {
+                $db->prepare('INSERT INTO patient_ids(patient_id,enabled,note,created_at,updated_at)
+                    VALUES(?,1,?,?,?)')->execute([$newId,$note,now_iso(),now_iso()]);
+            } catch (PDOException $e) {
+                $flash = 'این Patient ID قبلاً ثبت شده است.';
+            }
+        }
+    }
+
+    if ($action === 'toggle') {
+        $db->prepare('UPDATE patient_ids SET enabled=CASE enabled WHEN 1 THEN 0 ELSE 1 END,updated_at=? WHERE id=?')
+            ->execute([now_iso(),$id]);
+    }
+
+    if ($action === 'edit') {
+        $newId = trim((string)($_POST['patient_id'] ?? ''));
+        $note = trim((string)($_POST['note'] ?? ''));
+        $old = $db->prepare('SELECT patient_id FROM patient_ids WHERE id=?');
+        $old->execute([$id]);
+        $oldId = (string)$old->fetchColumn();
+        try {
+            $db->beginTransaction();
+            $db->prepare('UPDATE patient_ids SET patient_id=?,note=?,updated_at=? WHERE id=?')
+                ->execute([$newId,$note,now_iso(),$id]);
+            if ($oldId !== '' && $oldId !== $newId) {
+                $db->prepare('UPDATE accounts SET patient_id=?,updated_at=? WHERE patient_id=?')
+                    ->execute([$newId,now_iso(),$oldId]);
+            }
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            $flash = 'تغییر Patient ID انجام نشد؛ احتمالاً ID تکراری است.';
+        }
+    }
+
+    if ($action === 'delete') {
+        $q = $db->prepare('SELECT patient_id FROM patient_ids WHERE id=?');
+        $q->execute([$id]);
+        $pid = (string)$q->fetchColumn();
+        if ($pid !== '') {
+            $db->prepare('UPDATE accounts SET active=0,updated_at=? WHERE patient_id=?')
+                ->execute([now_iso(),$pid]);
+        }
+        $db->prepare('DELETE FROM patient_ids WHERE id=?')->execute([$id]);
+    }
+}
+
 if ($logged && isset($_POST['account_action'])) {
     $id = (int)($_POST['id'] ?? 0);
     $action = (string)($_POST['account_action'] ?? '');
 
     if ($action === 'activate') $db->prepare('UPDATE accounts SET active=1,updated_at=? WHERE id=?')->execute([now_iso(),$id]);
     if ($action === 'deactivate') $db->prepare('UPDATE accounts SET active=0,updated_at=? WHERE id=?')->execute([now_iso(),$id]);
-    if ($action === 'reset_device') $db->prepare("UPDATE accounts SET device_id='RESET-'||id||'-'||strftime('%s','now'),auth_token=NULL,updated_at=? WHERE id=?")->execute([now_iso(),$id]);
+    if ($action === 'reset_device') $db->prepare("UPDATE accounts SET device_id='UNBOUND:'||id||':'||strftime('%s','now'),auth_token=NULL,active=0,updated_at=? WHERE id=?")->execute([now_iso(),$id]);
     if ($action === 'delete') $db->prepare('DELETE FROM accounts WHERE id=?')->execute([$id]);
 
     if ($action === 'update_patient') {
@@ -107,6 +162,28 @@ table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px so
 <button name="login">ورود</button></form></div>
 <?php else:?>
 <p><a href="?logout=1">خروج</a></p>
+
+<div class="card"><h3>مدیریت Patient ID</h3>
+<form method="post" class="row">
+<div><label>Patient ID جدید</label><input name="new_patient_id" placeholder="مثلاً PT-1001"></div>
+<div><label>یادداشت</label><input name="new_patient_note" placeholder="نام یا توضیح"></div>
+<div style="align-self:end"><button name="patient_id_action" value="add">افزودن ID</button></div>
+</form>
+<table><tr><th>ID</th><th>یادداشت</th><th>وضعیت</th><th>عملیات</th></tr>
+<?php foreach($db->query('SELECT * FROM patient_ids ORDER BY id DESC') as $p):?>
+<tr>
+<td colspan="4"><form method="post" class="row">
+<input type="hidden" name="registry_id" value="<?=$p['id']?>">
+<input name="patient_id" value="<?=h($p['patient_id'])?>">
+<input name="note" value="<?=h($p['note'])?>">
+<span class="<?=$p['enabled']?'on':'off'?>"><?=$p['enabled']?'فعال':'غیرفعال'?></span>
+<div>
+<button name="patient_id_action" value="edit">ذخیره تغییر</button>
+<button class="muted" name="patient_id_action" value="toggle"><?=$p['enabled']?'غیرفعال':'فعال'?></button>
+<button class="danger" name="patient_id_action" value="delete" onclick="return confirm('این ID حذف و حساب مرتبط غیرفعال شود؟')">حذف</button>
+</div>
+</form></td></tr>
+<?php endforeach;?></table></div>
 
 <div class="card"><h3>حساب‌ها و Patient ID</h3>
 <table><tr><th>موبایل</th><th>Patient ID</th><th>Device</th><th>وضعیت</th><th>مدیریت</th></tr>
