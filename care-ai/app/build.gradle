@@ -6,12 +6,31 @@ android {
     namespace 'ir.careai.guardian'
     compileSdk 35
 
+    signingConfigs {
+        stable {
+            storeFile file('../signing/careai-update.jks')
+            storePassword 'CareAI2026Key'
+            keyAlias 'careai'
+            keyPassword 'CareAI2026Key'
+        }
+    }
+
     defaultConfig {
         applicationId "ir.careai.guardian"
         minSdk 26
         targetSdk 35
-        versionCode 8
-        versionName "8.0-EDITABLE-COMMANDS"
+        versionCode 9
+        versionName "9.0-PRO-UPDATE"
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.stable
+        }
+        release {
+            signingConfig signingConfigs.stable
+            minifyEnabled false
+        }
     }
 
     compileOptions {
