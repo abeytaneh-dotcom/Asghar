@@ -146,6 +146,9 @@ public class CameraMonitorActivity extends Activity
     private boolean callInProgress = false;
     private boolean callWasActive = false;
     private long callStartedAt = 0L;
+
+    private boolean externalActionInProgress = false;
+    private int externalReturnPromptIndex = -1;
     private SensorManager sensorManager;
     private long lastMotionPrompt = 0L;
 
@@ -492,17 +495,23 @@ public class CameraMonitorActivity extends Activity
 
         promptText.setBackgroundColor(0xFF1E7A46);
         promptText.setText("✓ " + resultText);
+        boolean deviceExecutable =
+                DeviceActionEngine.isExecutableCommand(cmd);
+
         faceState.setText(
-                cmd.notifyContacts
-                        ? "فرمان تأیید شد • پخش صوتی و اطلاع‌رسانی"
-                        : "فرمان تأیید شد • در حال اجرای دستور"
+                deviceExecutable
+                        ? "فرمان اجرایی تشخیص داده شد • در حال اجرای گوشی"
+                        : (cmd.notifyContacts
+                                ? "فرمان تأیید شد • پخش صوتی و اطلاع‌رسانی"
+                                : "فرمان تأیید شد • در حال اجرای دستور")
         );
 
         // همه فرمان‌ها پاسخ صوتی دارند.
         speak(resultText);
 
-        // فقط فرمان‌های اطلاع‌رسانی/اضطراری برای مخاطبان SMS می‌فرستند.
-        if (cmd.notifyContacts) {
+        // فرمان‌های اجرایی گوشی مثل باز کردن اپ/لینک SMS نمی‌فرستند،
+        // حتی اگر یک دستور قدیمی V9 با notifyContacts=true ذخیره شده باشد.
+        if (cmd.notifyContacts && !deviceExecutable) {
             EmergencyManager.notifyTrusted(this, resultText);
         }
 
@@ -552,6 +561,33 @@ public class CameraMonitorActivity extends Activity
             } else {
                 handler.postDelayed(() -> showPrompt(promptIndex + 1), 3200L);
             }
+            return;
+        }
+
+        if (deviceExecutable) {
+            promptText.setText("↗ " + resultText);
+            faceState.setText("در حال اجرای فرمان روی گوشی");
+
+            externalActionInProgress = true;
+            externalReturnPromptIndex = promptIndex + 1;
+
+            boolean executed = DeviceActionEngine.execute(this, cmd);
+
+            if (!executed) {
+                externalActionInProgress = false;
+                externalReturnPromptIndex = -1;
+                promptText.setBackgroundColor(0xFF9B1C31);
+                promptText.setText("اجرا نشد");
+                faceState.setText(
+                        "برنامه یا هدف اجرا پیدا نشد • در مدیریت دستور، نوع عمل و هدف اجرا را بررسی کنید"
+                );
+                speak("اجرای این دستور ممکن نشد.");
+                handler.postDelayed(
+                        () -> showPrompt(promptIndex + 1),
+                        3000L
+                );
+            }
+
             return;
         }
 
@@ -1506,8 +1542,53 @@ public class CameraMonitorActivity extends Activity
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+
+        if (externalActionInProgress) {
+            try {
+                if (session != null) {
+                    session.close();
+                    session = null;
+                }
+            } catch (Exception ignored) {}
+
+            try {
+                if (camera != null) {
+                    camera.close();
+                    camera = null;
+                }
+            } catch (Exception ignored) {}
+        }
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+
+        if (externalActionInProgress) {
+            externalActionInProgress = false;
+
+            final int next =
+                    externalReturnPromptIndex >= 0
+                            ? externalReturnPromptIndex
+                            : promptIndex + 1;
+
+            externalReturnPromptIndex = -1;
+
+            handler.postDelayed(() -> {
+                try {
+                    if (camera == null
+                            && texture != null
+                            && texture.isAvailable()) {
+                        openFrontCamera();
+                    }
+                } catch (Exception ignored) {}
+
+                faceStateSafe("بازگشت از اجرای دستور • Care AI فعال شد");
+                showPrompt(next);
+            }, 550L);
+        }
 
         if (callInProgress
                 && telephonyManager != null
