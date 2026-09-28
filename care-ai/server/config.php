@@ -30,10 +30,37 @@ function init_schema(PDO $db): void {
         device_id TEXT NOT NULL UNIQUE,
         active INTEGER NOT NULL DEFAULT 0,
         auth_token TEXT UNIQUE,
+        video_key TEXT UNIQUE,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         last_seen_at TEXT
     )");
+
+    try {
+        $db->exec("ALTER TABLE accounts ADD COLUMN video_key TEXT");
+    } catch (Throwable $e) {}
+
+    $db->exec("UPDATE accounts
+        SET video_key=lower(hex(randomblob(12)))
+        WHERE video_key IS NULL OR video_key=''");
+
+    $db->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_video_key
+        ON accounts(video_key)");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS video_calls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id TEXT NOT NULL UNIQUE,
+        patient_id TEXT NOT NULL,
+        join_key TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'ringing',
+        offer_sdp TEXT,
+        answer_sdp TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    )");
+
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_video_calls_patient_state
+        ON video_calls(patient_id,state,updated_at)");
 
     $db->exec("CREATE TABLE IF NOT EXISTS patient_ids (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,7 +91,10 @@ function init_schema(PDO $db): void {
         'update_version_code' => '0',
         'update_version_name' => '',
         'update_notes' => '',
-        'update_apk_url' => ''
+        'update_apk_url' => '',
+        'turn_url' => '',
+        'turn_user' => '',
+        'turn_pass' => ''
     ];
 
     $stmt = $db->prepare('INSERT OR IGNORE INTO settings(k,v) VALUES(?,?)');
