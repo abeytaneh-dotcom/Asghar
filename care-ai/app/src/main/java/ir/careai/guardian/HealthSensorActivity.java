@@ -351,12 +351,15 @@ public class HealthSensorActivity extends Activity {
             }catch(Exception ignored){}
         }
 
+        final String deviceName=name;
+        final String deviceAddress=d.getAddress();
+
         Button b=button(
-                name+"\n"+d.getAddress()+"   RSSI "+result.getRssi(),
+                deviceName+"\n"+deviceAddress+"   RSSI "+result.getRssi(),
                 Color.rgb(54,117,162)
         );
         b.setGravity(Gravity.CENTER_VERTICAL|Gravity.RIGHT);
-        b.setOnClickListener(v->connect(d.getAddress(),name));
+        b.setOnClickListener(v->connect(deviceAddress,deviceName));
         devices.addView(b);
     }
 
