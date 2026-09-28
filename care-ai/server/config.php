@@ -146,44 +146,123 @@ function random_token(int $bytes=32): string {
     return bin2hex(random_bytes($bytes));
 }
 
-function send_otp_sms(string $phone, string $code): array {
-    $token = trim(setting('sms_token'));
-    $sender = trim(setting('sms_sender'));
-    $pattern = trim(setting('sms_pattern'));
+function iranpayamak_recipient(string $phone): string {
+    $digits = preg_replace('/\\D+/', '', $phone) ?? '';
 
-    if ($token === '' || $sender === '' || $pattern === '') {
-        return ['ok'=>false, 'error'=>'SMS_NOT_CONFIGURED'];
+    if (str_starts_with($digits, '0098')) {
+        $digits = substr($digits, 4);
+    } elseif (str_starts_with($digits, '98') && strlen($digits) >= 12) {
+        $digits = substr($digits, 2);
     }
 
+    if (strlen($digits) === 10 && str_starts_with($digits, '9')) {
+        return '0' . $digits;
+    }
+
+    if (strlen($digits) === 11 && str_starts_with($digits, '09')) {
+        return $digits;
+    }
+
+    return $phone;
+}
+
+function send_otp_sms(string $phone, string $code): array {
+    $apiKey = trim(setting('sms_token'));
+    $lineNumber = trim(setting('sms_sender'));
+    $patternCode = trim(setting('sms_pattern'));
+
+    if ($apiKey === '' || $lineNumber === '' || $patternCode === '') {
+        return [
+            'ok'=>false,
+            'error'=>'SMS_NOT_CONFIGURED',
+            'message'=>'تنظیمات پیامک کامل نیست؛ API Key، شماره ارسال‌کننده و کد Pattern را در پنل مدیریت وارد کنید.'
+        ];
+    }
+
+    $recipient = iranpayamak_recipient($phone);
+
     $payload = [
-        'sending_type' => 'pattern',
-        'from_number' => $sender,
-        'code' => $pattern,
-        'recipients' => [$phone],
-        'params' => ['code' => $code]
+        'code' => $patternCode,
+        'attributes' => [
+            'code' => $code
+        ],
+        'recipient' => $recipient,
+        'line_number' => $lineNumber,
+        'number_format' => 'english'
     ];
 
-    $ch = curl_init('https://edge.ippanel.com/v1/api/send');
+    $ch = curl_init('https://api.iranpayamak.com/ws/v1/sms/pattern');
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 15,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 20,
         CURLOPT_HTTPHEADER => [
-            'Authorization: ' . $token,
+            'Accept: application/json',
+            'Api-Key: ' . $apiKey,
             'Content-Type: application/json'
         ],
-        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE)
+        CURLOPT_POSTFIELDS => json_encode(
+            $payload,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        )
     ]);
+
     $body = curl_exec($ch);
     $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $err = curl_error($ch);
+    $curlError = curl_error($ch);
     curl_close($ch);
 
-    if ($body === false || $http < 200 || $http >= 300) {
-        return ['ok'=>false, 'error'=>'SMS_FAILED', 'http'=>$http, 'detail'=>$err];
+    if ($body === false) {
+        return [
+            'ok'=>false,
+            'error'=>'SMS_CONNECTION_FAILED',
+            'message'=>'ارتباط سرور با ایران‌پیامک برقرار نشد.',
+            'http'=>$http,
+            'detail'=>$curlError
+        ];
     }
 
-    return ['ok'=>true];
+    $decoded = json_decode($body, true);
+    $providerStatus = is_array($decoded)
+        ? strtolower((string)($decoded['status'] ?? ''))
+        : '';
+
+    $providerMessage = '';
+    if (is_array($decoded)) {
+        $rawMessage = $decoded['messages']
+            ?? $decoded['message']
+            ?? '';
+
+        if (is_array($rawMessage)) {
+            $providerMessage = implode(' | ', array_map('strval', $rawMessage));
+        } else {
+            $providerMessage = trim((string)$rawMessage);
+        }
+    }
+
+    if ($http < 200 || $http >= 300 || ($providerStatus !== '' && $providerStatus !== 'success')) {
+        $message = 'ارسال کد تایید توسط ایران‌پیامک ناموفق بود.';
+        if ($providerMessage !== '') {
+            $message .= ' پاسخ سرویس: ' . $providerMessage;
+        } elseif ($http > 0) {
+            $message .= ' HTTP ' . $http;
+        }
+
+        return [
+            'ok'=>false,
+            'error'=>'SMS_FAILED',
+            'message'=>$message,
+            'http'=>$http,
+            'provider'=>$decoded
+        ];
+    }
+
+    return [
+        'ok'=>true,
+        'http'=>$http,
+        'provider'=>$decoded
+    ];
 }
 
 function require_admin(): void {
