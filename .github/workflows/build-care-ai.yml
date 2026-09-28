@@ -1,4 +1,4 @@
-name: Build Care AI V10 Custom Actions APK
+name: Build Care AI V13 Care Plus
 
 on:
   push:
@@ -99,6 +99,6 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CareAI-V10-Custom-Actions
+          name: CareAI-V13-Care-Plus
           path: care-ai/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
