@@ -1,6 +1,6 @@
 {
-  "version_code": 12,
-  "version_name": "12.0-COMMAND-VOICE",
+  "version_code": 13,
+  "version_name": "13.0-CARE-PLUS",
   "apk_url": "https://raw.githubusercontent.com/abeytaneh-dotcom/Asghar/care-ai-eye-m2/dist/CareAI-latest.apk",
   "notes": "اجرای واقعی دستورات سفارشی، باز کردن اپلیکیشن و لینک، تشخیص خودکار فرمان‌های قدیمی مثل اینستاگرام باز بشه و حفظ سیستم بروزرسانی مستقیم."
 }
