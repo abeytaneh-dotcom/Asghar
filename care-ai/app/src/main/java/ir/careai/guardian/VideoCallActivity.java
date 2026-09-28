@@ -3,7 +3,11 @@ package ir.careai.guardian;
 import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
+import android.os.Build;
 import android.os.Bundle;
+import android.webkit.JavascriptInterface;
 import android.view.View;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
@@ -50,6 +54,12 @@ public class VideoCallActivity extends Activity {
         s.setAllowContentAccess(false);
 
         web.setWebViewClient(new WebViewClient());
+        web.addJavascriptInterface(new Object(){
+            @JavascriptInterface
+            public void closeCall(){
+                runOnUiThread(()->finish());
+            }
+        },"AndroidBridge");
         web.setWebChromeClient(new WebChromeClient(){
             @Override
             public void onPermissionRequest(PermissionRequest request){
@@ -70,7 +80,35 @@ public class VideoCallActivity extends Activity {
                 +"&room="+android.net.Uri.encode(room==null?"":room)
                 +"&token="+android.net.Uri.encode(token);
 
+        forceSpeaker();
         web.loadUrl(url);
+    }
+
+    private void forceSpeaker() {
+        try {
+            AudioManager am=(AudioManager)getSystemService(AUDIO_SERVICE);
+            if(am==null)return;
+            if(Build.VERSION.SDK_INT>=31){
+                for(AudioDeviceInfo d:am.getAvailableCommunicationDevices()){
+                    if(d.getType()==AudioDeviceInfo.TYPE_BUILTIN_SPEAKER){
+                        am.setCommunicationDevice(d);
+                        break;
+                    }
+                }
+            }else{
+                am.setSpeakerphoneOn(true);
+            }
+        }catch(Exception ignored){}
+    }
+
+    private void releaseSpeaker() {
+        try{
+            AudioManager am=(AudioManager)getSystemService(AUDIO_SERVICE);
+            if(am==null)return;
+            if(Build.VERSION.SDK_INT>=31)am.clearCommunicationDevice();
+            else am.setSpeakerphoneOn(false);
+            am.setMode(AudioManager.MODE_NORMAL);
+        }catch(Exception ignored){}
     }
 
     @Override
@@ -89,6 +127,7 @@ public class VideoCallActivity extends Activity {
 
     @Override
     protected void onDestroy(){
+        releaseSpeaker();
         if(web!=null){
             try{web.loadUrl("about:blank");}catch(Exception ignored){}
             try{web.destroy();}catch(Exception ignored){}
