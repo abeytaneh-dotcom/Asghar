@@ -156,8 +156,36 @@ public class CameraMonitorActivity extends Activity
     private boolean externalActionInProgress = false;
     private int externalReturnPromptIndex = -1;
     private String externalTarget = "";
+    private boolean videoCallLaunching = false;
+    private String lastVideoRoom = "";
     private SensorManager sensorManager;
     private long lastMotionPrompt = 0L;
+
+    private final Runnable videoCallPoll = new Runnable() {
+        @Override
+        public void run() {
+            if (!videoCallLaunching
+                    && getSharedPreferences("careai",MODE_PRIVATE)
+                    .getBoolean("auto_video_answer",true)) {
+
+                VideoCallManager.checkIncoming(
+                        CameraMonitorActivity.this,
+                        (result,error)->{
+                            if(error!=null||result==null)return;
+                            if(!result.optBoolean("ok")
+                                    || !result.optBoolean("incoming"))return;
+
+                            String room=result.optString("room","");
+                            if(room.isEmpty()||room.equals(lastVideoRoom))return;
+
+                            runOnUiThread(()->launchIncomingVideoCall(room));
+                        }
+                );
+            }
+
+            handler.postDelayed(this,4000L);
+        }
+    };
 
     private final Runnable frameLoop = new Runnable() {
         @Override
@@ -213,6 +241,7 @@ public class CameraMonitorActivity extends Activity
         initFaceLandmarker();
 
         handler.postDelayed(frameLoop, 500L);
+        handler.postDelayed(videoCallPoll, 1800L);
     }
 
     private void initFaceLandmarker() {
@@ -251,10 +280,19 @@ public class CameraMonitorActivity extends Activity
 
     private void buildUi() {
         root = new FrameLayout(this);
-        root.setBackgroundColor(Color.BLACK);
+        root.setBackgroundColor(0xFF071522);
 
         texture = new TextureView(this);
+        texture.setAlpha(0.01f);
         root.addView(texture, new FrameLayout.LayoutParams(-1, -1));
+
+        TextView privacyCover = new TextView(this);
+        privacyCover.setText("Care AI\nپایش چشم فعال است\nتصویر دوربین نمایش داده نمی‌شود");
+        privacyCover.setTextColor(0xFF8FB8D8);
+        privacyCover.setTextSize(20);
+        privacyCover.setGravity(Gravity.CENTER);
+        privacyCover.setBackgroundColor(0xFF071522);
+        root.addView(privacyCover, new FrameLayout.LayoutParams(-1, -1));
 
         videoView = new VideoView(this);
         videoView.setVisibility(View.GONE);
@@ -1807,9 +1845,55 @@ public class CameraMonitorActivity extends Activity
         }
     }
 
+    private void launchIncomingVideoCall(String room) {
+        if (videoCallLaunching || room == null || room.trim().isEmpty()) return;
+
+        videoCallLaunching = true;
+        lastVideoRoom = room;
+
+        handler.removeCallbacks(promptTimeout);
+        handler.removeCallbacks(countdown);
+
+        faceStateSafe("تماس تصویری ورودی • پاسخ خودکار");
+
+        try {
+            if (session != null) {
+                session.close();
+                session = null;
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            if (camera != null) {
+                camera.close();
+                camera = null;
+            }
+        } catch (Exception ignored) {}
+
+        Intent i = new Intent(this, VideoCallActivity.class);
+        i.putExtra("role","patient");
+        i.putExtra("room",room);
+        startActivity(i);
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
+
+        if (videoCallLaunching) {
+            videoCallLaunching = false;
+            handler.postDelayed(() -> {
+                try {
+                    if (camera == null && texture != null && texture.isAvailable()) {
+                        openFrontCamera();
+                    }
+                } catch (Exception ignored) {}
+                faceStateSafe("تماس تصویری پایان یافت • Care AI فعال شد");
+                if (calibrationStage == 2 && !mediaMode && !sleepMode) {
+                    showPrompt(promptIndex);
+                }
+            },700L);
+        }
 
         if (callInProgress
                 && telephonyManager != null
