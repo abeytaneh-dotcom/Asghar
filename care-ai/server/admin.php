@@ -110,6 +110,19 @@ if ($logged && isset($_POST['account_action'])) {
     }
 }
 
+if ($logged && isset($_POST['test_sms'])) {
+    $testPhone = trim((string)($_POST['test_phone'] ?? ''));
+    if ($testPhone === '') {
+        $flash = 'شماره تست را وارد کنید.';
+    } else {
+        $testCode = (string)random_int(100000,999999);
+        $testResult = send_otp_sms(normalize_phone($testPhone), $testCode);
+        $flash = $testResult['ok']
+            ? 'پیامک تست با موفقیت ارسال شد. کد تست: ' . $testCode
+            : ($testResult['message'] ?? ('خطای پیامک: ' . ($testResult['error'] ?? 'UNKNOWN')));
+    }
+}
+
 if ($logged && isset($_POST['save_sms'])) {
     set_setting('sms_token', trim((string)($_POST['sms_token'] ?? '')));
     set_setting('sms_sender', trim((string)($_POST['sms_sender'] ?? '')));
@@ -211,13 +224,28 @@ table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px so
 </form></td></tr>
 <?php endforeach;?></table></div>
 
-<div class="card"><h3>تنظیمات پیامک OTP — IPPanel/FarazSMS</h3><form method="post">
-<div class="row"><div><label>API Token</label><input name="sms_token" value="<?=h(setting('sms_token'))?>"></div>
-<div><label>شماره ارسال‌کننده</label><input name="sms_sender" value="<?=h(setting('sms_sender'))?>"></div>
-<div><label>کد Pattern</label><input name="sms_pattern" value="<?=h(setting('sms_pattern'))?>"></div></div>
-<label>آدرس پایه سرور (مثال https://achinu.ir/careai)</label>
-<input name="api_base_url" value="<?=h(setting('api_base_url'))?>">
-<button name="save_sms">ذخیره تنظیمات</button></form></div>
+<div class="card"><h3>تنظیمات پیامک OTP — IranPayamak / FarazSMS</h3><form method="post">
+<p style="color:#64788c;font-size:13px;line-height:1.9">
+ارسال OTP با API جدید IranPayamak انجام می‌شود. Pattern باید متغیر <b>code</b> داشته باشد.
+</p>
+<div class="row">
+<div><label>API Key</label><input name="sms_token" value="<?=h(setting('sms_token'))?>" placeholder="API Key ایران‌پیامک"></div>
+<div><label>شماره ارسال‌کننده / Line Number</label><input name="sms_sender" value="<?=h(setting('sms_sender'))?>" placeholder="مثلاً 5000..."></div>
+<div><label>کد Pattern</label><input name="sms_pattern" value="<?=h(setting('sms_pattern'))?>" placeholder="کد پترن تأییدشده"></div>
+</div>
+<label>آدرس پایه سرور</label>
+<input name="api_base_url" value="<?=h(setting('api_base_url'))?>" placeholder="https://achinu.ir/careai">
+<button name="save_sms">ذخیره تنظیمات پیامک</button></form>
+
+<hr style="border:0;border-top:1px solid #e7eef4;margin:18px 0">
+
+<form method="post">
+<label>تست ارسال OTP</label>
+<div class="row">
+<div><input name="test_phone" placeholder="مثلاً 09121234567"></div>
+<div style="align-self:end"><button name="test_sms">ارسال پیامک تست</button></div>
+</div>
+</form></div>
 
 <div class="card"><h3>تنظیمات تماس تصویری WebRTC</h3>
 <form method="post">
