@@ -118,6 +118,13 @@ if ($logged && isset($_POST['save_sms'])) {
     $flash = 'تنظیمات ذخیره شد.';
 }
 
+if ($logged && isset($_POST['save_rtc'])) {
+    set_setting('turn_url', trim((string)($_POST['turn_url'] ?? '')));
+    set_setting('turn_user', trim((string)($_POST['turn_user'] ?? '')));
+    set_setting('turn_pass', trim((string)($_POST['turn_pass'] ?? '')));
+    $flash = 'تنظیمات تماس تصویری ذخیره شد.';
+}
+
 if ($logged && isset($_POST['save_update'])) {
     set_setting('update_version_code', (string)(int)($_POST['version_code'] ?? 0));
     set_setting('update_version_name', trim((string)($_POST['version_name'] ?? '')));
@@ -211,6 +218,18 @@ table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px so
 <label>آدرس پایه سرور (مثال https://achinu.ir/careai)</label>
 <input name="api_base_url" value="<?=h(setting('api_base_url'))?>">
 <button name="save_sms">ذخیره تنظیمات</button></form></div>
+
+<div class="card"><h3>تنظیمات تماس تصویری WebRTC</h3>
+<form method="post">
+<label>TURN URL اختیاری</label>
+<input name="turn_url" value="<?=h(setting('turn_url'))?>" placeholder="مثلاً turn:turn.example.com:3478">
+<div class="row">
+<div><label>TURN Username</label><input name="turn_user" value="<?=h(setting('turn_user'))?>"></div>
+<div><label>TURN Password</label><input name="turn_pass" value="<?=h(setting('turn_pass'))?>"></div>
+</div>
+<p style="color:#64788c;font-size:13px">اگر خالی باشد تماس با STUN انجام می‌شود. برای پایداری بیشتر تماس روی شبکه‌های مختلف، TURN توصیه می‌شود.</p>
+<button name="save_rtc">ذخیره تنظیمات تماس</button>
+</form></div>
 
 <div class="card"><h3>مدیریت آپدیت اپ</h3><form method="post" enctype="multipart/form-data">
 <div class="row"><div><label>Version Code</label><input type="number" name="version_code" value="<?=h(setting('update_version_code','0'))?>"></div>
