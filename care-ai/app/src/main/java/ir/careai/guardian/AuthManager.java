@@ -81,6 +81,7 @@ public final class AuthManager {
                         .putString("auth_token", result.optString("token", ""))
                         .putString("auth_phone", phone)
                         .putString("auth_patient_id", result.optString("patient_id", patientId))
+                        .putString("video_key", result.optString("video_key", ""))
                         .putBoolean("auth_active_cache", result.optBoolean("active", false))
                         .putLong("auth_checked_at", System.currentTimeMillis());
                 e.apply();
@@ -102,6 +103,7 @@ public final class AuthManager {
                 prefs(c).edit()
                         .putBoolean("auth_active_cache", result.optBoolean("active", false))
                         .putString("auth_patient_id", result.optString("patient_id", patientId(c)))
+                        .putString("video_key", result.optString("video_key", prefs(c).getString("video_key","")))
                         .putLong("auth_checked_at", System.currentTimeMillis())
                         .apply();
             }
@@ -119,6 +121,7 @@ public final class AuthManager {
                 .remove("auth_phone")
                 .remove("auth_patient_id")
                 .remove("auth_active_cache")
+                .remove("video_key")
                 .remove("auth_checked_at")
                 .apply();
     }
