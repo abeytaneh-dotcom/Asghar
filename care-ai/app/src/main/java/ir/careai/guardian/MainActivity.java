@@ -489,6 +489,54 @@ public class MainActivity extends Activity {
         setContentView(sc);
     }
 
+    private void openCarePlan(String kind) {
+        Intent i = new Intent(this, CarePlanActivity.class);
+        i.putExtra("kind", kind);
+        startActivity(i);
+    }
+
+    private void chooseVideoNurse() {
+        SharedPreferences p = getSharedPreferences("careai",MODE_PRIVATE);
+        String[] labels = new String[3];
+        for (int i=1;i<=3;i++) {
+            String name=p.getString("trusted_name"+i,"").trim();
+            String num=p.getString("trusted"+i,"").trim();
+            labels[i-1]=(name.isEmpty()?"پرستار/همراه "+i:name)
+                    +(num.isEmpty()?"":" — "+num);
+        }
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("ارسال لینک تماس تصویری به")
+                .setItems(labels,(d,which)->
+                        VideoCallManager.shareCaregiverLink(this,which+1))
+                .setNegativeButton("انصراف",null)
+                .show();
+    }
+
+    private void checkIncomingVideoOnDashboard() {
+        if (!getSharedPreferences("careai",MODE_PRIVATE)
+                .getBoolean("auto_video_answer",true)) return;
+
+        VideoCallManager.checkIncoming(this,(result,error)->{
+            if(error!=null||result==null)return;
+            if(!result.optBoolean("ok")||!result.optBoolean("incoming"))return;
+            String room=result.optString("room","");
+            if(room.isEmpty())return;
+
+            String handled=prefs.getString("last_video_room_handled","");
+            if(room.equals(handled))return;
+
+            prefs.edit().putString("last_video_room_handled",room).apply();
+
+            runOnUiThread(()->{
+                Intent i=new Intent(this,VideoCallActivity.class);
+                i.putExtra("role","patient");
+                i.putExtra("room",room);
+                startActivity(i);
+            });
+        });
+    }
+
     private void showPatientDashboard(boolean autoStart) {
         ScrollView sc = shell();
         LinearLayout l = column();
@@ -558,6 +606,79 @@ public class MainActivity extends Activity {
 
         addFeatureRow(l, care, talk);
         addFeatureRow(l, emergency, commands);
+
+        LinearLayout videoCall = featureCard(
+                android.R.drawable.ic_menu_camera,
+                "تماس تصویری",
+                "ارسال لینک امن به پرستار",
+                Color.rgb(19,145,165),
+                Color.rgb(229,247,249),
+                v -> chooseVideoNurse()
+        );
+
+        LinearLayout medicine = featureCard(
+                android.R.drawable.ic_menu_agenda,
+                "داروها",
+                "روز، ساعت، مقدار و پیامک پرستار",
+                Color.rgb(61,139,99),
+                Color.rgb(235,249,241),
+                v -> openCarePlan(CareScheduleStore.KIND_MEDICINE)
+        );
+
+        LinearLayout carePlan = featureCard(
+                android.R.drawable.ic_menu_recent_history,
+                "مراقبت و نوبت",
+                "دکتر، فیزیوتراپی و مراقبت‌ها",
+                Color.rgb(189,120,37),
+                Color.rgb(255,247,233),
+                v -> openCarePlan(CareScheduleStore.KIND_CARE)
+        );
+
+        LinearLayout sensor = featureCard(
+                android.R.drawable.stat_sys_data_bluetooth,
+                "سنسور سلامت",
+                "ضربان و اکسیژن BLE",
+                Color.rgb(190,70,87),
+                Color.rgb(255,237,241),
+                v -> startActivity(new Intent(this,HealthSensorActivity.class))
+        );
+
+        addFeatureRow(l, videoCall, medicine);
+        addFeatureRow(l, carePlan, sensor);
+
+        boolean autoAnswer = prefs.getBoolean("auto_video_answer",true);
+        LinearLayout autoVideo = wideCard(
+                android.R.drawable.ic_menu_call,
+                autoAnswer ? "پاسخ خودکار تماس تصویری: روشن" : "پاسخ خودکار تماس تصویری: خاموش",
+                autoAnswer
+                        ? "درخواست معتبر پرستار بدون لمس بیمار پاسخ داده می‌شود"
+                        : "برای روشن کردن لمس کنید",
+                autoAnswer ? C_TEAL : C_RED,
+                v -> {
+                    boolean nv=!prefs.getBoolean("auto_video_answer",true);
+                    prefs.edit().putBoolean("auto_video_answer",nv).apply();
+                    showPatientDashboard(false);
+                }
+        );
+        LinearLayout.LayoutParams avp=new LinearLayout.LayoutParams(-1,-2);
+        avp.setMargins(0,dp(12),0,0);
+        l.addView(autoVideo,avp);
+
+        int lastHr=prefs.getInt("last_hr",-1);
+        float lastSpO2=prefs.getFloat("last_spo2",-1f);
+        String vitalSub=(lastHr>0?"ضربان "+lastHr+" bpm":"ضربان --")
+                +" • "
+                +(lastSpO2>0?String.format(java.util.Locale.US,"اکسیژن %.1f%%",lastSpO2):"اکسیژن --");
+        LinearLayout vitals = wideCard(
+                android.R.drawable.ic_menu_info_details,
+                "آخرین وضعیت سنسور",
+                vitalSub,
+                C_TEAL,
+                v -> startActivity(new Intent(this,HealthSensorActivity.class))
+        );
+        LinearLayout.LayoutParams vp=new LinearLayout.LayoutParams(-1,-2);
+        vp.setMargins(0,dp(9),0,0);
+        l.addView(vitals,vp);
 
         LinearLayout contacts = wideCard(
                 android.R.drawable.ic_menu_myplaces,
@@ -644,6 +765,7 @@ public class MainActivity extends Activity {
 
         // بررسی خودکار آپدیت بدون مزاحمت اگر نسخه جدیدی وجود نداشته باشد.
         handler.postDelayed(() -> UpdateManager.check(this, false), 1800L);
+        handler.postDelayed(this::checkIncomingVideoOnDashboard, 2200L);
 
         if (autoStart && !autoLaunchScheduled) {
             autoLaunchScheduled = true;
