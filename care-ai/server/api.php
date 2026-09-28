@@ -75,7 +75,12 @@ if ($action === 'request_otp') {
 
     $sent = send_otp_sms($phone, $code);
     if (!$sent['ok']) {
-        json_out(['ok'=>false,'code'=>$sent['error'] ?? 'SMS_FAILED'], 503);
+        json_out([
+            'ok'=>false,
+            'code'=>$sent['error'] ?? 'SMS_FAILED',
+            'message'=>$sent['message'] ?? 'ارسال پیامک انجام نشد.',
+            'http'=>$sent['http'] ?? 0
+        ], 503);
     }
 
     json_out(['ok'=>true,'message'=>'کد تایید ارسال شد.']);
