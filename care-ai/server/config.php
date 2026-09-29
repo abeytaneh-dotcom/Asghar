@@ -29,12 +29,36 @@ function init_schema(PDO $db): void {
         patient_id TEXT NOT NULL UNIQUE,
         device_id TEXT NOT NULL UNIQUE,
         active INTEGER NOT NULL DEFAULT 0,
+        activation_mode TEXT NOT NULL DEFAULT 'trial',
+        activated_at INTEGER NOT NULL DEFAULT 0,
+        expires_at INTEGER NOT NULL DEFAULT 0,
         auth_token TEXT UNIQUE,
         video_key TEXT UNIQUE,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         last_seen_at TEXT
     )");
+
+    try {
+        $db->exec("ALTER TABLE accounts ADD COLUMN activation_mode TEXT NOT NULL DEFAULT 'trial'");
+    } catch (Throwable $e) {}
+    try {
+        $db->exec("ALTER TABLE accounts ADD COLUMN activated_at INTEGER NOT NULL DEFAULT 0");
+    } catch (Throwable $e) {}
+    try {
+        $db->exec("ALTER TABLE accounts ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0");
+    } catch (Throwable $e) {}
+
+    // حساب‌های قدیمی که قبلاً active بوده‌اند، با مهاجرت ۳۰ روز اعتبار می‌گیرند
+    // تا بعد از بروزرسانی ناگهان قفل نشوند.
+    $now = time();
+    $monthLater = $now + (30 * 86400);
+    $q = $db->prepare("UPDATE accounts
+        SET activation_mode='trial',
+            activated_at=CASE WHEN activated_at IS NULL OR activated_at=0 THEN ? ELSE activated_at END,
+            expires_at=CASE WHEN expires_at IS NULL OR expires_at=0 THEN ? ELSE expires_at END
+        WHERE active=1");
+    $q->execute([$now,$monthLater]);
 
     try {
         $db->exec("ALTER TABLE accounts ADD COLUMN video_key TEXT");
@@ -293,6 +317,58 @@ function send_otp_sms(string $phone, string $code): array {
         'http'=>$http,
         'provider'=>$decoded
     ];
+}
+
+function account_device_public_id(string $deviceId): string {
+    $clean = preg_replace('/[^A-Za-z0-9]/', '', $deviceId) ?? '';
+    if ($clean === '') $clean = bin2hex(random_bytes(8));
+    return 'DEV-' . strtoupper(substr(hash('sha256', $clean), 0, 12));
+}
+
+function account_activation_state(array $account): array {
+    $activeFlag = (int)($account['active'] ?? 0) === 1;
+    $expiresAt = (int)($account['expires_at'] ?? 0);
+    $now = time();
+
+    if (!$activeFlag) {
+        return [
+            'active'=>false,
+            'expired'=>false,
+            'expires_at'=>$expiresAt,
+            'remaining_days'=>0,
+            'mode'=>(string)($account['activation_mode'] ?? 'trial')
+        ];
+    }
+
+    if ($expiresAt <= 0 || $expiresAt <= $now) {
+        return [
+            'active'=>false,
+            'expired'=>true,
+            'expires_at'=>$expiresAt,
+            'remaining_days'=>0,
+            'mode'=>(string)($account['activation_mode'] ?? 'trial')
+        ];
+    }
+
+    return [
+        'active'=>true,
+        'expired'=>false,
+        'expires_at'=>$expiresAt,
+        'remaining_days'=>(int)ceil(($expiresAt - $now) / 86400),
+        'mode'=>(string)($account['activation_mode'] ?? 'trial')
+    ];
+}
+
+function expire_account_if_needed(PDO $db, array $account): array {
+    $state = account_activation_state($account);
+
+    if ($state['expired'] && (int)($account['active'] ?? 0) === 1) {
+        $db->prepare('UPDATE accounts SET active=0,updated_at=? WHERE id=?')
+            ->execute([now_iso(),(int)$account['id']]);
+        $account['active'] = 0;
+    }
+
+    return $state;
 }
 
 function require_admin(): void {
