@@ -883,6 +883,8 @@ public class MainActivity extends Activity {
         ArrayList<String> permissions = new ArrayList<>();
         permissions.add(Manifest.permission.CAMERA);
         permissions.add(Manifest.permission.SEND_SMS);
+        permissions.add(Manifest.permission.RECEIVE_SMS);
+        permissions.add(Manifest.permission.READ_SMS);
         permissions.add(Manifest.permission.CALL_PHONE);
         permissions.add(Manifest.permission.READ_PHONE_STATE);
 
