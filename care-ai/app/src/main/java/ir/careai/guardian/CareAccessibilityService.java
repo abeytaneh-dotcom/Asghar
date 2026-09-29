@@ -82,23 +82,33 @@ public class CareAccessibilityService extends AccessibilityService {
     public static void openInstagramReelsSoon() {
         if (instance == null) return;
 
-        instance.handler.postDelayed(() -> {
-            if (instance.clickReelsNode()) return;
+        // بعضی نسخه‌های Instagram بعد از Intent مستقیم، Home را نشان می‌دهند.
+        // چند بار روی نود Reels تلاش می‌کنیم و بین تلاش‌ها دوباره Deep Link می‌فرستیم.
+        instance.handler.postDelayed(() -> instance.tryOpenReels(0), 650L);
+    }
 
-            instance.handler.postDelayed(() -> {
-                if (instance.clickReelsNode()) return;
+    private void tryOpenReels(int attempt) {
+        if (clickReelsNode()) return;
 
-                try {
-                    Intent i = new Intent(
-                            Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://www.instagram.com/reels/")
-                    );
-                    i.setPackage("com.instagram.android");
-                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    instance.startActivity(i);
-                } catch (Exception ignored) {}
-            }, 1200L);
-        }, 1100L);
+        if (attempt == 0 || attempt == 2) {
+            try {
+                Intent i = new Intent(
+                        Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://www.instagram.com/reels/")
+                );
+                i.setPackage("com.instagram.android");
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(i);
+            } catch (Exception ignored) {}
+        }
+
+        if (attempt < 5) {
+            handler.postDelayed(
+                    () -> tryOpenReels(attempt + 1),
+                    850L
+            );
+        }
     }
 
     private boolean clickReelsNode() {
