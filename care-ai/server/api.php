@@ -7,57 +7,63 @@ $action = (string)($data['action'] ?? $_GET['action'] ?? '');
 
 if ($action === 'request_otp') {
     $phone = normalize_phone((string)($data['phone'] ?? ''));
-    $patientId = trim((string)($data['patient_id'] ?? ''));
     $deviceId = trim((string)($data['device_id'] ?? ''));
 
-    if ($phone === '' || $patientId === '' || $deviceId === '') {
-        json_out(['ok'=>false,'code'=>'MISSING_FIELDS'], 422);
+    if ($phone === '' || $deviceId === '') {
+        json_out([
+            'ok'=>false,
+            'code'=>'MISSING_FIELDS',
+            'message'=>'شماره موبایل یا شناسه دستگاه دریافت نشد.'
+        ], 422);
     }
 
     $db = db();
 
-    $pid = $db->prepare('SELECT enabled FROM patient_ids WHERE patient_id=? LIMIT 1');
-    $pid->execute([$patientId]);
-    $pidEnabled = $pid->fetchColumn();
-    if ($pidEnabled === false || (int)$pidEnabled !== 1) {
-        json_out([
-            'ok'=>false,
-            'code'=>'PATIENT_ID_NOT_ALLOWED',
-            'message'=>'این آیدی بیمار در پنل مدیریت ثبت یا فعال نشده است.'
-        ], 403);
-    }
-
-    $s = $db->prepare('SELECT * FROM accounts WHERE phone=? OR patient_id=? OR device_id=? LIMIT 1');
-    $s->execute([$phone, $patientId, $deviceId]);
+    // حساب از این نسخه با شماره موبایل + شناسه واقعی خود گوشی قفل می‌شود.
+    $s = $db->prepare('SELECT * FROM accounts WHERE phone=? OR device_id=? LIMIT 1');
+    $s->execute([$phone,$deviceId]);
     $existing = $s->fetch(PDO::FETCH_ASSOC);
 
     if ($existing) {
         if ($existing['phone'] === $phone
             && str_starts_with((string)$existing['device_id'], 'UNBOUND:')) {
-            if ($existing['patient_id'] !== $patientId) {
-                json_out(['ok'=>false,'code'=>'ACCOUNT_MISMATCH',
-                    'message'=>'این حساب برای بیمار دیگری ثبت شده است.'], 409);
-            }
-            $db->prepare('UPDATE accounts SET device_id=?,auth_token=NULL,updated_at=? WHERE id=?')
+            $db->prepare('UPDATE accounts
+                SET device_id=?,auth_token=NULL,active=0,expires_at=0,updated_at=?
+                WHERE id=?')
                 ->execute([$deviceId,now_iso(),$existing['id']]);
             $existing['device_id'] = $deviceId;
         }
 
         if ($existing['phone'] === $phone && $existing['device_id'] !== $deviceId) {
-            json_out(['ok'=>false,'code'=>'ACCOUNT_BOUND_OTHER_DEVICE',
-                'message'=>'این حساب قبلاً روی گوشی دیگری ثبت شده است.'], 409);
+            json_out([
+                'ok'=>false,
+                'code'=>'ACCOUNT_BOUND_OTHER_DEVICE',
+                'message'=>'این شماره قبلاً روی گوشی دیگری ثبت شده است. ابتدا مدیر باید دستگاه قبلی را آزاد کند.'
+            ], 409);
         }
-        if ($existing['patient_id'] === $patientId && $existing['device_id'] !== $deviceId) {
-            json_out(['ok'=>false,'code'=>'PATIENT_BOUND_OTHER_DEVICE',
-                'message'=>'این آیدی بیمار قبلاً روی گوشی دیگری ثبت شده است.'], 409);
+
+        if ($existing['device_id'] === $deviceId && $existing['phone'] !== $phone) {
+            json_out([
+                'ok'=>false,
+                'code'=>'DEVICE_BOUND_OTHER_ACCOUNT',
+                'message'=>'این گوشی قبلاً برای حساب دیگری ثبت شده است.'
+            ], 409);
         }
-        if ($existing['device_id'] === $deviceId && $existing['patient_id'] !== $patientId) {
-            json_out(['ok'=>false,'code'=>'DEVICE_BOUND_OTHER_PATIENT',
-                'message'=>'این حساب/گوشی قبلاً برای بیمار دیگری ثبت شده است.'], 409);
-        }
-        if ($existing['phone'] !== $phone || $existing['patient_id'] !== $patientId) {
-            json_out(['ok'=>false,'code'=>'ACCOUNT_MISMATCH',
-                'message'=>'اطلاعات حساب با ثبت قبلی مطابقت ندارد.'], 409);
+
+        // Patient ID قدیمی فقط برای سازگاری داخلی نگه داشته می‌شود؛
+        // کاربر دیگر آن را وارد نمی‌کند.
+        $patientId = (string)$existing['patient_id'];
+    } else {
+        $patientId = account_device_public_id($deviceId);
+
+        // برخورد بسیار بعید hash را هم مدیریت می‌کنیم.
+        $base = $patientId;
+        $n = 1;
+        while (true) {
+            $q = $db->prepare('SELECT 1 FROM accounts WHERE patient_id=? LIMIT 1');
+            $q->execute([$patientId]);
+            if ($q->fetchColumn() === false) break;
+            $patientId = $base . '-' . $n++;
         }
     }
 
@@ -65,12 +71,16 @@ if ($action === 'request_otp') {
     $hash = password_hash($code, PASSWORD_DEFAULT);
     $expires = time() + 300;
 
-    $q = $db->prepare('INSERT INTO otp_codes(phone,code_hash,patient_id,device_id,expires_at,attempts,created_at)
-        VALUES(?,?,?,?,?,0,?)
+    $q = $db->prepare('INSERT INTO otp_codes(
+            phone,code_hash,patient_id,device_id,expires_at,attempts,created_at
+        ) VALUES(?,?,?,?,?,0,?)
         ON CONFLICT(phone) DO UPDATE SET
-        code_hash=excluded.code_hash, patient_id=excluded.patient_id,
-        device_id=excluded.device_id, expires_at=excluded.expires_at,
-        attempts=0, created_at=excluded.created_at');
+            code_hash=excluded.code_hash,
+            patient_id=excluded.patient_id,
+            device_id=excluded.device_id,
+            expires_at=excluded.expires_at,
+            attempts=0,
+            created_at=excluded.created_at');
     $q->execute([$phone,$hash,$patientId,$deviceId,$expires,now_iso()]);
 
     $sent = send_otp_sms($phone, $code);
@@ -83,14 +93,26 @@ if ($action === 'request_otp') {
         ], 503);
     }
 
-    json_out(['ok'=>true,'message'=>'کد تایید ارسال شد.']);
+    json_out([
+        'ok'=>true,
+        'message'=>'کد تایید ارسال شد.',
+        'device_id'=>$deviceId,
+        'account_id'=>$patientId
+    ]);
 }
 
 if ($action === 'verify_otp') {
     $phone = normalize_phone((string)($data['phone'] ?? ''));
-    $patientId = trim((string)($data['patient_id'] ?? ''));
     $deviceId = trim((string)($data['device_id'] ?? ''));
     $code = trim((string)($data['code'] ?? ''));
+
+    if ($phone === '' || $deviceId === '' || $code === '') {
+        json_out([
+            'ok'=>false,
+            'code'=>'MISSING_FIELDS',
+            'message'=>'اطلاعات تایید کامل نیست.'
+        ], 422);
+    }
 
     $db = db();
     $q = $db->prepare('SELECT * FROM otp_codes WHERE phone=?');
@@ -98,55 +120,120 @@ if ($action === 'verify_otp') {
     $otp = $q->fetch(PDO::FETCH_ASSOC);
 
     if (!$otp || time() > (int)$otp['expires_at']) {
-        json_out(['ok'=>false,'code'=>'OTP_EXPIRED','message'=>'کد منقضی شده است.'], 401);
-    }
-    if ((int)$otp['attempts'] >= 6) {
-        json_out(['ok'=>false,'code'=>'OTP_LOCKED','message'=>'تعداد تلاش بیش از حد مجاز است.'], 429);
-    }
-    if ($otp['patient_id'] !== $patientId || $otp['device_id'] !== $deviceId) {
-        json_out(['ok'=>false,'code'=>'OTP_CONTEXT_MISMATCH'], 409);
-    }
-    if (!password_verify($code, $otp['code_hash'])) {
-        $db->prepare('UPDATE otp_codes SET attempts=attempts+1 WHERE phone=?')->execute([$phone]);
-        json_out(['ok'=>false,'code'=>'OTP_INVALID','message'=>'کد تایید صحیح نیست.'], 401);
+        json_out([
+            'ok'=>false,
+            'code'=>'OTP_EXPIRED',
+            'message'=>'کد تایید منقضی شده است. دوباره کد بگیرید.'
+        ], 401);
     }
 
-    $s = $db->prepare('SELECT * FROM accounts WHERE phone=? OR patient_id=? OR device_id=? LIMIT 1');
-    $s->execute([$phone,$patientId,$deviceId]);
+    if ((int)$otp['attempts'] >= 6) {
+        json_out([
+            'ok'=>false,
+            'code'=>'OTP_LOCKED',
+            'message'=>'تعداد تلاش بیش از حد مجاز است. دوباره کد بگیرید.'
+        ], 429);
+    }
+
+    if ($otp['device_id'] !== $deviceId) {
+        json_out([
+            'ok'=>false,
+            'code'=>'OTP_CONTEXT_MISMATCH',
+            'message'=>'کد تایید برای این گوشی صادر نشده است.'
+        ], 409);
+    }
+
+    if (!password_verify($code, $otp['code_hash'])) {
+        $db->prepare('UPDATE otp_codes SET attempts=attempts+1 WHERE phone=?')
+            ->execute([$phone]);
+        json_out([
+            'ok'=>false,
+            'code'=>'OTP_INVALID',
+            'message'=>'کد تایید صحیح نیست.'
+        ], 401);
+    }
+
+    $patientId = (string)$otp['patient_id'];
+
+    $s = $db->prepare('SELECT * FROM accounts WHERE phone=? OR device_id=? LIMIT 1');
+    $s->execute([$phone,$deviceId]);
     $a = $s->fetch(PDO::FETCH_ASSOC);
 
     if ($a) {
-        if ($a['phone'] !== $phone || $a['patient_id'] !== $patientId || $a['device_id'] !== $deviceId) {
-            json_out(['ok'=>false,'code'=>'ACCOUNT_BOUND',
-                'message'=>'این حساب یا بیمار قبلاً روی گوشی دیگری ثبت شده است.'], 409);
+        if ($a['phone'] !== $phone || $a['device_id'] !== $deviceId) {
+            json_out([
+                'ok'=>false,
+                'code'=>'ACCOUNT_BOUND',
+                'message'=>'این حساب یا گوشی قبلاً به ثبت دیگری متصل شده است.'
+            ], 409);
         }
+
         $token = $a['auth_token'] ?: random_token();
-        $videoKey = !empty($a['video_key']) ? (string)$a['video_key'] : random_token(12);
-        $db->prepare('UPDATE accounts SET auth_token=?,video_key=?,updated_at=?,last_seen_at=? WHERE id=?')
+        $videoKey = !empty($a['video_key'])
+            ? (string)$a['video_key']
+            : random_token(12);
+
+        $db->prepare('UPDATE accounts
+            SET auth_token=?,video_key=?,last_seen_at=?,updated_at=?
+            WHERE id=?')
             ->execute([$token,$videoKey,now_iso(),now_iso(),$a['id']]);
-        $active = (int)$a['active'] === 1;
+
+        // دوباره رکورد را بخوان تا وضعیت فعال‌سازی و انقضا قطعی باشد.
+        $s = $db->prepare('SELECT * FROM accounts WHERE id=?');
+        $s->execute([$a['id']]);
+        $a = $s->fetch(PDO::FETCH_ASSOC);
     } else {
         $token = random_token();
         $videoKey = random_token(12);
+
         try {
-            $db->prepare('INSERT INTO accounts(phone,patient_id,device_id,active,auth_token,video_key,created_at,updated_at,last_seen_at)
-                VALUES(?,?,?,0,?,?,?,?,?)')
-                ->execute([$phone,$patientId,$deviceId,$token,$videoKey,now_iso(),now_iso(),now_iso()]);
+            $db->prepare('INSERT INTO accounts(
+                    phone,patient_id,device_id,active,
+                    activation_mode,activated_at,expires_at,
+                    auth_token,video_key,created_at,updated_at,last_seen_at
+                ) VALUES(?,?,?,0,\'trial\',0,0,?,?,?,?,?)')
+                ->execute([
+                    $phone,$patientId,$deviceId,
+                    $token,$videoKey,
+                    now_iso(),now_iso(),now_iso()
+                ]);
+
+            $id = (int)$db->lastInsertId();
+            $s = $db->prepare('SELECT * FROM accounts WHERE id=?');
+            $s->execute([$id]);
+            $a = $s->fetch(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
-            json_out(['ok'=>false,'code'=>'ACCOUNT_BOUND',
-                'message'=>'این حساب، آیدی بیمار یا گوشی قبلاً ثبت شده است.'], 409);
+            json_out([
+                'ok'=>false,
+                'code'=>'ACCOUNT_BOUND',
+                'message'=>'این شماره یا گوشی قبلاً ثبت شده است.'
+            ], 409);
         }
-        $active = false;
     }
 
+    $state = expire_account_if_needed($db,$a);
+
     $db->prepare('DELETE FROM otp_codes WHERE phone=?')->execute([$phone]);
+
+    $message = 'ثبت‌نام انجام شد؛ منتظر فعال‌سازی مدیر باشید.';
+    if ($state['active']) {
+        $message = 'حساب فعال است. ' . $state['remaining_days'] . ' روز از اعتبار تست باقی مانده است.';
+    } elseif ($state['expired']) {
+        $message = 'مدت فعال‌سازی ۳۰ روزه این حساب تمام شده است. مدیر باید حساب را تمدید کند.';
+    }
+
     json_out([
         'ok'=>true,
         'token'=>$token,
-        'active'=>$active,
-        'patient_id'=>$patientId,
+        'active'=>$state['active'],
+        'expired'=>$state['expired'],
+        'activation_mode'=>$state['mode'],
+        'expires_at'=>$state['expires_at'],
+        'remaining_days'=>$state['remaining_days'],
+        'patient_id'=>$a['patient_id'],
+        'device_id'=>$a['device_id'],
         'video_key'=>$videoKey ?? '',
-        'message'=>$active ? 'حساب فعال است.' : 'ثبت‌نام انجام شد؛ منتظر فعال‌سازی مدیر باشید.'
+        'message'=>$message
     ]);
 }
 
@@ -154,25 +241,51 @@ if ($action === 'status') {
     $token = trim((string)($data['token'] ?? ''));
     $deviceId = trim((string)($data['device_id'] ?? ''));
 
-    $q = db()->prepare('SELECT phone,patient_id,device_id,active,video_key FROM accounts WHERE auth_token=? LIMIT 1');
+    $db = db();
+    $q = $db->prepare('SELECT * FROM accounts WHERE auth_token=? LIMIT 1');
     $q->execute([$token]);
     $a = $q->fetch(PDO::FETCH_ASSOC);
 
-    if (!$a) json_out(['ok'=>false,'code'=>'AUTH_INVALID'], 401);
-    if ($a['device_id'] !== $deviceId) {
-        json_out(['ok'=>false,'code'=>'DEVICE_MISMATCH',
-            'message'=>'این حساب روی دستگاه دیگری ثبت شده است.'], 403);
+    if (!$a) {
+        json_out([
+            'ok'=>false,
+            'code'=>'AUTH_INVALID',
+            'message'=>'نشست فعال‌سازی معتبر نیست. دوباره وارد شوید.'
+        ], 401);
     }
 
-    db()->prepare('UPDATE accounts SET last_seen_at=?,updated_at=? WHERE auth_token=?')
-        ->execute([now_iso(),now_iso(),$token]);
+    if ($a['device_id'] !== $deviceId) {
+        json_out([
+            'ok'=>false,
+            'code'=>'DEVICE_MISMATCH',
+            'message'=>'این حساب برای گوشی دیگری فعال شده است.'
+        ], 403);
+    }
+
+    $state = expire_account_if_needed($db,$a);
+
+    $db->prepare('UPDATE accounts SET last_seen_at=?,updated_at=? WHERE id=?')
+        ->execute([now_iso(),now_iso(),$a['id']]);
+
+    $message = 'حساب هنوز توسط مدیر فعال نشده است.';
+    if ($state['active']) {
+        $message = 'فعال‌سازی معتبر است. ' . $state['remaining_days'] . ' روز باقی مانده است.';
+    } elseif ($state['expired']) {
+        $message = 'مدت فعال‌سازی ۳۰ روزه تمام شده است. برای تمدید با مدیر تماس بگیرید.';
+    }
 
     json_out([
         'ok'=>true,
-        'active'=>(int)$a['active'] === 1,
+        'active'=>$state['active'],
+        'expired'=>$state['expired'],
+        'activation_mode'=>$state['mode'],
+        'expires_at'=>$state['expires_at'],
+        'remaining_days'=>$state['remaining_days'],
         'phone'=>$a['phone'],
         'patient_id'=>$a['patient_id'],
-        'video_key'=>$a['video_key'] ?? ''
+        'device_id'=>$a['device_id'],
+        'video_key'=>$a['video_key'] ?? '',
+        'message'=>$message
     ]);
 }
 
@@ -184,7 +297,8 @@ if ($action === 'video_create_by_key') {
     $q->execute([$patientId]);
     $a = $q->fetch(PDO::FETCH_ASSOC);
 
-    if (!$a || (int)$a['active'] !== 1 || !hash_equals((string)$a['video_key'], $key)) {
+    $videoState = $a ? account_activation_state($a) : ['active'=>false];
+    if (!$a || !$videoState['active'] || !hash_equals((string)$a['video_key'], $key)) {
         json_out(['ok'=>false,'code'=>'CALL_LINK_INVALID'], 403);
     }
 
@@ -226,7 +340,8 @@ if ($action === 'video_incoming') {
     $q->execute([$token]);
     $a = $q->fetch(PDO::FETCH_ASSOC);
 
-    if (!$a || $a['device_id'] !== $deviceId || (int)$a['active'] !== 1) {
+    $incomingState = $a ? account_activation_state($a) : ['active'=>false];
+    if (!$a || $a['device_id'] !== $deviceId || !$incomingState['active']) {
         json_out(['ok'=>false,'code'=>'AUTH_INVALID'],401);
     }
 
@@ -247,10 +362,11 @@ if ($action === 'video_get_offer') {
     $token = trim((string)($data['token'] ?? ''));
     $room = trim((string)($data['room'] ?? ''));
 
-    $q = db()->prepare('SELECT patient_id,active FROM accounts WHERE auth_token=? LIMIT 1');
+    $q = db()->prepare('SELECT patient_id,active,activation_mode,activated_at,expires_at FROM accounts WHERE auth_token=? LIMIT 1');
     $q->execute([$token]);
     $a = $q->fetch(PDO::FETCH_ASSOC);
-    if (!$a || (int)$a['active'] !== 1) json_out(['ok'=>false],401);
+    $callState = $a ? account_activation_state($a) : ['active'=>false];
+    if (!$a || !$callState['active']) json_out(['ok'=>false,'code'=>'ACTIVATION_REQUIRED'],401);
 
     $q = db()->prepare('SELECT patient_id,offer_sdp,state FROM video_calls WHERE room_id=? LIMIT 1');
     $q->execute([$room]);
