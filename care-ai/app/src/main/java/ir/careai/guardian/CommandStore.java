@@ -21,6 +21,7 @@ public final class CommandStore {
     public static final String ACTION_EMERGENCY = "EMERGENCY";
     public static final String ACTION_OPEN_APP = "OPEN_APP";
     public static final String ACTION_OPEN_URL = "OPEN_URL";
+    public static final String ACTION_SMS = "SMS";
 
     private static final String KEY = "commands_json";
 
@@ -92,7 +93,33 @@ public final class CommandStore {
         if (out.isEmpty()) {
             out = new ArrayList<>(defaults(c));
             save(c, out);
+            p.edit().putBoolean("sms_command_added_v16", true).apply();
+            return out;
         }
+
+        // یک بار بعد از ارتقا، فرمان پیامک چشمی را به حساب‌های قدیمی اضافه می‌کنیم.
+        if (!p.getBoolean("sms_command_added_v16", false)) {
+            boolean hasSms = false;
+            for (Command cmd : out) {
+                if (ACTION_SMS.equals(cmd.action)) {
+                    hasSms = true;
+                    break;
+                }
+            }
+            if (!hasSms) {
+                out.add(new Command(
+                        "eye_sms",
+                        "می‌خواهی پیام بفرستی؟",
+                        "صفحه نوشتن پیام را باز می‌کنم",
+                        ACTION_SMS,
+                        true,
+                        false
+                ));
+                save(c, out);
+            }
+            p.edit().putBoolean("sms_command_added_v16", true).apply();
+        }
+
         return out;
     }
 
@@ -139,6 +166,14 @@ public final class CommandStore {
             }
         }
 
+        out.add(new Command(
+                "eye_sms",
+                "می‌خواهی پیام بفرستی؟",
+                "صفحه نوشتن پیام را باز می‌کنم",
+                ACTION_SMS,
+                true,
+                false
+        ));
         out.add(new Command("video", "می‌خواهی برات ویدیو پخش کنم؟", "ویدیو پخش می‌کنم", ACTION_VIDEO, true, false));
         out.add(new Command("audio", "می‌خواهی برات آهنگ پخش کنم؟", "آهنگ پخش می‌کنم", ACTION_AUDIO, true, false));
         out.add(new Command("water", "آب می‌خواهی؟", "آب می‌خواهم", ACTION_SPEAK, true));
@@ -204,6 +239,7 @@ public final class CommandStore {
         if (ACTION_VIDEO.equals(action) || ACTION_AUDIO.equals(action)) return "رسانه";
         if (ACTION_CALL_1.equals(action) || ACTION_CALL_2.equals(action) || ACTION_CALL_3.equals(action)) return "تماس";
         if (ACTION_EMERGENCY.equals(action)) return "اضطراری";
+        if (ACTION_SMS.equals(action)) return "پیامک چشمی";
         if (ACTION_OPEN_APP.equals(action) || ACTION_OPEN_URL.equals(action)) return "اجرایی گوشی";
         return "اطلاع‌رسانی";
     }
@@ -217,6 +253,7 @@ public final class CommandStore {
         if (ACTION_EMERGENCY.equals(action)) return "کمک فوری";
         if (ACTION_OPEN_APP.equals(action)) return "باز کردن اپلیکیشن";
         if (ACTION_OPEN_URL.equals(action)) return "باز کردن لینک / سایت";
+        if (ACTION_SMS.equals(action)) return "نوشتن و ارسال پیامک با چشم";
         return "اعلام صوتی + پیامک";
     }
 }
