@@ -19,11 +19,11 @@ jobs:
       - name: Package server
         run: |
           cd care-ai
-          zip -r CareAI-Server-V11.zip server
+          zip -r CareAI-Server-V14.zip server
 
       - name: Upload server package
         uses: actions/upload-artifact@v4
         with:
-          name: CareAI-Server-V11
-          path: care-ai/CareAI-Server-V11.zip
+          name: CareAI-Server-V14
+          path: care-ai/CareAI-Server-V14.zip
           retention-days: 7
