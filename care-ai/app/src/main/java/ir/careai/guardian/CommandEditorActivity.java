@@ -47,6 +47,7 @@ public class CommandEditorActivity extends Activity {
             CommandStore.ACTION_AUDIO,
             CommandStore.ACTION_OPEN_APP,
             CommandStore.ACTION_OPEN_URL,
+            CommandStore.ACTION_SMS,
             CommandStore.ACTION_EMERGENCY
     };
 
@@ -59,6 +60,7 @@ public class CommandEditorActivity extends Activity {
             "پخش آهنگ",
             "باز کردن اپلیکیشن",
             "باز کردن لینک / سایت",
+            "نوشتن و ارسال پیامک با چشم",
             "کمک فوری"
     };
 
@@ -737,6 +739,8 @@ public class CommandEditorActivity extends Activity {
 
         if (CommandStore.ACTION_OPEN_APP.equals(action)
                 || CommandStore.ACTION_OPEN_URL.equals(action)) return Color.rgb(29, 145, 165);
+
+        if (CommandStore.ACTION_SMS.equals(action)) return Color.rgb(45, 122, 210);
 
         if (CommandStore.ACTION_CALL_1.equals(action)
                 || CommandStore.ACTION_CALL_2.equals(action)
