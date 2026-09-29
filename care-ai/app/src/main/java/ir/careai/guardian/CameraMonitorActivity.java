@@ -1398,6 +1398,51 @@ public class CameraMonitorActivity extends Activity
         handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
     }
 
+    private void updateSmsComposerUi() {
+        if (!smsComposerMode) return;
+
+        String[] symbols = smsStage == 0 ? SMS_LETTERS : SMS_DIGITS;
+        String symbol = symbols[smsSymbolIndex % symbols.length];
+
+        if (smsStage == 0) {
+            smsStageText.setText(
+                    smsReplyMode
+                            ? "پاسخ به " + smsReplyNumber
+                            : "مرحله ۱ • نوشتن متن پیام"
+            );
+
+            smsTypedText.setText(
+                    smsTextBuffer.length() == 0
+                            ? "متن پیام هنوز خالی است"
+                            : smsTextBuffer.toString()
+            );
+
+            smsSymbolText.setText(symbol);
+            smsHintText.setText(
+                    "نگاه چپ = انتخاب «" + symbol
+                            + "» • نگاه راست = پایان متن"
+            );
+
+        } else {
+            smsStageText.setText("مرحله ۲ • وارد کردن شماره گیرنده");
+
+            String number = smsNumberBuffer.length() == 0
+                    ? "شماره هنوز وارد نشده"
+                    : smsNumberBuffer.toString();
+
+            smsTypedText.setText(
+                    "پیام: " + smsTextBuffer
+                            + "\n\nشماره: " + number
+            );
+
+            smsSymbolText.setText(symbol);
+            smsHintText.setText(
+                    "نگاه چپ = انتخاب عدد " + symbol
+                            + " • نگاه راست = ارسال پیام"
+            );
+        }
+    }
+
     private void analyzeTextureFrame() {
         if (faceLandmarker == null
                 || processingFrame
