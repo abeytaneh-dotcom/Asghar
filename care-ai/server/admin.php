@@ -78,7 +78,7 @@ if ($logged && isset($_POST['account_action'])) {
             SET device_id='UNBOUND:'||id||':'||strftime('%s','now'),
                 auth_token=NULL,
                 active=0,
-                activation_mode='inactive',
+                activation_mode='new',
                 activated_at=0,
                 expires_at=0,
                 updated_at=?
@@ -115,7 +115,12 @@ if ($logged && isset($_POST['save_sms'])) {
     $flash = 'تنظیمات ذخیره شد.';
 }
 
-if ($logged && isset($_POST['save_support'])) {\n    set_setting('support_whatsapp', trim((string)($_POST['support_whatsapp'] ?? '')));\n    $flash = 'شماره واتساپ پشتیبانی ذخیره شد.';\n}\n\nif ($logged && isset($_POST['save_rtc'])) {
+if ($logged && isset($_POST['save_support'])) {
+    set_setting('support_whatsapp', trim((string)($_POST['support_whatsapp'] ?? '')));
+    $flash = 'شماره واتساپ پشتیبانی ذخیره شد.';
+}
+
+if ($logged && isset($_POST['save_rtc'])) {
     set_setting('turn_url', trim((string)($_POST['turn_url'] ?? '')));
     set_setting('turn_user', trim((string)($_POST['turn_user'] ?? '')));
     set_setting('turn_pass', trim((string)($_POST['turn_pass'] ?? '')));
