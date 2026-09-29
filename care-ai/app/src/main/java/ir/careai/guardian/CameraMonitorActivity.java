@@ -83,6 +83,17 @@ public class CameraMonitorActivity extends Activity
     private static final long SMS_GAZE_HOLD_MS = 420L;
     private static final long INCOMING_SMS_VISIBLE_MS = 60000L;
 
+    private static final String[] SMS_LETTERS = new String[]{
+            "ا","آ","ب","پ","ت","ث","ج","چ","ح","خ",
+            "د","ذ","ر","ز","ژ","س","ش","ص","ض","ط",
+            "ظ","ع","غ","ف","ق","ک","گ","ل","م","ن",
+            "و","ه","ی","فاصله"
+    };
+
+    private static final String[] SMS_DIGITS = new String[]{
+            "0","1","2","3","4","5","6","7","8","9"
+    };
+
     private static final int ACTION_SPEAK = 0;
     private static final int ACTION_TALK_MODE = 1;
     private static final int ACTION_EMERGENCY = 2;
@@ -112,6 +123,27 @@ public class CameraMonitorActivity extends Activity
     private TextView modeState;
     private TextView promptText;
     private TextView instruction;
+
+    private LinearLayout smsOverlay;
+    private TextView smsStageText;
+    private TextView smsTypedText;
+    private TextView smsSymbolText;
+    private TextView smsHintText;
+
+    private boolean smsComposerMode = false;
+    private boolean incomingSmsMode = false;
+    private boolean smsReplyMode = false;
+    private boolean smsLeftLatched = false;
+    private boolean smsRightLatched = false;
+    private int smsStage = 0;
+    private int smsSymbolIndex = 0;
+    private int smsReturnPromptIndex = -1;
+    private String smsReplyNumber = "";
+    private String incomingSmsNumber = "";
+    private String incomingSmsBody = "";
+    private long incomingSmsShownAt = 0L;
+    private final StringBuilder smsTextBuffer = new StringBuilder();
+    private final StringBuilder smsNumberBuffer = new StringBuilder();
 
     private SharedPreferences prefs;
 
