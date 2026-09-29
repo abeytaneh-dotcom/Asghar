@@ -65,9 +65,7 @@ if ($logged && isset($_POST['account_action'])) {
     if ($action === 'deactivate') {
         $db->prepare("UPDATE accounts
             SET active=0,
-                activation_mode='inactive',
-                activated_at=0,
-                expires_at=0,
+                activation_mode='blocked',
                 updated_at=?
             WHERE id=?")
             ->execute([now_iso(),$id]);
