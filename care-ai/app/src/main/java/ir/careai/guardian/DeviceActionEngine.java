@@ -38,7 +38,15 @@ public final class DeviceActionEngine {
         }
 
         if (CommandStore.ACTION_OPEN_APP.equals(cmd.action)) {
+            String combined = firstNonEmpty(cmd.target, "")
+                    + " " + firstNonEmpty(cmd.output, "")
+                    + " " + firstNonEmpty(cmd.question, "");
             String target = firstNonEmpty(cmd.target, cmd.output, cmd.question);
+
+            if (looksLikeInstagramReels(combined)) {
+                return openInstagramReels(activity);
+            }
+
             return openApp(activity, target);
         }
 
@@ -47,6 +55,15 @@ public final class DeviceActionEngine {
         if (CommandStore.ACTION_SPEAK.equals(cmd.action)) {
             String inferred = inferAppTarget(cmd);
             if (!inferred.isEmpty()) {
+                String combined = firstNonEmpty(cmd.target, "")
+                        + " " + firstNonEmpty(cmd.output, "")
+                        + " " + firstNonEmpty(cmd.question, "");
+
+                if ("Instagram".equalsIgnoreCase(inferred)
+                        && looksLikeInstagramReels(combined)) {
+                    return openInstagramReels(activity);
+                }
+
                 return openApp(activity, inferred);
             }
 
@@ -57,6 +74,51 @@ public final class DeviceActionEngine {
         }
 
         return false;
+    }
+
+    private static boolean looksLikeInstagramReels(String value) {
+        String s = normalize(value);
+        return containsAny(s, "اینستاگرام", "instagram", "insta")
+                && containsAny(s, "ریلز", "reels", "reel");
+    }
+
+    private static boolean openInstagramReels(Activity activity) {
+        prepareEyeControl(activity, "Instagram Reels");
+
+        try {
+            Intent direct = new Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("https://www.instagram.com/reels/")
+            );
+            direct.setPackage("com.instagram.android");
+            direct.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(direct);
+
+            new Handler(Looper.getMainLooper()).postDelayed(
+                    CareAccessibilityService::openInstagramReelsSoon,
+                    1000L
+            );
+            return true;
+
+        } catch (Exception ignored) {}
+
+        try {
+            Intent launch = activity.getPackageManager()
+                    .getLaunchIntentForPackage("com.instagram.android");
+            if (launch == null) return false;
+
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(launch);
+
+            new Handler(Looper.getMainLooper()).postDelayed(
+                    CareAccessibilityService::openInstagramReelsSoon,
+                    900L
+            );
+            return true;
+
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static boolean openApp(Activity activity, String target) {
