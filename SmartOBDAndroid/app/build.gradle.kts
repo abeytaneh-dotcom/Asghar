@@ -14,8 +14,8 @@ android {
         applicationId = "ir.khanehremap.smartobd"
         minSdk = 23
         targetSdk = 35
-        versionCode = 7
-        versionName = "2.4.1"
+        versionCode = 8
+        versionName = "3.0.0-livingcar"
     }
     buildTypes {
         getByName("debug") { signingConfig = signingConfigs.getByName("stable") }
