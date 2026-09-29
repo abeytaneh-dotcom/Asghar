@@ -149,7 +149,8 @@ function init_schema(PDO $db): void {
         'update_apk_url' => '',
         'turn_url' => '',
         'turn_user' => '',
-        'turn_pass' => ''
+        'turn_pass' => '',
+        'support_whatsapp' => ''
     ];
 
     $stmt = $db->prepare('INSERT OR IGNORE INTO settings(k,v) VALUES(?,?)');
@@ -171,41 +172,49 @@ function set_setting(string $key, string $value): void {
 
 function activation_state(array $account): array {
     $active = (int)($account['active'] ?? 0) === 1;
-    $mode = trim((string)($account['activation_mode'] ?? 'inactive'));
+    $mode = trim((string)($account['activation_mode'] ?? 'new'));
     $expiresAt = (int)($account['expires_at'] ?? 0);
     $now = time();
 
-    // انقضا حتی پس از صفر شدن active باید همچنان به‌عنوان «منقضی» گزارش شود.
+    if ($mode === 'blocked') {
+        return [
+            'active'=>false,
+            'mode'=>'blocked',
+            'expires_at'=>$expiresAt,
+            'code'=>'ACCOUNT_BLOCKED',
+            'message'=>'این حساب توسط مدیریت غیرفعال شده است.'
+        ];
+    }
+
     if ($mode === 'expired'
             || ($expiresAt > 0 && $now >= $expiresAt)
             || ($active && $expiresAt <= 0)) {
-
         return [
             'active'=>false,
             'mode'=>'expired',
             'expires_at'=>$expiresAt,
             'code'=>'ACTIVATION_EXPIRED',
-            'message'=>'اعتبار یک‌ماهه فعال‌سازی پایان یافته است. برای تمدید با مدیر تماس بگیرید.'
+            'message'=>'اعتبار حساب شما به پایان رسیده، جهت شارژ اعتبار با پشتیبانی تماس بگیرید.'
         ];
     }
 
     if (!$active) {
         return [
             'active'=>false,
-            'mode'=>$mode === '' ? 'inactive' : $mode,
+            'mode'=>$mode === '' ? 'new' : $mode,
             'expires_at'=>$expiresAt,
             'code'=>'ACTIVATION_REQUIRED',
-            'message'=>'این حساب فعال نیست. مدیر باید حساب را فعال کند.'
+            'message'=>'حساب هنوز فعال نشده است.'
         ];
     }
 
     return [
         'active'=>true,
-        'mode'=>$mode === 'test' ? 'test' : 'active',
+        'mode'=>$mode === 'trial' ? 'trial' : 'active',
         'expires_at'=>$expiresAt,
         'code'=>'OK',
-        'message'=>$mode === 'test'
-            ? 'حساب در حالت تست فعال است.'
+        'message'=>$mode === 'trial'
+            ? 'ماه اول رایگان فعال است.'
             : 'حساب فعال است.'
     ];
 }
