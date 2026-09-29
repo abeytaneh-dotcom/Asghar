@@ -173,6 +173,21 @@ function activation_state(array $account): array {
     $active = (int)($account['active'] ?? 0) === 1;
     $mode = trim((string)($account['activation_mode'] ?? 'inactive'));
     $expiresAt = (int)($account['expires_at'] ?? 0);
+    $now = time();
+
+    // انقضا حتی پس از صفر شدن active باید همچنان به‌عنوان «منقضی» گزارش شود.
+    if ($mode === 'expired'
+            || ($expiresAt > 0 && $now >= $expiresAt)
+            || ($active && $expiresAt <= 0)) {
+
+        return [
+            'active'=>false,
+            'mode'=>'expired',
+            'expires_at'=>$expiresAt,
+            'code'=>'ACTIVATION_EXPIRED',
+            'message'=>'اعتبار یک‌ماهه فعال‌سازی پایان یافته است. برای تمدید با مدیر تماس بگیرید.'
+        ];
+    }
 
     if (!$active) {
         return [
@@ -181,16 +196,6 @@ function activation_state(array $account): array {
             'expires_at'=>$expiresAt,
             'code'=>'ACTIVATION_REQUIRED',
             'message'=>'این حساب فعال نیست. مدیر باید حساب را فعال کند.'
-        ];
-    }
-
-    if ($expiresAt <= 0 || time() >= $expiresAt) {
-        return [
-            'active'=>false,
-            'mode'=>'expired',
-            'expires_at'=>$expiresAt,
-            'code'=>'ACTIVATION_EXPIRED',
-            'message'=>'اعتبار یک‌ماهه فعال‌سازی پایان یافته است. برای تمدید با مدیر تماس بگیرید.'
         ];
     }
 
