@@ -327,6 +327,7 @@ public class CameraMonitorActivity extends Activity
 
         handler.postDelayed(frameLoop, 500L);
         handler.postDelayed(videoCallPoll, 1800L);
+        handler.postDelayed(incomingSmsPoll, 1000L);
     }
 
     private void initFaceLandmarker() {
@@ -434,6 +435,8 @@ public class CameraMonitorActivity extends Activity
                         Gravity.BOTTOM
                 );
         root.addView(faceState, fp);
+
+        buildSmsOverlay();
 
         setContentView(root);
 
