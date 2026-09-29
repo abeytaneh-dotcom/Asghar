@@ -1,4 +1,4 @@
-name: Build Care AI V13 Care Plus
+name: Build Care AI V14 Device Activation
 
 on:
   push:
@@ -84,7 +84,7 @@ jobs:
             "version_code": $VERSION_CODE,
             "version_name": "$VERSION_NAME",
             "apk_url": "https://raw.githubusercontent.com/abeytaneh-dotcom/Asghar/care-ai-eye-m2/dist/CareAI-latest.apk",
-            "notes": "اجرای واقعی دستورات سفارشی، باز کردن اپلیکیشن و لینک، تشخیص خودکار فرمان‌های قدیمی مثل اینستاگرام باز بشه و حفظ سیستم بروزرسانی مستقیم."
+            "notes": "فعال‌سازی خودکار با شناسه گوشی، حذف ورود دستی Patient ID، حالت تست ۳۰ روزه، تمدید ماهانه و رفع همگام‌سازی وضعیت مدیر."
           }
           EOF
 
@@ -99,6 +99,6 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CareAI-V13-Care-Plus
+          name: CareAI-V14-Device-Activation
           path: care-ai/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
