@@ -27,6 +27,7 @@ import android.speech.tts.TextToSpeech;
 import android.telecom.TelecomManager;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
+import android.telephony.SmsManager;
 import android.view.Gravity;
 import android.view.Surface;
 import android.view.TextureView;
@@ -78,6 +79,9 @@ public class CameraMonitorActivity extends Activity
     private static final long DOUBLE_BLINK_WINDOW_MS = 1800L;
     private static final long SLEEP_HOLD_MS = 6000L;
     private static final long WAKE_OPEN_MS = 1800L;
+    private static final long SMS_SYMBOL_INTERVAL_MS = 2200L;
+    private static final long SMS_GAZE_HOLD_MS = 420L;
+    private static final long INCOMING_SMS_VISIBLE_MS = 60000L;
 
     private static final int ACTION_SPEAK = 0;
     private static final int ACTION_TALK_MODE = 1;
