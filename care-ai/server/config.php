@@ -228,25 +228,55 @@ function send_otp_sms(string $phone, string $code): array {
         ? strtolower((string)($decoded['status'] ?? ''))
         : '';
 
+    $flattenProviderMessage = static function ($value) use (&$flattenProviderMessage): string {
+        if ($value === null) return '';
+        if (is_bool($value)) return $value ? 'true' : 'false';
+        if (is_scalar($value)) return trim((string)$value);
+
+        if (is_array($value)) {
+            $parts = [];
+            foreach ($value as $key => $item) {
+                $text = $flattenProviderMessage($item);
+                if ($text === '') continue;
+
+                if (is_string($key) && !ctype_digit($key)) {
+                    $parts[] = $key . ': ' . $text;
+                } else {
+                    $parts[] = $text;
+                }
+            }
+            return implode(' | ', $parts);
+        }
+
+        return '';
+    };
+
     $providerMessage = '';
     if (is_array($decoded)) {
         $rawMessage = $decoded['messages']
             ?? $decoded['message']
+            ?? $decoded['errors']
+            ?? $decoded['error']
             ?? '';
 
-        if (is_array($rawMessage)) {
-            $providerMessage = implode(' | ', array_map('strval', $rawMessage));
-        } else {
-            $providerMessage = trim((string)$rawMessage);
-        }
+        $providerMessage = $flattenProviderMessage($rawMessage);
     }
 
     if ($http < 200 || $http >= 300 || ($providerStatus !== '' && $providerStatus !== 'success')) {
         $message = 'ارسال کد تایید توسط ایران‌پیامک ناموفق بود.';
+
         if ($providerMessage !== '') {
             $message .= ' پاسخ سرویس: ' . $providerMessage;
         } elseif ($http > 0) {
             $message .= ' HTTP ' . $http;
+        }
+
+        // اگر پاسخ سرویس ساختار متفاوتی داشت، یک خلاصه امن و قابل‌خواندن بده.
+        if ($providerMessage === '' && is_array($decoded)) {
+            $summary = $flattenProviderMessage($decoded);
+            if ($summary !== '') {
+                $message .= ' جزئیات: ' . mb_substr($summary, 0, 600);
+            }
         }
 
         return [
