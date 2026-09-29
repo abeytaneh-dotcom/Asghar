@@ -1477,6 +1477,27 @@ public class CameraMonitorActivity extends Activity
         );
     }
 
+    private void dismissIncomingSms() {
+        incomingSmsMode = false;
+        incomingSmsNumber = "";
+        incomingSmsBody = "";
+        incomingSmsShownAt = 0L;
+        smsLeftLatched = false;
+        smsRightLatched = false;
+        leftGazeStartedAt = 0L;
+        rightGazeStartedAt = 0L;
+
+        if (smsOverlay != null) smsOverlay.setVisibility(View.GONE);
+
+        if (calibrationStage == 2 && !sleepMode && !mediaMode) {
+            int next = smsReturnPromptIndex >= 0
+                    ? smsReturnPromptIndex
+                    : promptIndex;
+            smsReturnPromptIndex = -1;
+            showPrompt(next);
+        }
+    }
+
     private void analyzeTextureFrame() {
         if (faceLandmarker == null
                 || processingFrame
