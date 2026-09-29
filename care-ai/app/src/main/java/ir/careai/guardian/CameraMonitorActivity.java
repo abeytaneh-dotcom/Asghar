@@ -1443,6 +1443,40 @@ public class CameraMonitorActivity extends Activity
         }
     }
 
+    private void showIncomingSms(String number, String body, long receivedAt) {
+        handler.removeCallbacks(promptTimeout);
+        handler.removeCallbacks(countdown);
+        handler.removeCallbacks(smsSymbolLoop);
+
+        if (mediaMode) stopMediaSilently();
+
+        incomingSmsMode = true;
+        smsComposerMode = false;
+        incomingSmsNumber = number == null ? "" : number.trim();
+        incomingSmsBody = body == null ? "" : body;
+        incomingSmsShownAt = receivedAt > 0L
+                ? receivedAt
+                : System.currentTimeMillis();
+        smsReturnPromptIndex = promptIndex;
+
+        smoothedGaze = Float.NaN;
+        leftGazeStartedAt = 0L;
+        rightGazeStartedAt = 0L;
+        smsLeftLatched = false;
+        smsRightLatched = false;
+
+        smsStageText.setText("پیام جدید از " + incomingSmsNumber);
+        smsTypedText.setText(incomingSmsBody);
+        smsSymbolText.setText("پاسخ؟");
+        smsHintText.setText("نگاه چپ = پاسخ به همین شماره • ۶۰ ثانیه");
+        smsOverlay.setVisibility(View.VISIBLE);
+
+        speak(
+                "پیام جدید از " + incomingSmsNumber
+                        + ". برای پاسخ، به سمت چپ نگاه کنید."
+        );
+    }
+
     private void analyzeTextureFrame() {
         if (faceLandmarker == null
                 || processingFrame
