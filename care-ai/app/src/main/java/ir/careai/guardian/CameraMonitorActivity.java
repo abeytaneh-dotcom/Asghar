@@ -463,6 +463,66 @@ public class CameraMonitorActivity extends Activity
         );
     }
 
+    private void buildSmsOverlay() {
+        smsOverlay = new LinearLayout(this);
+        smsOverlay.setOrientation(LinearLayout.VERTICAL);
+        smsOverlay.setGravity(Gravity.CENTER_HORIZONTAL);
+        smsOverlay.setPadding(dp(20), dp(48), dp(20), dp(24));
+        smsOverlay.setBackgroundColor(0xFF071522);
+        smsOverlay.setVisibility(View.GONE);
+
+        smsStageText = new TextView(this);
+        smsStageText.setTextColor(0xFF8FCBFF);
+        smsStageText.setTextSize(19);
+        smsStageText.setGravity(Gravity.CENTER);
+        smsStageText.setPadding(dp(8), dp(8), dp(8), dp(10));
+
+        smsTypedText = new TextView(this);
+        smsTypedText.setTextColor(Color.WHITE);
+        smsTypedText.setTextSize(25);
+        smsTypedText.setGravity(Gravity.CENTER);
+        smsTypedText.setBackgroundColor(0xFF10283D);
+        smsTypedText.setPadding(dp(14), dp(18), dp(14), dp(18));
+
+        smsSymbolText = new TextView(this);
+        smsSymbolText.setTextColor(Color.WHITE);
+        smsSymbolText.setTextSize(58);
+        smsSymbolText.setGravity(Gravity.CENTER);
+        smsSymbolText.setBackgroundColor(0xFF1A5688);
+        smsSymbolText.setPadding(dp(12), dp(28), dp(12), dp(28));
+
+        smsHintText = new TextView(this);
+        smsHintText.setTextColor(0xFFE9F0F7);
+        smsHintText.setTextSize(17);
+        smsHintText.setGravity(Gravity.CENTER);
+        smsHintText.setPadding(dp(8), dp(18), dp(8), dp(8));
+
+        smsOverlay.addView(
+                smsStageText,
+                new LinearLayout.LayoutParams(-1, -2)
+        );
+
+        LinearLayout.LayoutParams typedLp =
+                new LinearLayout.LayoutParams(-1, dp(150));
+        typedLp.setMargins(0, dp(6), 0, dp(14));
+        smsOverlay.addView(smsTypedText, typedLp);
+
+        LinearLayout.LayoutParams symbolLp =
+                new LinearLayout.LayoutParams(-1, dp(190));
+        symbolLp.setMargins(0, 0, 0, dp(10));
+        smsOverlay.addView(smsSymbolText, symbolLp);
+
+        smsOverlay.addView(
+                smsHintText,
+                new LinearLayout.LayoutParams(-1, -2)
+        );
+
+        root.addView(
+                smsOverlay,
+                new FrameLayout.LayoutParams(-1, -1)
+        );
+    }
+
     private void startCalibration() {
         calibrationStage = 0;
         calibrationStageStartedAt = System.currentTimeMillis();
