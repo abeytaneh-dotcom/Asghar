@@ -264,7 +264,7 @@ if ($action === 'video_create_by_key') {
     $patientId = trim((string)($data['patient_id'] ?? ''));
     $key = trim((string)($data['key'] ?? ''));
 
-    $q = db()->prepare('SELECT patient_id,video_key,active FROM accounts WHERE patient_id=? LIMIT 1');
+    $q = db()->prepare('SELECT patient_id,video_key,active,activation_mode,expires_at FROM accounts WHERE patient_id=? LIMIT 1');
     $q->execute([$patientId]);
     $a = $q->fetch(PDO::FETCH_ASSOC);
 
@@ -307,7 +307,7 @@ if ($action === 'video_incoming') {
     $token = trim((string)($data['token'] ?? ''));
     $deviceId = trim((string)($data['device_id'] ?? ''));
 
-    $q = db()->prepare('SELECT patient_id,device_id,active FROM accounts WHERE auth_token=? LIMIT 1');
+    $q = db()->prepare('SELECT patient_id,device_id,active,activation_mode,expires_at FROM accounts WHERE auth_token=? LIMIT 1');
     $q->execute([$token]);
     $a = $q->fetch(PDO::FETCH_ASSOC);
 
@@ -359,10 +359,10 @@ if ($action === 'video_answer') {
     $room = trim((string)($data['room'] ?? ''));
     $answer = (string)($data['answer'] ?? '');
 
-    $q = db()->prepare('SELECT patient_id,active FROM accounts WHERE auth_token=? LIMIT 1');
+    $q = db()->prepare('SELECT patient_id,active,activation_mode,expires_at FROM accounts WHERE auth_token=? LIMIT 1');
     $q->execute([$token]);
     $a = $q->fetch(PDO::FETCH_ASSOC);
-    if (!$a || (int)$a['active'] !== 1) json_out(['ok'=>false],401);
+    if (!$a || !account_is_active($a)) json_out(['ok'=>false,'code'=>'ACTIVATION_REQUIRED'],401);
 
     $q = db()->prepare('SELECT patient_id FROM video_calls WHERE room_id=? LIMIT 1');
     $q->execute([$room]);
