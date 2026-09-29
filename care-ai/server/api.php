@@ -311,16 +311,39 @@ if ($action === 'status') {
         ],403);
     }
 
-    $state = activation_state($a);
+    $mode = trim((string)($a['activation_mode'] ?? 'new'));
+    $activatedAt = (int)($a['activated_at'] ?? 0);
+    $expiresAt = (int)($a['expires_at'] ?? 0);
 
-    if (!$state['active']
-            && $state['code'] === 'ACTIVATION_EXPIRED'
-            && (int)$a['active'] === 1) {
+    // مهاجرت حساب‌هایی که در نسخه قبلی ثبت شده ولی هنوز فعال نشده‌اند:
+    // اولین ماه را بدون نیاز به مدیر از همین لحظه شروع می‌کنیم.
+    if ((int)$a['active'] !== 1
+            && $activatedAt <= 0
+            && $expiresAt <= 0
+            && !in_array($mode,['blocked','expired'],true)) {
+
+        $now = time();
+        $freeUntil = strtotime('+1 month',$now);
+
         db()->prepare("UPDATE accounts
-            SET active=0,activation_mode='expired',updated_at=?
+            SET active=1,
+                activation_mode='trial',
+                activated_at=?,
+                expires_at=?,
+                updated_at=?,
+                last_seen_at=?
             WHERE id=?")
-            ->execute([now_iso(),$a['id']]);
+            ->execute([
+                $now,$freeUntil,now_iso(),now_iso(),$a['id']
+            ]);
+
+        $a['active']=1;
+        $a['activation_mode']='trial';
+        $a['activated_at']=$now;
+        $a['expires_at']=$freeUntil;
     }
+
+    $state = expire_account_if_needed(db(),$a);
 
     db()->prepare('UPDATE accounts SET last_seen_at=?,updated_at=? WHERE id=?')
         ->execute([now_iso(),now_iso(),$a['id']]);
