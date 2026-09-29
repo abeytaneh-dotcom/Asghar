@@ -1581,6 +1581,119 @@ public class CameraMonitorActivity extends Activity
         handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
     }
 
+    private void finishSmsStage() {
+        if (smsStage == 0) {
+            if (smsTextBuffer.length() == 0) {
+                speak("متن پیام هنوز خالی است.");
+                return;
+            }
+
+            if (smsReplyMode && !smsReplyNumber.isEmpty()) {
+                sendEyeSms(smsReplyNumber, smsTextBuffer.toString());
+                return;
+            }
+
+            smsStage = 1;
+            smsSymbolIndex = 0;
+            smsLeftLatched = false;
+            smsRightLatched = true;
+
+            handler.removeCallbacks(smsSymbolLoop);
+            updateSmsComposerUi();
+            speak("متن تمام شد. حالا شماره گیرنده را وارد کنید.");
+            handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
+            return;
+        }
+
+        if (smsNumberBuffer.length() < 4) {
+            speak("شماره گیرنده هنوز کامل نیست.");
+            return;
+        }
+
+        sendEyeSms(
+                smsNumberBuffer.toString(),
+                smsTextBuffer.toString()
+        );
+    }
+
+    private void sendEyeSms(String number, String text) {
+        handler.removeCallbacks(smsSymbolLoop);
+
+        if (!EyeSmsSender.canSend(this)) {
+            smsStageText.setText("مجوز پیامک داده نشده است");
+            smsSymbolText.setText("!");
+            smsHintText.setText("مجوز SEND_SMS را برای Care AI فعال کنید");
+            speak("مجوز ارسال پیامک داده نشده است.");
+            return;
+        }
+
+        boolean sent = EyeSmsSender.send(this, number, text);
+
+        if (!sent) {
+            smsStageText.setText("ارسال پیام انجام نشد");
+            smsSymbolText.setText("!");
+            smsHintText.setText("شماره یا دسترسی پیامک را بررسی کنید");
+            speak("ارسال پیام انجام نشد.");
+            handler.postDelayed(
+                    () -> {
+                        if (smsComposerMode) {
+                            updateSmsComposerUi();
+                            handler.postDelayed(
+                                    smsSymbolLoop,
+                                    SMS_SYMBOL_INTERVAL_MS
+                            );
+                        }
+                    },
+                    2200L
+            );
+            return;
+        }
+
+        smsStageText.setText("پیام ارسال شد");
+        smsTypedText.setText(text);
+        smsSymbolText.setText("✓");
+        smsSymbolText.setBackgroundColor(0xFF1E7A46);
+        smsHintText.setText("در حال بازگشت به محیط مراقبت");
+        speak("پیام ارسال شد.");
+
+        handler.postDelayed(this::returnFromEyeSms, 2200L);
+    }
+
+    private void returnFromEyeSms() {
+        smsComposerMode = false;
+        incomingSmsMode = false;
+        smsReplyMode = false;
+        smsReplyNumber = "";
+        smsTextBuffer.setLength(0);
+        smsNumberBuffer.setLength(0);
+        smsLeftLatched = false;
+        smsRightLatched = false;
+        leftGazeStartedAt = 0L;
+        rightGazeStartedAt = 0L;
+        smoothedGaze = Float.NaN;
+
+        handler.removeCallbacks(smsSymbolLoop);
+
+        if (smsSymbolText != null) {
+            smsSymbolText.setBackgroundColor(0xFF1A5688);
+        }
+        if (smsOverlay != null) {
+            smsOverlay.setVisibility(View.GONE);
+        }
+
+        setPanelFull();
+        panel.setVisibility(View.VISIBLE);
+
+        int next = smsReturnPromptIndex >= 0
+                ? smsReturnPromptIndex
+                : promptIndex + 1;
+        smsReturnPromptIndex = -1;
+
+        if (calibrationStage == 2 && !sleepMode) {
+            showPrompt(next);
+        }
+    }
+
     private void analyzeTextureFrame() {
         if (faceLandmarker == null
                 || processingFrame
