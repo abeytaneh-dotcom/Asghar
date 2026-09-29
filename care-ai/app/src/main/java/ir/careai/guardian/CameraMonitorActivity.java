@@ -1463,6 +1463,21 @@ public class CameraMonitorActivity extends Activity
 
         if (mediaMode) stopMediaSilently();
 
+        if (externalActionInProgress) {
+            externalActionInProgress = false;
+            externalTarget = "";
+            externalReturnPromptIndex = -1;
+
+            try {
+                Intent i = new Intent(this, CameraMonitorActivity.class);
+                i.addFlags(
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                                | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                );
+                startActivity(i);
+            } catch (Exception ignored) {}
+        }
+
         incomingSmsMode = true;
         smsComposerMode = false;
         incomingSmsNumber = number == null ? "" : number.trim();
