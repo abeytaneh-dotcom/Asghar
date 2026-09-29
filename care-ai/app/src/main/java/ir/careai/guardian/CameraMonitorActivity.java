@@ -1498,6 +1498,89 @@ public class CameraMonitorActivity extends Activity
         }
     }
 
+    private void handleSmsComposerGaze(
+            long now,
+            float leftScore,
+            float rightScore) {
+
+        float threshold = rightThreshold * 0.80f;
+
+        if (leftScore > threshold) {
+            rightGazeStartedAt = 0L;
+            smsRightLatched = false;
+
+            if (!smsLeftLatched) {
+                if (leftGazeStartedAt == 0L) leftGazeStartedAt = now;
+
+                long held = now - leftGazeStartedAt;
+                if (held >= SMS_GAZE_HOLD_MS) {
+                    smsLeftLatched = true;
+                    leftGazeStartedAt = 0L;
+                    selectSmsSymbol();
+                }
+            }
+            return;
+        }
+
+        leftGazeStartedAt = 0L;
+        smsLeftLatched = false;
+
+        if (rightScore > threshold) {
+            if (!smsRightLatched) {
+                if (rightGazeStartedAt == 0L) rightGazeStartedAt = now;
+
+                long held = now - rightGazeStartedAt;
+                if (held >= SMS_GAZE_HOLD_MS) {
+                    smsRightLatched = true;
+                    rightGazeStartedAt = 0L;
+                    finishSmsStage();
+                }
+            }
+            return;
+        }
+
+        rightGazeStartedAt = 0L;
+        smsRightLatched = false;
+    }
+
+    private void handleIncomingSmsGaze(long now, float leftScore) {
+        if (leftScore > rightThreshold * 0.80f) {
+            if (!smsLeftLatched) {
+                if (leftGazeStartedAt == 0L) leftGazeStartedAt = now;
+
+                if (now - leftGazeStartedAt >= SMS_GAZE_HOLD_MS) {
+                    smsLeftLatched = true;
+                    leftGazeStartedAt = 0L;
+
+                    String number = incomingSmsNumber;
+                    incomingSmsMode = false;
+                    startSmsComposer(number, true);
+                }
+            }
+        } else {
+            leftGazeStartedAt = 0L;
+            smsLeftLatched = false;
+        }
+    }
+
+    private void selectSmsSymbol() {
+        String[] symbols = smsStage == 0 ? SMS_LETTERS : SMS_DIGITS;
+        String symbol = symbols[smsSymbolIndex % symbols.length];
+
+        if (smsStage == 0) {
+            smsTextBuffer.append(
+                    "فاصله".equals(symbol) ? " " : symbol
+            );
+        } else {
+            smsNumberBuffer.append(symbol);
+        }
+
+        smsSymbolIndex = (smsSymbolIndex + 1) % symbols.length;
+        handler.removeCallbacks(smsSymbolLoop);
+        updateSmsComposerUi();
+        handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
+    }
+
     private void analyzeTextureFrame() {
         if (faceLandmarker == null
                 || processingFrame
