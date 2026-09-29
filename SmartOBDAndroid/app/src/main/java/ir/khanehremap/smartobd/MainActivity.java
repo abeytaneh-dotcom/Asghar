@@ -38,7 +38,11 @@ public class MainActivity extends Activity {
     boolean connected=false, demo=false, soundAlert=true, alive=true, waitingIdentity=false;
     String deviceSerial="", pendingSerial="", protocol="NONE", ecuName="هنوز شناسایی نشده";
     int rpm=0, speed=0, coolant=0;
-    float fuel=0, voltage=0;
+    float fuel=0, voltage=0, waterLevel=-1f;
+    boolean lowCoolant=false;
+    // Living-car feature states. Firmware can drive these later without redesigning the UI.
+    boolean headlightsOn=false, leftSignal=false, rightSignal=false, wipersOn=false;
+    boolean hoodOpen=false, doorsOpen=false;
     String dtcText="برای بررسی خودرو «اسکن خطاها» را بزنید";
 
     Handler h=new Handler(Looper.getMainLooper());
@@ -264,7 +268,23 @@ public class MainActivity extends Activity {
                 else dtcText=s.substring(4).replace(",","\n");
             }
             else if(s.startsWith("CLEAR_DTC:SENT"))dtcText="حافظه خطا پاک شد";
-            else if(s.startsWith("ALARM:LOW_COOLANT")&&soundAlert)speak("هشدار، سطح آب خنک کننده پایین است");
+            else if(s.startsWith("WATER_LEVEL:")) waterLevel=Float.parseFloat(s.substring(12).trim());
+            else if(s.startsWith("WATER:")) waterLevel=Float.parseFloat(s.substring(6).trim());
+            else if(s.startsWith("ALARM:LOW_COOLANT")){
+                lowCoolant=true;
+                if(soundAlert)speak("تشنمه");
+            }
+            else if(s.equals("COOLANT:OK")) lowCoolant=false;
+            else if(s.startsWith("LIGHTS:")) headlightsOn=s.endsWith("ON");
+            else if(s.startsWith("WIPER:")) wipersOn=s.endsWith("ON");
+            else if(s.startsWith("SIGNAL:")){
+                String v=s.substring(7).trim();
+                leftSignal="LEFT".equals(v)||"HAZARD".equals(v);
+                rightSignal="RIGHT".equals(v)||"HAZARD".equals(v);
+                if("OFF".equals(v)){leftSignal=false;rightSignal=false;}
+            }
+            else if(s.startsWith("HOOD:")) hoodOpen=s.endsWith("OPEN");
+            else if(s.startsWith("DOORS:")||s.startsWith("DOOR:")) doorsOpen=s.endsWith("OPEN");
         }catch(Exception ignored){}
         proView.invalidate();
     }
@@ -336,253 +356,444 @@ public class MainActivity extends Activity {
     }
 
     class ProView extends View {
-        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
-        RectF r=new RectF();
-        int page=3; // 0 dashboard, 1 diag, 2 live, 3 connect/settings
+        final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+        final RectF r=new RectF();
+        final Random random=new Random();
+        int page=0; // 0 خانه، 1 گزارش‌ها، 2 سرویس، 3 وضعیت خودرو، 4 بیشتر
         String message="بدون اتصال";
-        Bitmap cockpit;
+
+        // Logical responsive canvas
+        float logicalW=420, logicalH=820, uiScale=1, uiDx=0, uiDy=0;
+        boolean landscape=false;
+
+        // Living face animation: no frame swapping, all geometry moves smoothly.
+        float eyeX=0f, eyeY=0f, eyeTargetX=0f, eyeTargetY=0f, blink=0f;
+        long nextLook=0, nextBlink=0, blinkStart=0;
+        boolean blinking=false;
 
         ProView(Context c){
-            super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null);
-            try{
-                int id=getResources().getIdentifier("cockpit_portrait","drawable",getPackageName());
-                if(id!=0) cockpit=BitmapFactory.decodeResource(getResources(),id);
-            }catch(Exception ignored){}
+            super(c);
+            setLayerType(View.LAYER_TYPE_SOFTWARE,null);
+            nextLook=SystemClock.uptimeMillis()+900;
+            nextBlink=SystemClock.uptimeMillis()+2200;
         }
 
-        void fill(Canvas c,int color){c.drawColor(color);}
-        void txt(Canvas c,String s,float x,float y,float size,int col,Paint.Align a,boolean bold){
-            p.setStyle(Paint.Style.FILL);p.setColor(col);p.setTextSize(size);p.setTextAlign(a);
-            p.setTypeface(bold?Typeface.create("sans",Typeface.BOLD):Typeface.create("sans",Typeface.NORMAL));
-            p.clearShadowLayer();c.drawText(s,x,y,p);
+        int rgb(int rr,int gg,int bb){return Color.rgb(rr,gg,bb);}
+        int argb(int aa,int rr,int gg,int bb){return Color.argb(aa,rr,gg,bb);}
+
+        void txt(Canvas c,String text,float x,float y,float size,int color,Paint.Align align,boolean bold){
+            p.reset(); p.setAntiAlias(true); p.setStyle(Paint.Style.FILL); p.setColor(color);
+            p.setTextSize(size); p.setTextAlign(align);
+            p.setTypeface(Typeface.create("sans",bold?Typeface.BOLD:Typeface.NORMAL));
+            c.drawText(text,x,y,p);
         }
-        void rr(Canvas c,float l,float t,float x,float y,float rad,int col,int stroke){
-            p.setStyle(Paint.Style.FILL);p.setColor(col);p.clearShadowLayer();c.drawRoundRect(l,t,x,y,rad,rad,p);
-            if(stroke!=0){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);p.setColor(stroke);c.drawRoundRect(l,t,x,y,rad,rad,p);}
+        void rr(Canvas c,float l,float t,float rt,float b,float rad,int color,int stroke){
+            p.reset();p.setAntiAlias(true);p.setStyle(Paint.Style.FILL);p.setColor(color);
+            c.drawRoundRect(l,t,rt,b,rad,rad,p);
+            if(stroke!=0){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.2f);p.setColor(stroke);c.drawRoundRect(l,t,rt,b,rad,rad,p);}
         }
-        void line(Canvas c,float x1,float y1,float x2,float y2,int col,float sw){
-            p.setColor(col);p.setStrokeWidth(sw);p.setStyle(Paint.Style.STROKE);c.drawLine(x1,y1,x2,y2,p);
+        void line(Canvas c,float x1,float y1,float x2,float y2,int color,float sw){
+            p.reset();p.setAntiAlias(true);p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);
+            p.setColor(color);p.setStrokeWidth(sw);c.drawLine(x1,y1,x2,y2,p);
+        }
+        void circle(Canvas c,float x,float y,float rad,int color){
+            p.reset();p.setAntiAlias(true);p.setStyle(Paint.Style.FILL);p.setColor(color);c.drawCircle(x,y,rad,p);
         }
 
-        @Override protected void onDraw(Canvas c){
-            super.onDraw(c);
-            float w=getWidth(),h=getHeight();
-            if(getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE){drawLandscape(c,w,h);return;}
-            drawBackground(c,w,h);
-            drawHeader(c,w,h);
-            if(page==0)drawDashboard(c,w,h);
-            else if(page==1)drawDiag(c,w,h);
-            else if(page==2)drawLive(c,w,h);
-            else drawConnect(c,w,h);
-            drawBottom(c,w,h);
+        void setupLogical(Canvas c,float w,float h){
+            landscape=w>h*1.15f;
+            logicalW=landscape?820:420;
+            logicalH=landscape?420:820;
+            uiScale=Math.min(w/logicalW,h/logicalH);
+            uiDx=(w-logicalW*uiScale)/2f;
+            uiDy=(h-logicalH*uiScale)/2f;
+            c.translate(uiDx,uiDy);
+            c.scale(uiScale,uiScale);
         }
 
-        void drawBackground(Canvas c,float w,float h){
-            fill(c,BG);
-            if(cockpit!=null){
-                Rect src=new Rect(0,0,cockpit.getWidth(),cockpit.getHeight());
-                RectF dst=new RectF(0,h*.22f,w,h);
-                p.setAlpha(90);c.drawBitmap(cockpit,src,dst,p);p.setAlpha(255);
-                LinearGradient shade=new LinearGradient(0,h*.18f,0,h,Color.argb(250,1,12,21),Color.argb(140,1,12,21),Shader.TileMode.CLAMP);
-                p.setShader(shade);c.drawRect(0,h*.18f,w,h,p);p.setShader(null);
+        @Override protected void onDraw(Canvas canvas){
+            super.onDraw(canvas);
+            canvas.drawColor(BG);
+            canvas.save();
+            setupLogical(canvas,getWidth(),getHeight());
+            animateFace();
+
+            if(landscape) drawLandscape(canvas);
+            else drawPortrait(canvas);
+
+            canvas.restore();
+            postInvalidateOnAnimation();
+        }
+
+        void animateFace(){
+            long now=SystemClock.uptimeMillis();
+
+            if(lowCoolant){
+                eyeTargetX=0f; eyeTargetY=.40f;
+            } else if(now>=nextLook && !blinking){
+                eyeTargetX=-.80f+random.nextFloat()*1.60f;
+                eyeTargetY=-.20f+random.nextFloat()*.45f;
+                nextLook=now+1200+random.nextInt(2200);
+            }
+            eyeX+=(eyeTargetX-eyeX)*.055f;
+            eyeY+=(eyeTargetY-eyeY)*.055f;
+
+            if(!lowCoolant && !blinking && now>=nextBlink){
+                blinking=true;blinkStart=now;
+                nextBlink=now+2600+random.nextInt(2800);
+            }
+            if(blinking){
+                long d=now-blinkStart;
+                if(d<90) blink=d/90f;
+                else if(d<145) blink=1f;
+                else if(d<240) blink=1f-(d-145)/95f;
+                else {blink=0f;blinking=false;}
+            }else blink+=(0f-blink)*.22f;
+        }
+
+        void drawPortrait(Canvas c){
+            drawBg(c,420,820);
+            drawHeader(c,420);
+            if(page==0){
+                drawLivingCar(c,210,218,1f);
+                drawTwinGauges(c,210,430);
+                drawDataGrid(c,18,555,384);
+            }else{
+                drawSecondary(c,420,820);
+            }
+            drawBottom(c,420,820);
+        }
+
+        void drawLandscape(Canvas c){
+            drawBg(c,820,420);
+            drawHeader(c,820);
+            if(page==0){
+                drawLivingCar(c,195,190,.72f);
+                drawGauge(c,430,190,78,speed,220,"km/h",CYAN,false);
+                drawGauge(c,585,190,78,rpm,8000,"RPM",CYAN,true);
+                drawMiniData(c,675,107,128,56,"آب",waterText(),lowCoolant?RED:CYAN);
+                drawMiniData(c,675,170,128,56,"دما",coolant>0?coolant+"°C":"—",RED);
+                drawMiniData(c,675,233,128,56,"سوخت",fuel>0?String.format(Locale.US,"%.0f%%",fuel):"—",AMBER);
+            }else drawSecondaryLandscape(c);
+            drawBottomLandscape(c,820,420);
+        }
+
+        void drawBg(Canvas c,float w,float h){
+            p.reset();p.setAntiAlias(true);
+            LinearGradient g=new LinearGradient(0,0,0,h,rgb(4,23,43),rgb(0,5,11),Shader.TileMode.CLAMP);
+            p.setShader(g);c.drawRect(0,0,w,h,p);p.setShader(null);
+            for(int i=0;i<8;i++){
+                float x=(i*79+31)%w;
+                p.setColor(argb(24,0,139,255));p.setShadowLayer(18,0,0,rgb(0,130,255));
+                c.drawCircle(x,120+(i%3)*38,3.5f,p);p.clearShadowLayer();
             }
         }
 
-        void drawHeader(Canvas c,float w,float h){
-            float top=22;
-            rr(c,w-122,40,w-28,88,28,connected?Color.rgb(9,61,54):Color.rgb(58,30,40),0);
-            txt(c,"●  "+(connected?"OBD وصل":"OBD قطع"),w-75,70,14,connected?GREEN:RED,Paint.Align.CENTER,true);
+        void drawHeader(Canvas c,float w){
+            float center=w/2f;
+            rr(c,16,18,68,68,16,argb(170,4,20,38),rgb(17,100,175));
+            txt(c,"☰",42,54,29,WHITE,Paint.Align.CENTER,false);
 
-            Path hex=new Path();float cx=58,cy=62,rad=29;
-            for(int i=0;i<6;i++){double a=Math.toRadians(30+i*60);float x=(float)(cx+Math.cos(a)*rad),y=(float)(cy+Math.sin(a)*rad);if(i==0)hex.moveTo(x,y);else hex.lineTo(x,y);}hex.close();
-            p.setColor(CYAN);p.setStyle(Paint.Style.FILL);p.setShadowLayer(18,0,0,CYAN);c.drawPath(hex,p);p.clearShadowLayer();
-            txt(c,"A",cx,cy+9,26,BG,Paint.Align.CENTER,true);
-            txt(c,"خانه ریمپ",w-170,56,23,WHITE,Paint.Align.RIGHT,false);
-            txt(c,"SMART OBD",w-170,82,13,CYAN,Paint.Align.RIGHT,true);
-            line(c,28,110,w-28,110,Color.rgb(10,84,98),1);
+            rr(c,w-68,18,w-16,68,16,argb(170,4,20,38),rgb(17,100,175));
+            txt(c,"⚙",w-42,54,29,WHITE,Paint.Align.CENTER,false);
+
+            txt(c,"پژو ۲۰۶ من",center,42,22,WHITE,Paint.Align.CENTER,true);
+            rr(c,center-92,52,center+92,83,18,argb(195,3,27,43),connected?rgb(13,103,92):rgb(35,46,62));
+            circle(c,center-72,67.5f,6,connected?GREEN:rgb(112,132,148));
+            txt(c,connected?"خودرو آماده حرکت است":"SMART OBD قطع",center+4,72,12,connected?WHITE:rgb(190,205,218),Paint.Align.CENTER,true);
         }
 
-        void drawConnect(Canvas c,float w,float h){
-            txt(c,"اتصال و تنظیمات",w-36,155,27,WHITE,Paint.Align.RIGHT,false);
-            txt(c,"مدیریت رابط بلوتوث و تجربه رانندگی",w-36,184,13,MUTED,Paint.Align.RIGHT,false);
+        void drawLivingCar(Canvas c,float cx,float cy,float scale){
+            c.save();c.translate(cx,cy);c.scale(scale,scale);
+            float bob=(float)Math.sin(SystemClock.uptimeMillis()/760.0)*1.6f;
+            c.translate(0,bob);
 
-            float t=205;
-            rr(c,28,t,w-28,t+196,28,CARD,0);
-            rr(c,w-140,t+36,w-70,t+106,35,connected?Color.rgb(24,70,66):Color.rgb(48,42,67),0);
-            txt(c,"ϟ",w-105,t+80,28,connected?GREEN:RED,Paint.Align.CENTER,true);
-            txt(c,connected?"متصل":"بدون اتصال",w-165,t+74,25,WHITE,Paint.Align.RIGHT,false);
-            String id=connected?(deviceSerial.isEmpty()?prefs.getString("activated_serial","SMART OBD"):deviceSerial):"KHANEH_REMAP_C3";
-            txt(c,id,w-165,t+108,14,connected?GREEN:RED,Paint.Align.RIGHT,true);
-            txt(c,message,w-165,t+142,12,MUTED,Paint.Align.RIGHT,false);
+            // shadow
+            p.reset();p.setAntiAlias(true);p.setColor(argb(130,0,0,0));
+            c.drawOval(new RectF(-154,92,154,132),p);
 
-            rr(c,55,t+150,w-55,t+190,16,Color.TRANSPARENT,CYAN);
-            txt(c,connected?"قطع ارتباط":"اتصال به OBD",w/2,t+177,18,CYAN,Paint.Align.CENTER,false);
-            txt(c,"⌁",w-95,t+177,20,CYAN,Paint.Align.CENTER,true);
+            // optional open doors; architecture is ready for future commands.
+            if(doorsOpen){
+                p.setColor(rgb(7,98,214));
+                Path dl=new Path();dl.moveTo(-128,-22);dl.lineTo(-182,5);dl.lineTo(-175,82);dl.lineTo(-120,65);dl.close();c.drawPath(dl,p);
+                Path dr=new Path();dr.moveTo(128,-22);dr.lineTo(182,5);dr.lineTo(175,82);dr.lineTo(120,65);dr.close();c.drawPath(dr,p);
+            }
 
-            float y=t+220;
-            rr(c,28,y,w-28,y+118,24,CARD,0);
-            txt(c,"شناسایی خودکار ECU",w-58,y+36,15,MUTED,Paint.Align.RIGHT,false);
-            txt(c,ecuName,w-58,y+72,17,WHITE,Paint.Align.RIGHT,true);
-            txt(c,"تشخیص خودکار • PID استاندارد • "+protocol,w-58,y+101,12,CYAN,Paint.Align.RIGHT,false);
+            // body
+            p.setStyle(Paint.Style.FILL);
+            LinearGradient bodyG=new LinearGradient(0,-92,0,92,rgb(38,158,255),rgb(0,78,190),Shader.TileMode.CLAMP);
+            p.setShader(bodyG);
+            Path body=new Path();
+            body.moveTo(-154,65);body.cubicTo(-154,9,-135,-38,-100,-62);
+            body.cubicTo(-77,-103,77,-103,100,-62);
+            body.cubicTo(135,-38,154,9,154,65);
+            body.quadTo(148,103,118,108);body.lineTo(-118,108);
+            body.quadTo(-148,103,-154,65);body.close();c.drawPath(body,p);p.setShader(null);
 
-            y+=140;
-            rr(c,28,y,w-28,y+84,22,CARD,0);
-            txt(c,"حالت دمو بدون خودرو",w-58,y+48,17,WHITE,Paint.Align.RIGHT,false);
-            drawSwitch(c,68,y+42,demo);
+            // roof + windshield
+            p.setColor(rgb(1,39,82));
+            Path wind=new Path();wind.moveTo(-92,-57);wind.quadTo(-73,-94,-42,-104);wind.quadTo(0,-116,42,-104);
+            wind.quadTo(73,-94,92,-57);wind.lineTo(78,-10);wind.lineTo(-78,-10);wind.close();c.drawPath(wind,p);
 
-            y+=100;
-            rr(c,28,y,w-28,y+84,22,CARD,0);
-            txt(c,"هشدار صوتی پارامترهای بحرانی",w-58,y+48,17,WHITE,Paint.Align.RIGHT,false);
-            drawSwitch(c,68,y+42,soundAlert);
+            p.setColor(rgb(13,93,150));
+            Path glass=new Path();glass.moveTo(-82,-55);glass.quadTo(-64,-85,-38,-94);glass.quadTo(0,-104,38,-94);
+            glass.quadTo(64,-85,82,-55);glass.lineTo(70,-18);glass.lineTo(-70,-18);glass.close();c.drawPath(glass,p);
 
-            txt(c,"نسخه حرفه‌ای  2.3 Serial  •  طراحی اختصاصی خانه ریمپ",w/2,y+128,11,Color.rgb(70,94,109),Paint.Align.CENTER,false);
-            String act=prefs.getString("activated_serial","");
-            if(!act.isEmpty()) txt(c,"سریال فعال: "+act,w/2,y+150,11,Color.rgb(78,120,137),Paint.Align.CENTER,false);
+            // eyebrows integrated into glass
+            line(c,-67,-67,-20,-78,rgb(0,8,16),7);
+            line(c,67,-67,20,-78,rgb(0,8,16),7);
+
+            // eyes live inside windshield, not image swapping
+            drawEye(c,-38,-50);
+            drawEye(c,38,-50);
+
+            // wipers future-ready
+            if(wipersOn){
+                float a=(float)Math.sin(SystemClock.uptimeMillis()/180.0)*.65f;
+                float x=(float)(Math.sin(a)*54), y=(float)(-16-Math.cos(a)*46);
+                line(c,-4,-11,x-4,y,rgb(12,18,24),5);
+                line(c,9,-11,-x+9,y,rgb(12,18,24),5);
+            }
+
+            // hood; moves if HOOD:OPEN arrives in future firmware
+            p.setColor(rgb(17,124,238));
+            Path hood=new Path();
+            float hoodLift=hoodOpen?-26:0;
+            hood.moveTo(-119,-7+hoodLift);hood.lineTo(119,-7+hoodLift);hood.lineTo(139,51);hood.lineTo(-139,51);hood.close();c.drawPath(hood,p);
+            line(c,-116,-5+hoodLift,116,-5+hoodLift,rgb(70,190,255),2);
+
+            // headlights
+            drawHeadlight(c,-116,44,headlightsOn,leftSignal);
+            drawHeadlight(c,116,44,headlightsOn,rightSignal);
+
+            // grille + lion badge
+            rr(c,-66,48,66,69,9,rgb(0,13,24),0);
+            rr(c,-17,39,17,70,6,rgb(4,14,25),rgb(215,230,244));
+            txt(c,"♌",0,61,20,WHITE,Paint.Align.CENTER,true);
+
+            // bumper / smile
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(8);p.setStrokeCap(Paint.Cap.ROUND);p.setColor(rgb(0,15,26));
+            c.drawArc(new RectF(-72,57,72,104),8,164,false,p);
+            p.setStrokeWidth(4);p.setColor(rgb(244,248,250));c.drawArc(new RectF(-52,63,52,90),18,144,false,p);
+
+            // tongue ONLY on coolant warning
+            if(lowCoolant){
+                p.setStyle(Paint.Style.FILL);p.setColor(rgb(255,82,95));
+                Path tongue=new Path();tongue.moveTo(-15,82);tongue.cubicTo(-11,112,12,116,17,87);
+                tongue.cubicTo(8,92,-2,91,-15,82);tongue.close();c.drawPath(tongue,p);
+                line(c,2,91,5,106,rgb(194,47,62),2.2f);
+            }
+
+            // plate
+            rr(c,-45,97,45,119,5,rgb(5,13,24),rgb(130,155,176));
+            txt(c,"206",0,114,18,WHITE,Paint.Align.CENTER,true);
+
+            if(lowCoolant){
+                rr(c,69,-118,147,-77,20,rgb(255,248,244),rgb(255,84,90));
+                txt(c,"تشنمه",108,-91,17,rgb(138,11,28),Paint.Align.CENTER,true);
+                circle(c,139,-66,4,rgb(69,190,255));circle(c,148,-58,3,rgb(69,190,255));
+            }
+            c.restore();
         }
 
-        void drawSwitch(Canvas c,float x,float y,boolean on){
-            rr(c,x-38,y-18,x+38,y+18,18,on?Color.rgb(11,132,142):Color.rgb(50,76,91),0);
-            p.setColor(on?CYAN:Color.rgb(133,160,175));p.setStyle(Paint.Style.FILL);c.drawCircle(x+(on?19:-19),y,14,p);
-        }
-
-        void drawDashboard(Canvas c,float w,float h){
-            txt(c,"داشبورد",w-36,155,28,WHITE,Paint.Align.RIGHT,false);
-            txt(c,connected?"خودرو و ECU متصل":"آماده اتصال به خودرو",w-36,181,13,connected?GREEN:MUTED,Paint.Align.RIGHT,false);
-
-            float gy=300,rad=112;
-            gauge(c,w*.28f,gy,rad,rpm,8000,"RPM");
-            gauge(c,w*.72f,gy,rad,speed,240,"km/h");
-            rr(c,w*.42f,237,w*.58f,330,24,Color.rgb(4,24,38),Color.rgb(13,81,104));
-            txt(c,connected?"D":"P",w*.5f,292,44,WHITE,Paint.Align.CENTER,true);
-            txt(c,protocol,w*.5f,322,11,CYAN,Paint.Align.CENTER,true);
-
-            float y=440, gap=9, cw=(w-56-gap)/2;
-            dataCard(c,28,y,28+cw,y+88,"دمای مایع خنک‌کننده",coolant>0?coolant+" °C":"—",RED);
-            dataCard(c,28+cw+gap,y,w-28,y+88,"ولتاژ کنترلر",voltage>0?String.format(Locale.US,"%.1f V",voltage):"—",GREEN);
-            y+=100;
-            dataCard(c,28,y,28+cw,y+88,"سطح سوخت",fuel>0?String.format(Locale.US,"%.0f %%",fuel):"—",AMBER);
-            dataCard(c,28+cw+gap,y,w-28,y+88,"وضعیت ECU",connected?"مطلوب است":"بدون اتصال",connected?GREEN:MUTED);
-
-            rr(c,28,y+110,w-28,y+182,22,CARD,0);
-            txt(c,connected?"ارتباط پایدار با ECU":"برای شروع از بخش اتصال وارد شوید",w/2,y+154,15,connected?GREEN:MUTED,Paint.Align.CENTER,true);
-        }
-
-        void gauge(Canvas c,float cx,float cy,float rad,int value,int max,String unit){
-            p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(12);
-            r.set(cx-rad,cy-rad,cx+rad,cy+rad);p.setColor(Color.rgb(19,48,67));c.drawArc(r,140,260,false,p);
-            float q=Math.max(0,Math.min(1,value/(float)max));p.setColor(CYAN);p.setShadowLayer(14,0,0,CYAN);c.drawArc(r,140,260*q,false,p);p.clearShadowLayer();
-            txt(c,String.valueOf(value),cx,cy+12,40,WHITE,Paint.Align.CENTER,true);
-            txt(c,unit,cx,cy+43,13,MUTED,Paint.Align.CENTER,false);
-        }
-
-        void dataCard(Canvas c,float l,float t,float x,float y,String name,String val,int col){
-            rr(c,l,t,x,y,20,CARD,Color.rgb(14,56,76));
-            txt(c,name,x-16,t+30,12,MUTED,Paint.Align.RIGHT,false);
-            txt(c,val,x-16,y-20,19,col,Paint.Align.RIGHT,true);
-        }
-
-        void drawLive(Canvas c,float w,float h){
-            txt(c,"داده‌های زنده ECU",w-36,155,27,WHITE,Paint.Align.RIGHT,false);
-            txt(c,"نمایش لحظه‌ای پارامترهای موتور",w-36,184,13,MUTED,Paint.Align.RIGHT,false);
-            String[][] rows={
-                    {"دور موتور",rpm+" RPM"},
-                    {"سرعت خودرو",speed+" km/h"},
-                    {"دمای مایع خنک‌کننده",coolant>0?coolant+" °C":"—"},
-                    {"سطح سوخت",fuel>0?String.format(Locale.US,"%.0f %%",fuel):"—"},
-                    {"ولتاژ کنترلر",voltage>0?String.format(Locale.US,"%.2f V",voltage):"—"},
-                    {"پروتکل",protocol}
-            };
-            float y=214;
-            for(int i=0;i<rows.length;i++){
-                rr(c,28,y,w-28,y+72,20,CARD,0);
-                txt(c,rows[i][0],w-58,y+30,14,MUTED,Paint.Align.RIGHT,false);
-                txt(c,rows[i][1],w-58,y+57,19,i<2?CYAN:WHITE,Paint.Align.RIGHT,true);
-                y+=82;
+        void drawEye(Canvas c,float ex,float ey){
+            float openness=Math.max(.05f,1f-blink);
+            float h=34f*openness;
+            p.setStyle(Paint.Style.FILL);p.setColor(rgb(249,250,245));
+            c.drawOval(new RectF(ex-27,ey-h/2,ex+27,ey+h/2),p);
+            if(openness>.22f){
+                float px=ex+eyeX*10f, py=ey+eyeY*6f;
+                circle(c,px,py,12,rgb(21,173,229));
+                circle(c,px,py,7.5f,rgb(2,20,30));
+                circle(c,px-3.2f,py-4.5f,2.8f,Color.WHITE);
+            }
+            // eyelid is body-colored and slides down naturally
+            if(blink>.01f){
+                p.setColor(rgb(11,100,195));
+                float cover=34f*blink;
+                c.drawRoundRect(ex-29,ey-20,ex+29,ey-20+cover,8,8,p);
             }
         }
 
-        void drawDiag(Canvas c,float w,float h){
-            txt(c,"عیب‌یابی هوشمند",w-36,155,27,WHITE,Paint.Align.RIGHT,false);
-            txt(c,"خواندن و پاک‌کردن خطاهای استاندارد OBD-II",w-36,184,13,MUTED,Paint.Align.RIGHT,false);
-            rr(c,28,210,w-28,330,24,CARD,0);
-            txt(c,"کد خطا (DTC)",w-58,245,15,MUTED,Paint.Align.RIGHT,false);
-            String[] lines=dtcText.split("\\n");
-            float y=280;
-            for(int i=0;i<Math.min(lines.length,3);i++){txt(c,lines[i],w-58,y,15,WHITE,Paint.Align.RIGHT,true);y+=25;}
-            rr(c,45,354,w-45,406,18,Color.rgb(7,55,74),CYAN);
-            txt(c,"اسکن خطاها",w/2,387,18,CYAN,Paint.Align.CENTER,true);
-            rr(c,45,420,w-45,472,18,Color.rgb(55,28,36),RED);
-            txt(c,"پاک‌کردن خطاهای ECU",w/2,453,17,RED,Paint.Align.CENTER,true);
+        void drawHeadlight(Canvas c,float x,float y,boolean on,boolean signal){
+            p.reset();p.setAntiAlias(true);
+            if(on){p.setShadowLayer(22,0,0,rgb(255,239,180));p.setColor(rgb(255,245,205));}
+            else p.setColor(rgb(235,240,230));
+            c.drawOval(new RectF(x-29,y-13,x+29,y+13),p);p.clearShadowLayer();
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(rgb(120,160,190));c.drawOval(new RectF(x-29,y-13,x+29,y+13),p);
+            if(signal){
+                p.setStyle(Paint.Style.FILL);p.setColor(AMBER);p.setShadowLayer(15,0,0,AMBER);circle(c,x+(x<0?-18:18),y,7,AMBER);p.clearShadowLayer();
+            }
+        }
 
-            rr(c,28,500,w-28,588,22,CARD,0);
-            txt(c,"اطلاعات ECU",w-58,532,14,MUTED,Paint.Align.RIGHT,false);
-            txt(c,ecuName,w-58,566,16,connected?GREEN:WHITE,Paint.Align.RIGHT,true);
+        void drawTwinGauges(Canvas c,float cx,float y){
+            drawGauge(c,cx-105,y,82,speed,220,"km/h",CYAN,false);
+            drawGauge(c,cx+105,y,82,rpm,8000,"RPM",CYAN,true);
+        }
+
+        void drawGauge(Canvas c,float cx,float cy,float rad,int value,int max,String unit,int color,boolean redZone){
+            p.reset();p.setAntiAlias(true);p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(8);
+            r.set(cx-rad,cy-rad,cx+rad,cy+rad);p.setColor(rgb(12,37,61));c.drawArc(r,135,270,false,p);
+            float q=Math.max(0,Math.min(1,value/(float)max));p.setColor(color);p.setShadowLayer(12,0,0,color);c.drawArc(r,135,270*q,false,p);p.clearShadowLayer();
+            if(redZone){p.setColor(RED);c.drawArc(r,355,50,false,p);}
+            txt(c,String.valueOf(value),cx,cy+8,33,WHITE,Paint.Align.CENTER,true);
+            txt(c,unit,cx,cy+34,13,rgb(202,220,235),Paint.Align.CENTER,false);
+            float a=(float)Math.toRadians(135+270*q);
+            float nx=cx+(float)Math.cos(a)*(rad-20), ny=cy+(float)Math.sin(a)*(rad-20);
+            line(c,cx,cy,nx,ny,WHITE,3);
+            circle(c,cx,cy,5,WHITE);
+        }
+
+        String waterText(){
+            if(lowCoolant)return "کم";
+            if(waterLevel>=0)return String.format(Locale.US,"%.0f%%",Math.max(0,Math.min(100,waterLevel)));
+            return "—";
+        }
+
+        void drawDataGrid(Canvas c,float x,float y,float width){
+            float gap=10, cw=(width-gap)/2f, ch=76;
+            dataCard(c,x,y,cw,ch,"میزان آب رادیاتور",waterText(),lowCoolant?RED:CYAN,0);
+            dataCard(c,x+cw+gap,y,cw,ch,"دمای موتور",coolant>0?coolant+"°C":"—",RED,1);
+            dataCard(c,x,y+ch+gap,cw,ch,"میزان سوخت",fuel>0?String.format(Locale.US,"%.0f%%",fuel):"—",AMBER,2);
+            dataCard(c,x+cw+gap,y+ch+gap,cw,ch,"ولتاژ باتری",voltage>0?String.format(Locale.US,"%.1f V",voltage):"—",GREEN,3);
+        }
+
+        void dataCard(Canvas c,float x,float y,float w,float h,String title,String value,int accent,int icon){
+            int bg=lowCoolant&&icon==0?rgb(42,10,18):rgb(5,22,38);
+            rr(c,x,y,x+w,y+h,17,bg,argb(190,17,101,169));
+            String ic=icon==0?"💧":icon==1?"♨":icon==2?"⛽":"▣";
+            txt(c,ic,x+23,y+30,20,accent,Paint.Align.CENTER,true);
+            txt(c,title,x+w-14,y+27,12,rgb(204,221,235),Paint.Align.RIGHT,false);
+            txt(c,value,x+w-14,y+55,20,accent,Paint.Align.RIGHT,true);
+            rr(c,x+16,y+h-12,x+w-16,y+h-7,4,rgb(15,42,64),0);
+            float pct=icon==0?(waterLevel>=0?Math.max(0,Math.min(1,waterLevel/100f)):(lowCoolant?.12f:.75f)):
+                    icon==1?(coolant>0?Math.min(1,coolant/120f):.45f):
+                    icon==2?(fuel>0?Math.min(1,fuel/100f):.45f):
+                    (voltage>0?Math.max(.08f,Math.min(1,(voltage-10f)/5f)):.45f);
+            rr(c,x+16,y+h-12,x+16+(w-32)*pct,y+h-7,4,accent,0);
+        }
+
+        void drawMiniData(Canvas c,float x,float y,float w,float h,String title,String val,int accent){
+            rr(c,x,y,x+w,y+h,14,rgb(5,22,38),rgb(11,78,128));
+            txt(c,title,x+w-10,y+20,11,rgb(185,205,222),Paint.Align.RIGHT,false);
+            txt(c,val,x+w-10,y+43,18,accent,Paint.Align.RIGHT,true);
         }
 
         void drawBottom(Canvas c,float w,float h){
-            float bh=104,y=h-bh;
-            rr(c,0,y,w,h,0,Color.rgb(2,19,29),0);
-            line(c,0,y,w,y,Color.rgb(7,45,59),1);
-            String[] icons={"⌂","▥","≋","⌁"};
-            String[] labels={"داشبورد","داده زنده","عیب‌یابی","اتصال"};
-            for(int i=0;i<4;i++){
-                float cx=w*(i+.5f)/4;
-                boolean on=page==i;
-                if(on)rr(c,cx-38,y+9,cx+38,y+70,29,Color.rgb(3,49,64),0);
-                txt(c,icons[i],cx,y+42,24,on?CYAN:MUTED,Paint.Align.CENTER,true);
-                txt(c,labels[i],cx,y+85,12,on?CYAN:MUTED,Paint.Align.CENTER,false);
-                if(on)line(c,cx-28,y+2,cx+28,y+2,CYAN,4);
+            float y=h-76;
+            rr(c,12,y,w-12,h-8,24,argb(245,2,17,30),rgb(7,78,136));
+            String[] icons={"▥","🔧","⌂","🚗","•••"};
+            String[] labels={"گزارش‌ها","سرویس","خانه","وضعیت خودرو","بیشتر"};
+            int[] pages={1,2,0,3,4};
+            for(int i=0;i<5;i++){
+                float cx=20+(i+.5f)*(w-40)/5f;
+                boolean on=page==pages[i];
+                if(on)rr(c,cx-32,y+7,cx+32,y+58,18,rgb(4,74,146),rgb(21,142,255));
+                txt(c,icons[i],cx,y+31,18,on?WHITE:rgb(188,211,231),Paint.Align.CENTER,true);
+                txt(c,labels[i],cx,y+52,9,on?CYAN:rgb(202,217,231),Paint.Align.CENTER,on);
             }
         }
 
-        void drawLandscape(Canvas c,float w,float h){
-            fill(c,BG);
-            if(cockpit!=null){p.setAlpha(70);c.drawBitmap(cockpit,null,new RectF(0,0,w,h),p);p.setAlpha(255);}
-            rr(c,12,12,220,h-12,22,Color.argb(230,5,29,43),0);
-            txt(c,"خانه ریمپ",200,52,21,WHITE,Paint.Align.RIGHT,true);
-            txt(c,"SMART OBD",200,76,12,CYAN,Paint.Align.RIGHT,true);
-            String[] n={"داشبورد","داده زنده","عیب‌یابی","اتصال"};
-            for(int i=0;i<4;i++){float y=110+i*58;rr(c,25,y,207,y+46,14,page==i?Color.rgb(5,67,84):Color.TRANSPARENT,page==i?CYAN:0);txt(c,n[i],190,y+30,14,page==i?CYAN:WHITE,Paint.Align.RIGHT,page==i);}
-            if(page==3){
-                txt(c,"اتصال و تنظیمات",w-35,55,25,WHITE,Paint.Align.RIGHT,true);
-                rr(c,250,82,w-25,h-25,26,Color.argb(225,7,32,47),0);
-                txt(c,connected?"OBD متصل":"بدون اتصال",w-65,130,24,connected?GREEN:RED,Paint.Align.RIGHT,true);
-                txt(c,prefs.getString("activated_serial","سریال ثبت نشده"),w-65,164,15,CYAN,Paint.Align.RIGHT,true);
-                txt(c,message,w-65,196,13,MUTED,Paint.Align.RIGHT,false);
-                rr(c,280,230,w-55,282,18,Color.TRANSPARENT,CYAN);txt(c,connected?"قطع ارتباط":"اتصال به OBD",(280+w-55)/2,263,18,CYAN,Paint.Align.CENTER,true);
-            }else{
-                txt(c,page==0?"داشبورد":page==1?"عیب‌یابی":"داده زنده",w-35,55,25,WHITE,Paint.Align.RIGHT,true);
-                gauge(c,w*.48f,h*.47f,Math.min(120,h*.3f),rpm,8000,"RPM");
-                gauge(c,w*.78f,h*.47f,Math.min(120,h*.3f),speed,240,"km/h");
+        void drawBottomLandscape(Canvas c,float w,float h){
+            float y=h-54;
+            rr(c,10,y,w-10,h-6,18,argb(245,2,17,30),rgb(7,78,136));
+            String[] labels={"گزارش","سرویس","خانه","خودرو","بیشتر"};
+            int[] pages={1,2,0,3,4};
+            for(int i=0;i<5;i++){
+                float cx=(i+.5f)*w/5f;
+                boolean on=page==pages[i];
+                if(on)rr(c,cx-38,y+6,cx+38,h-12,13,rgb(4,74,146),rgb(21,142,255));
+                txt(c,labels[i],cx,y+31,11,on?CYAN:WHITE,Paint.Align.CENTER,on);
             }
+        }
+
+        void drawSecondary(Canvas c,float w,float h){
+            float top=118;
+            String title=page==1?"گزارش‌ها و عیب‌یابی":page==2?"سرویس و داده زنده":page==3?"وضعیت خودرو":"بیشتر";
+            txt(c,title,w-24,top,24,WHITE,Paint.Align.RIGHT,true);
+            if(page==1){
+                rr(c,20,150,w-20,270,20,rgb(5,25,42),rgb(13,87,140));
+                txt(c,"DTC",w-42,182,13,MUTED,Paint.Align.RIGHT,false);
+                String[] lines=dtcText.split("\n");
+                float yy=212;for(int i=0;i<Math.min(3,lines.length);i++){txt(c,lines[i],w-42,yy,14,WHITE,Paint.Align.RIGHT,true);yy+=23;}
+                rr(c,24,292,w-24,340,16,rgb(4,48,68),CYAN);txt(c,"اسکن خطاها",w/2,323,16,CYAN,Paint.Align.CENTER,true);
+                rr(c,24,352,w-24,400,16,rgb(54,25,33),RED);txt(c,"پاک‌کردن خطاها",w/2,383,16,RED,Paint.Align.CENTER,true);
+            }else if(page==2){
+                float y=150;
+                String[][] rows={{"دور موتور",rpm+" RPM"},{"سرعت",speed+" km/h"},{"دما",coolant>0?coolant+"°C":"—"},{"سوخت",fuel>0?String.format(Locale.US,"%.0f%%",fuel):"—"},{"ولتاژ",voltage>0?String.format(Locale.US,"%.2f V",voltage):"—"}};
+                for(String[] row:rows){rr(c,20,y,w-20,y+58,16,rgb(5,25,42),rgb(10,64,105));txt(c,row[0],w-40,y+24,12,MUTED,Paint.Align.RIGHT,false);txt(c,row[1],w-40,y+46,16,WHITE,Paint.Align.RIGHT,true);y+=68;}
+            }else if(page==3){
+                rr(c,20,150,w-20,300,22,rgb(5,25,42),rgb(13,87,140));
+                txt(c,connected?"SMART OBD متصل":"SMART OBD قطع",w-42,190,20,connected?GREEN:RED,Paint.Align.RIGHT,true);
+                txt(c,message,w-42,220,12,MUTED,Paint.Align.RIGHT,false);
+                txt(c,prefs.getString("activated_serial","سریال ثبت نشده"),w-42,252,13,CYAN,Paint.Align.RIGHT,true);
+                rr(c,35,318,w-35,370,17,rgb(4,48,68),CYAN);txt(c,connected?"قطع ارتباط":"اتصال OBD",w/2,351,17,CYAN,Paint.Align.CENTER,true);
+            }else{
+                rr(c,20,150,w-20,330,22,rgb(5,25,42),rgb(13,87,140));
+                txt(c,"ساختار خودروی زنده آماده توسعه است",w-42,190,16,WHITE,Paint.Align.RIGHT,true);
+                txt(c,"چراغ‌ها • راهنما • برف‌پاک‌کن • کاپوت • درها",w-42,224,13,CYAN,Paint.Align.RIGHT,false);
+                txt(c,"فرمان‌های BLE آینده مستقیماً همین مدل را حرکت می‌دهند.",w-42,258,12,MUTED,Paint.Align.RIGHT,false);
+                txt(c,"نسخه Living Car 3.0",w-42,300,13,GREEN,Paint.Align.RIGHT,true);
+            }
+        }
+
+        void drawSecondaryLandscape(Canvas c){
+            txt(c,page==1?"گزارش‌ها":page==2?"سرویس":page==3?"وضعیت خودرو":"بیشتر",790,110,24,WHITE,Paint.Align.RIGHT,true);
+            rr(c,260,125,800,330,22,rgb(5,25,42),rgb(13,87,140));
+            if(page==3){
+                txt(c,connected?"OBD متصل":"OBD قطع",770,170,20,connected?GREEN:RED,Paint.Align.RIGHT,true);
+                txt(c,message,770,205,13,MUTED,Paint.Align.RIGHT,false);
+                txt(c,prefs.getString("activated_serial","سریال ثبت نشده"),770,240,14,CYAN,Paint.Align.RIGHT,true);
+            }else if(page==1){
+                txt(c,"DTC",770,165,14,MUTED,Paint.Align.RIGHT,false);
+                txt(c,dtcText.replace("\n"," • "),770,205,13,WHITE,Paint.Align.RIGHT,true);
+            }else if(page==2){
+                txt(c,"RPM "+rpm+"   |   "+speed+" km/h   |   "+coolant+"°C",770,185,19,WHITE,Paint.Align.RIGHT,true);
+                txt(c,"سوخت "+String.format(Locale.US,"%.0f%%",fuel)+"   |   باتری "+String.format(Locale.US,"%.1fV",voltage),770,230,16,CYAN,Paint.Align.RIGHT,false);
+            }else{
+                txt(c,"Living Car Engine آماده توسعه",770,185,18,WHITE,Paint.Align.RIGHT,true);
+                txt(c,"LIGHTS / WIPER / SIGNAL / HOOD / DOORS",770,225,14,CYAN,Paint.Align.RIGHT,true);
+            }
+        }
+
+        void showQuickSettings(){
+            String[] items={
+                    connected?"قطع ارتباط OBD":"اتصال به OBD",
+                    demo?"خاموش کردن دمو":"روشن کردن دمو",
+                    soundAlert?"خاموش کردن هشدار صوتی":"روشن کردن هشدار صوتی",
+                    "پاک کردن مچ سریال"
+            };
+            new AlertDialog.Builder(MainActivity.this).setTitle("تنظیمات سریع")
+                    .setItems(items,(d,which)->{
+                        if(which==0){if(connected)disconnect();else beginConnect();}
+                        else if(which==1){demo=!demo;if(demo)disconnect();invalidate();}
+                        else if(which==2){soundAlert=!soundAlert;toast(soundAlert?"هشدار صوتی فعال شد":"هشدار صوتی خاموش شد");invalidate();}
+                        else if(which==3)clearActivation();
+                    }).show();
         }
 
         @Override public boolean onTouchEvent(MotionEvent e){
             if(e.getAction()!=MotionEvent.ACTION_UP)return true;
-            float x=e.getX(),y=e.getY(),w=getWidth(),h=getHeight();
-            if(getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE){
-                if(x<230){
-                    if(y>110&&y<156)page=0; else if(y>168&&y<214)page=1; else if(y>226&&y<272)page=2; else if(y>284&&y<330)page=3;
-                    invalidate();return true;
+            float x=(e.getX()-uiDx)/uiScale, y=(e.getY()-uiDy)/uiScale;
+            float w=logicalW,h=logicalH;
+
+            if(y>=18&&y<=90&&x>=w-86){showQuickSettings();return true;}
+            if(y>=45&&y<=90&&x>w/2-110&&x<w/2+110){if(connected)disconnect();else beginConnect();return true;}
+
+            if(landscape){
+                if(y>h-62){
+                    int i=Math.max(0,Math.min(4,(int)(x/(w/5f))));
+                    int[] pages={1,2,0,3,4};page=pages[i];invalidate();return true;
                 }
-                if(page==3&&y>220&&y<300){if(connected)disconnect();else beginConnect();return true;}
-                return true;
-            }
-            if(y>h-108){
-                int i=Math.min(3,(int)(x/(w/4f)));page=i;invalidate();return true;
-            }
-            if(page==3){
-                float t=205;
-                if(y>t+145&&y<t+198){if(connected)disconnect();else beginConnect();return true;}
-                float sw1=t+220+140+42;
-                if(y>sw1-42&&y<sw1+42){demo=!demo;if(demo)disconnect();invalidate();return true;}
-                float sw2=t+220+140+100+42;
-                if(y>sw2-42&&y<sw2+42){soundAlert=!soundAlert;toast(soundAlert?"هشدار صوتی فعال شد":"هشدار صوتی خاموش شد");invalidate();return true;}
-                // long-ish tap footer area clears serial binding
-                if(y>h-190&&y<h-110&&x<w*.45f){clearActivation();return true;}
-            }else if(page==1){
-                if(y>348&&y<414){readDtc();return true;}
-                if(y>414&&y<480){clearDtc();return true;}
+                if(page==3&&x>260&&y>125&&y<330){if(connected)disconnect();else beginConnect();return true;}
+            }else{
+                if(y>h-84){
+                    int i=Math.max(0,Math.min(4,(int)((x-12)/((w-24)/5f))));
+                    int[] pages={1,2,0,3,4};page=pages[i];invalidate();return true;
+                }
+                if(page==1&&y>285&&y<345){readDtc();return true;}
+                if(page==1&&y>345&&y<410){clearDtc();return true;}
+                if(page==3&&y>305&&y<385){if(connected)disconnect();else beginConnect();return true;}
             }
             return true;
         }
