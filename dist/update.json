@@ -1,6 +1,6 @@
 {
-  "version_code": 14,
-  "version_name": "14.0-DEVICE-ACTIVATION",
+  "version_code": 15,
+  "version_name": "15.0-AUTO-FREE-MONTH",
   "apk_url": "https://raw.githubusercontent.com/abeytaneh-dotcom/Asghar/care-ai-eye-m2/dist/CareAI-latest.apk",
   "notes": "فعال‌سازی خودکار با شناسه گوشی، حذف ورود دستی Patient ID، حالت تست ۳۰ روزه، تمدید ماهانه و رفع همگام‌سازی وضعیت مدیر."
 }
