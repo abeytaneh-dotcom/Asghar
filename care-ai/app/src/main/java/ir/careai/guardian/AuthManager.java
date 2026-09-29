@@ -58,6 +58,10 @@ public final class AuthManager {
         return prefs(c).getLong("auth_expires_at", 0L);
     }
 
+    public static String supportWhatsapp(Context c) {
+        return prefs(c).getString("support_whatsapp", "");
+    }
+
     public static void requestOtp(
             Context c,
             String phone,
@@ -142,6 +146,10 @@ public final class AuthManager {
                         result.optString("activation_mode", "inactive")
                 )
                 .putLong("auth_expires_at", expiresAt)
+                .putString(
+                        "support_whatsapp",
+                        result.optString("support_whatsapp", "")
+                )
                 .putLong("auth_checked_at", System.currentTimeMillis())
                 .apply();
     }
@@ -178,6 +186,13 @@ public final class AuthManager {
                 .putLong(
                         "auth_expires_at",
                         result.optLong("expires_at", 0L)
+                )
+                .putString(
+                        "support_whatsapp",
+                        result.optString(
+                                "support_whatsapp",
+                                p.getString("support_whatsapp", "")
+                        )
                 )
                 .putLong("auth_checked_at", System.currentTimeMillis())
                 .apply();
@@ -218,6 +233,7 @@ public final class AuthManager {
                 .remove("auth_active_cache")
                 .remove("auth_activation_mode")
                 .remove("auth_expires_at")
+                .remove("support_whatsapp")
                 .remove("video_key")
                 .remove("auth_checked_at")
                 .apply();
