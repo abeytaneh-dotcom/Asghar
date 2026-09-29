@@ -722,7 +722,9 @@ public class CameraMonitorActivity extends Activity
         );
 
         // پیامک مستقل از صداست، ولی فرمان‌های اجرایی گوشی SMS نمی‌فرستند.
-        if (cmd.notifyContacts && !deviceExecutable) {
+        if (cmd.notifyContacts
+                && !deviceExecutable
+                && !CommandStore.ACTION_SMS.equals(cmd.action)) {
             EmergencyManager.notifyTrusted(this, resultText);
         }
 
@@ -784,6 +786,13 @@ public class CameraMonitorActivity extends Activity
             promptText.setText("♫ " + resultText);
             commandExecutionLocked = false;
             playLatestAudio();
+            return;
+        }
+
+        if (CommandStore.ACTION_SMS.equals(cmd.action)) {
+            commandExecutionLocked = false;
+            promptText.setText("✉ " + resultText);
+            startSmsComposer("", false);
             return;
         }
 
