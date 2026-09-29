@@ -672,6 +672,10 @@ public class CameraMonitorActivity extends Activity
     private void confirmCurrentByDoubleBlink() {
         long now = System.currentTimeMillis();
 
+        if (smsComposerMode || incomingSmsMode) {
+            return;
+        }
+
         if (mediaMode) {
             stopMediaAndReturn("پخش متوقف شد.");
             return;
@@ -1893,6 +1897,16 @@ public class CameraMonitorActivity extends Activity
         float rightScore =
                 (smoothedGaze - neutralGaze) * rightDirectionSign;
         float leftScore = -rightScore;
+
+        if (smsComposerMode) {
+            handleSmsComposerGaze(now, leftScore, rightScore);
+            return;
+        }
+
+        if (incomingSmsMode) {
+            handleIncomingSmsGaze(now, leftScore);
+            return;
+        }
 
         if (externalActionInProgress) {
             rightGazeStartedAt = 0L;
