@@ -177,8 +177,8 @@ table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px so
 <p style="line-height:2;color:#64788c">
 کاربر دیگر هیچ Patient ID را دستی وارد نمی‌کند. اپ شناسه دستگاه را مستقیماً از Android می‌خواند
 و حساب با <b>شماره موبایل + Device ID</b> قفل می‌شود.
-مدیر می‌تواند حساب را در حالت <b>فعال</b> یا <b>تست</b> برای یک ماه فعال کند.
-پس از پایان تاریخ، اپ به‌صورت خودکار خطای انقضای فعال‌سازی می‌دهد.
+اولین ورود بعد از تایید پیامکی به‌صورت خودکار <b>یک ماه رایگان</b> فعال می‌شود و نیازی به تایید مدیر ندارد.
+بعد از پایان اعتبار، حساب منقضی می‌شود و تمدید از همین پنل انجام می‌شود.
 </p>
 </div>
 
@@ -257,6 +257,18 @@ table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px so
 <?php endforeach;?>
 </table>
 </div>
+</div>
+
+<div class="card">
+<h3>پشتیبانی تمدید حساب</h3>
+<form method="post">
+<label>شماره واتساپ پشتیبانی</label>
+<input name="support_whatsapp" value="<?=h(setting('support_whatsapp'))?>" placeholder="مثلاً 09121234567">
+<p style="color:#64788c;font-size:13px;line-height:1.9">
+بعد از پایان اعتبار، اپ دکمه واتساپ را نمایش می‌دهد و متن درخواست تمدید همراه با ID حساب به‌صورت خودکار آماده می‌شود.
+</p>
+<button name="save_support">ذخیره شماره واتساپ</button>
+</form>
 </div>
 
 <div class="card"><h3>تنظیمات پیامک OTP — IranPayamak / FarazSMS</h3><form method="post">
