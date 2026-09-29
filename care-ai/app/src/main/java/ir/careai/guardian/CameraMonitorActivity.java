@@ -197,6 +197,55 @@ public class CameraMonitorActivity extends Activity
     private SensorManager sensorManager;
     private long lastMotionPrompt = 0L;
 
+    private final Runnable smsSymbolLoop = new Runnable() {
+        @Override
+        public void run() {
+            if (!smsComposerMode) return;
+
+            String[] symbols = smsStage == 0 ? SMS_LETTERS : SMS_DIGITS;
+            smsSymbolIndex = (smsSymbolIndex + 1) % symbols.length;
+            updateSmsComposerUi();
+
+            handler.postDelayed(this, SMS_SYMBOL_INTERVAL_MS);
+        }
+    };
+
+    private final Runnable incomingSmsPoll = new Runnable() {
+        @Override
+        public void run() {
+            long now = System.currentTimeMillis();
+
+            if (incomingSmsMode) {
+                long elapsed = now - incomingSmsShownAt;
+                if (elapsed >= INCOMING_SMS_VISIBLE_MS) {
+                    dismissIncomingSms();
+                } else if (smsHintText != null) {
+                    long seconds = (INCOMING_SMS_VISIBLE_MS - elapsed + 999L) / 1000L;
+                    smsHintText.setText(
+                            "نگاه چپ = پاسخ به همین شماره • "
+                                    + seconds + " ثانیه"
+                    );
+                }
+            } else if (!smsComposerMode && !sleepMode) {
+                boolean pending = prefs.getBoolean("incoming_sms_pending", false);
+                long at = prefs.getLong("incoming_sms_at", 0L);
+
+                if (pending) {
+                    if (at > 0L && now - at <= INCOMING_SMS_VISIBLE_MS) {
+                        String number = prefs.getString("incoming_sms_number", "");
+                        String body = prefs.getString("incoming_sms_body", "");
+                        prefs.edit().putBoolean("incoming_sms_pending", false).apply();
+                        showIncomingSms(number, body, at);
+                    } else {
+                        prefs.edit().putBoolean("incoming_sms_pending", false).apply();
+                    }
+                }
+            }
+
+            handler.postDelayed(this, 800L);
+        }
+    };
+
     private final Runnable videoCallPoll = new Runnable() {
         @Override
         public void run() {
