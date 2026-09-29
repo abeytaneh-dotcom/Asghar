@@ -397,36 +397,18 @@ function account_device_public_id(string $deviceId): string {
 }
 
 function account_activation_state(array $account): array {
-    $activeFlag = (int)($account['active'] ?? 0) === 1;
-    $expiresAt = (int)($account['expires_at'] ?? 0);
-    $now = time();
-
-    if (!$activeFlag) {
-        return [
-            'active'=>false,
-            'expired'=>false,
-            'expires_at'=>$expiresAt,
-            'remaining_days'=>0,
-            'mode'=>(string)($account['activation_mode'] ?? 'trial')
-        ];
-    }
-
-    if ($expiresAt <= 0 || $expiresAt <= $now) {
-        return [
-            'active'=>false,
-            'expired'=>true,
-            'expires_at'=>$expiresAt,
-            'remaining_days'=>0,
-            'mode'=>(string)($account['activation_mode'] ?? 'trial')
-        ];
-    }
+    $base = activation_state($account);
 
     return [
-        'active'=>true,
-        'expired'=>false,
-        'expires_at'=>$expiresAt,
-        'remaining_days'=>(int)ceil(($expiresAt - $now) / 86400),
-        'mode'=>(string)($account['activation_mode'] ?? 'trial')
+        'active'=>$base['active'],
+        'expired'=>$base['code'] === 'ACTIVATION_EXPIRED',
+        'expires_at'=>$base['expires_at'],
+        'remaining_days'=>$base['active']
+            ? (int)ceil(max(0, $base['expires_at'] - time()) / 86400)
+            : 0,
+        'mode'=>$base['mode'],
+        'code'=>$base['code'],
+        'message'=>$base['message']
     ];
 }
 
@@ -434,9 +416,13 @@ function expire_account_if_needed(PDO $db, array $account): array {
     $state = account_activation_state($account);
 
     if ($state['expired'] && (int)($account['active'] ?? 0) === 1) {
-        $db->prepare('UPDATE accounts SET active=0,updated_at=? WHERE id=?')
+        $db->prepare("UPDATE accounts
+            SET active=0,activation_mode='expired',updated_at=?
+            WHERE id=?")
             ->execute([now_iso(),(int)$account['id']]);
+
         $account['active'] = 0;
+        $account['activation_mode'] = 'expired';
     }
 
     return $state;
