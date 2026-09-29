@@ -36,7 +36,7 @@ if ($action === 'request_otp') {
 
             $existing['device_id'] = $deviceId;
             $existing['active'] = 0;
-            $existing['activation_mode'] = 'inactive';
+            $existing['activation_mode'] = 'new';
             $existing['activated_at'] = 0;
             $existing['expires_at'] = 0;
         }
@@ -109,11 +109,19 @@ if ($action === 'verify_otp') {
     $otp = $q->fetch(PDO::FETCH_ASSOC);
 
     if (!$otp || time() > (int)$otp['expires_at']) {
-        json_out(['ok'=>false,'code'=>'OTP_EXPIRED','message'=>'کد تایید منقضی شده است.'],401);
+        json_out([
+            'ok'=>false,
+            'code'=>'OTP_EXPIRED',
+            'message'=>'کد تایید منقضی شده است.'
+        ],401);
     }
 
     if ((int)$otp['attempts'] >= 6) {
-        json_out(['ok'=>false,'code'=>'OTP_LOCKED','message'=>'تعداد تلاش بیش از حد مجاز است.'],429);
+        json_out([
+            'ok'=>false,
+            'code'=>'OTP_LOCKED',
+            'message'=>'تعداد تلاش بیش از حد مجاز است.'
+        ],429);
     }
 
     if ((string)$otp['device_id'] !== $deviceId) {
@@ -127,18 +135,29 @@ if ($action === 'verify_otp') {
     if (!password_verify($code,(string)$otp['code_hash'])) {
         $db->prepare('UPDATE otp_codes SET attempts=attempts+1 WHERE phone=?')
             ->execute([$phone]);
-        json_out(['ok'=>false,'code'=>'OTP_INVALID','message'=>'کد تایید صحیح نیست.'],401);
+
+        json_out([
+            'ok'=>false,
+            'code'=>'OTP_INVALID',
+            'message'=>'کد تایید صحیح نیست.'
+        ],401);
     }
 
     $patientId = trim((string)$otp['patient_id']);
-    if ($patientId === '') $patientId = $deviceId;
+    if ($patientId === '') {
+        $patientId = account_device_public_id($deviceId);
+    }
 
     $s = $db->prepare('SELECT * FROM accounts WHERE phone=? OR device_id=? LIMIT 1');
     $s->execute([$phone,$deviceId]);
     $a = $s->fetch(PDO::FETCH_ASSOC);
 
+    $now = time();
+    $freeUntil = strtotime('+1 month',$now);
+
     if ($a) {
-        if ((string)$a['phone'] !== $phone || (string)$a['device_id'] !== $deviceId) {
+        if ((string)$a['phone'] !== $phone
+                || (string)$a['device_id'] !== $deviceId) {
             json_out([
                 'ok'=>false,
                 'code'=>'ACCOUNT_BOUND',
@@ -147,30 +166,100 @@ if ($action === 'verify_otp') {
         }
 
         $patientId = trim((string)$a['patient_id']);
-        if ($patientId === '') $patientId = $deviceId;
+        if ($patientId === '') {
+            $patientId = account_device_public_id($deviceId);
+        }
 
-        $token = !empty($a['auth_token']) ? (string)$a['auth_token'] : random_token();
-        $videoKey = !empty($a['video_key']) ? (string)$a['video_key'] : random_token(12);
+        $token = !empty($a['auth_token'])
+            ? (string)$a['auth_token']
+            : random_token();
 
-        $db->prepare('UPDATE accounts
-            SET auth_token=?,video_key=?,updated_at=?,last_seen_at=?
-            WHERE id=?')
-            ->execute([$token,$videoKey,now_iso(),now_iso(),$a['id']]);
+        $videoKey = !empty($a['video_key'])
+            ? (string)$a['video_key']
+            : random_token(12);
 
-        $state = activation_state($a);
+        $mode = trim((string)($a['activation_mode'] ?? 'new'));
+        $activatedAt = (int)($a['activated_at'] ?? 0);
+        $expiresAt = (int)($a['expires_at'] ?? 0);
+
+        // اولین ورود این حساب، بدون دخالت مدیر یک ماه رایگان فعال می‌شود.
+        // حساب مسدود یا حسابی که قبلاً منقضی شده، خودکار دوباره فعال نمی‌شود.
+        $firstActivation = $activatedAt <= 0
+            && $expiresAt <= 0
+            && !in_array($mode,['blocked','expired'],true);
+
+        if ($firstActivation) {
+            $db->prepare("UPDATE accounts
+                SET patient_id=?,
+                    active=1,
+                    activation_mode='trial',
+                    activated_at=?,
+                    expires_at=?,
+                    auth_token=?,
+                    video_key=?,
+                    updated_at=?,
+                    last_seen_at=?
+                WHERE id=?")
+                ->execute([
+                    $patientId,$now,$freeUntil,$token,$videoKey,
+                    now_iso(),now_iso(),$a['id']
+                ]);
+
+            $a['patient_id']=$patientId;
+            $a['active']=1;
+            $a['activation_mode']='trial';
+            $a['activated_at']=$now;
+            $a['expires_at']=$freeUntil;
+            $a['auth_token']=$token;
+            $a['video_key']=$videoKey;
+        } else {
+            $db->prepare('UPDATE accounts
+                SET auth_token=?,video_key=?,updated_at=?,last_seen_at=?
+                WHERE id=?')
+                ->execute([
+                    $token,$videoKey,now_iso(),now_iso(),$a['id']
+                ]);
+
+            $a['auth_token']=$token;
+            $a['video_key']=$videoKey;
+        }
+
+        $state = expire_account_if_needed($db,$a);
+
     } else {
         $token = random_token();
         $videoKey = random_token(12);
+        $patientId = account_device_public_id($deviceId);
 
         try {
-            $db->prepare('INSERT INTO accounts(
-                    phone,patient_id,device_id,active,activation_mode,activated_at,expires_at,
-                    auth_token,video_key,created_at,updated_at,last_seen_at
-                ) VALUES(?,?,?,0,\'inactive\',0,0,?,?,?,?,?)')
+            $db->prepare("INSERT INTO accounts(
+                    phone,patient_id,device_id,
+                    active,activation_mode,activated_at,expires_at,
+                    auth_token,video_key,
+                    created_at,updated_at,last_seen_at
+                ) VALUES(?,?,?,1,'trial',?,?,?,?,?,?,?)")
                 ->execute([
-                    $phone,$patientId,$deviceId,$token,$videoKey,
+                    $phone,$patientId,$deviceId,
+                    $now,$freeUntil,
+                    $token,$videoKey,
                     now_iso(),now_iso(),now_iso()
                 ]);
+
+            $a = [
+                'id'=>(int)$db->lastInsertId(),
+                'phone'=>$phone,
+                'patient_id'=>$patientId,
+                'device_id'=>$deviceId,
+                'active'=>1,
+                'activation_mode'=>'trial',
+                'activated_at'=>$now,
+                'expires_at'=>$freeUntil,
+                'auth_token'=>$token,
+                'video_key'=>$videoKey
+            ];
+
+            $state = account_activation_state($a);
+
         } catch (PDOException $e) {
             json_out([
                 'ok'=>false,
@@ -178,17 +267,10 @@ if ($action === 'verify_otp') {
                 'message'=>'این شماره یا گوشی قبلاً ثبت شده است.'
             ],409);
         }
-
-        $state = [
-            'active'=>false,
-            'mode'=>'inactive',
-            'expires_at'=>0,
-            'code'=>'ACTIVATION_REQUIRED',
-            'message'=>'ثبت‌نام انجام شد؛ منتظر فعال‌سازی مدیر باشید.'
-        ];
     }
 
-    $db->prepare('DELETE FROM otp_codes WHERE phone=?')->execute([$phone]);
+    $db->prepare('DELETE FROM otp_codes WHERE phone=?')
+        ->execute([$phone]);
 
     json_out([
         'ok'=>true,
@@ -200,11 +282,8 @@ if ($action === 'verify_otp') {
         'device_id'=>$deviceId,
         'patient_id'=>$patientId,
         'video_key'=>$videoKey ?? '',
-        'message'=>$state['active']
-            ? $state['message']
-            : ($state['code']==='ACTIVATION_EXPIRED'
-                ? $state['message']
-                : 'ثبت‌نام انجام شد؛ منتظر فعال‌سازی مدیر باشید.')
+        'support_whatsapp'=>setting('support_whatsapp'),
+        'message'=>$state['message']
     ]);
 }
 
@@ -256,7 +335,8 @@ if ($action === 'status') {
         'phone'=>$a['phone'],
         'device_id'=>$a['device_id'],
         'patient_id'=>$a['patient_id'],
-        'video_key'=>$a['video_key'] ?? ''
+        'video_key'=>$a['video_key'] ?? '',
+        'support_whatsapp'=>setting('support_whatsapp')
     ]);
 }
 
