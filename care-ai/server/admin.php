@@ -117,7 +117,7 @@ if ($logged && isset($_POST['save_sms'])) {
     $flash = 'تنظیمات ذخیره شد.';
 }
 
-if ($logged && isset($_POST['save_rtc'])) {
+if ($logged && isset($_POST['save_support'])) {\n    set_setting('support_whatsapp', trim((string)($_POST['support_whatsapp'] ?? '')));\n    $flash = 'شماره واتساپ پشتیبانی ذخیره شد.';\n}\n\nif ($logged && isset($_POST['save_rtc'])) {
     set_setting('turn_url', trim((string)($_POST['turn_url'] ?? '')));
     set_setting('turn_user', trim((string)($_POST['turn_user'] ?? '')));
     set_setting('turn_pass', trim((string)($_POST['turn_pass'] ?? '')));
