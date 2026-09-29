@@ -19,8 +19,8 @@ android {
         applicationId "ir.careai.guardian"
         minSdk 26
         targetSdk 35
-        versionCode 15
-        versionName "15.0-AUTO-FREE-MONTH"
+        versionCode 16
+        versionName "16.0-EYE-SMS-REELS"
     }
 
     buildFeatures {
