@@ -1,6 +1,6 @@
 {
-  "version_code": 13,
-  "version_name": "13.0-CARE-PLUS",
+  "version_code": 14,
+  "version_name": "14.0-DEVICE-ACTIVATION",
   "apk_url": "https://raw.githubusercontent.com/abeytaneh-dotcom/Asghar/care-ai-eye-m2/dist/CareAI-latest.apk",
-  "notes": "اجرای واقعی دستورات سفارشی، باز کردن اپلیکیشن و لینک، تشخیص خودکار فرمان‌های قدیمی مثل اینستاگرام باز بشه و حفظ سیستم بروزرسانی مستقیم."
+  "notes": "فعال‌سازی خودکار با شناسه گوشی، حذف ورود دستی Patient ID، حالت تست ۳۰ روزه، تمدید ماهانه و رفع همگام‌سازی وضعیت مدیر."
 }
