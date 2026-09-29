@@ -226,7 +226,7 @@ public class CameraMonitorActivity extends Activity
                                     + seconds + " ثانیه"
                     );
                 }
-            } else if (!smsComposerMode && !sleepMode) {
+            } else if (!smsComposerMode) {
                 boolean pending = prefs.getBoolean("incoming_sms_pending", false);
                 long at = prefs.getLong("incoming_sms_at", 0L);
 
