@@ -64,6 +64,37 @@ function init_schema(PDO $db): void {
         $db->exec("ALTER TABLE accounts ADD COLUMN video_key TEXT");
     } catch (Throwable $e) {}
 
+    try {
+        $db->exec("ALTER TABLE accounts ADD COLUMN activation_mode TEXT NOT NULL DEFAULT 'inactive'");
+    } catch (Throwable $e) {}
+
+    try {
+        $db->exec("ALTER TABLE accounts ADD COLUMN activated_at INTEGER NOT NULL DEFAULT 0");
+    } catch (Throwable $e) {}
+
+    try {
+        $db->exec("ALTER TABLE accounts ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0");
+    } catch (Throwable $e) {}
+
+    // حساب‌های فعال قدیمی از زمان نصب این نسخه یک ماه اعتبار می‌گیرند.
+    $db->exec("UPDATE accounts
+        SET activation_mode=CASE
+                WHEN activation_mode IS NULL OR activation_mode='' OR activation_mode='inactive'
+                    THEN 'active'
+                ELSE activation_mode
+            END,
+            activated_at=CASE
+                WHEN activated_at IS NULL OR activated_at=0
+                    THEN CAST(strftime('%s','now') AS INTEGER)
+                ELSE activated_at
+            END,
+            expires_at=CASE
+                WHEN expires_at IS NULL OR expires_at=0
+                    THEN CAST(strftime('%s','now','+1 month') AS INTEGER)
+                ELSE expires_at
+            END
+        WHERE active=1");
+
     $db->exec("UPDATE accounts
         SET video_key=lower(hex(randomblob(12)))
         WHERE video_key IS NULL OR video_key=''");
@@ -136,6 +167,46 @@ function set_setting(string $key, string $value): void {
     $s = db()->prepare('INSERT INTO settings(k,v) VALUES(?,?)
         ON CONFLICT(k) DO UPDATE SET v=excluded.v');
     $s->execute([$key, $value]);
+}
+
+function activation_state(array $account): array {
+    $active = (int)($account['active'] ?? 0) === 1;
+    $mode = trim((string)($account['activation_mode'] ?? 'inactive'));
+    $expiresAt = (int)($account['expires_at'] ?? 0);
+
+    if (!$active) {
+        return [
+            'active'=>false,
+            'mode'=>$mode === '' ? 'inactive' : $mode,
+            'expires_at'=>$expiresAt,
+            'code'=>'ACTIVATION_REQUIRED',
+            'message'=>'این حساب فعال نیست. مدیر باید حساب را فعال کند.'
+        ];
+    }
+
+    if ($expiresAt <= 0 || time() >= $expiresAt) {
+        return [
+            'active'=>false,
+            'mode'=>'expired',
+            'expires_at'=>$expiresAt,
+            'code'=>'ACTIVATION_EXPIRED',
+            'message'=>'اعتبار یک‌ماهه فعال‌سازی پایان یافته است. برای تمدید با مدیر تماس بگیرید.'
+        ];
+    }
+
+    return [
+        'active'=>true,
+        'mode'=>$mode === 'test' ? 'test' : 'active',
+        'expires_at'=>$expiresAt,
+        'code'=>'OK',
+        'message'=>$mode === 'test'
+            ? 'حساب در حالت تست فعال است.'
+            : 'حساب فعال است.'
+    ];
+}
+
+function account_is_active(array $account): bool {
+    return activation_state($account)['active'] === true;
 }
 
 function json_out(array $data, int $status=200): never {
