@@ -1361,6 +1361,43 @@ public class CameraMonitorActivity extends Activity
         handler.postDelayed(() -> showPrompt(0), 1800L);
     }
 
+    private void startSmsComposer(String fixedNumber, boolean replyMode) {
+        handler.removeCallbacks(promptTimeout);
+        handler.removeCallbacks(countdown);
+        handler.removeCallbacks(smsSymbolLoop);
+
+        if (mediaMode) stopMediaSilently();
+
+        smsComposerMode = true;
+        incomingSmsMode = false;
+        smsReplyMode = replyMode;
+        smsReplyNumber = fixedNumber == null ? "" : fixedNumber.trim();
+        smsStage = 0;
+        smsSymbolIndex = 0;
+        smsLeftLatched = false;
+        smsRightLatched = false;
+        smsTextBuffer.setLength(0);
+        smsNumberBuffer.setLength(0);
+        smsReturnPromptIndex = replyMode ? promptIndex : promptIndex + 1;
+
+        smoothedGaze = Float.NaN;
+        leftGazeStartedAt = 0L;
+        rightGazeStartedAt = 0L;
+        blinkCount = 0;
+        firstBlinkAt = 0L;
+
+        smsOverlay.setVisibility(View.VISIBLE);
+        updateSmsComposerUi();
+
+        speak(
+                replyMode
+                        ? "پاسخ پیام را بنویسید. نگاه چپ یعنی انتخاب حرف و نگاه راست یعنی پایان پیام."
+                        : "نوشتن پیام شروع شد. نگاه چپ یعنی انتخاب حرف و نگاه راست یعنی پایان متن."
+        );
+
+        handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
+    }
+
     private void analyzeTextureFrame() {
         if (faceLandmarker == null
                 || processingFrame
