@@ -3,12 +3,10 @@ package ir.careai.guardian;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
-import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -18,14 +16,21 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.json.JSONObject;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
 public class RegistrationActivity extends Activity {
 
-    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Handler handler =
+            new Handler(Looper.getMainLooper());
 
     private EditText phone;
     private EditText otp;
     private TextView status;
-    private Button send;
+    private TextView deviceIdView;
     private Button verify;
     private Button refresh;
 
@@ -42,11 +47,7 @@ public class RegistrationActivity extends Activity {
         render();
 
         if (AuthManager.hasToken(this)) {
-            String savedPhone = getSharedPreferences("careai", MODE_PRIVATE)
-                    .getString("auth_phone", "");
-            if (!savedPhone.isEmpty()) phone.setText(savedPhone);
-
-            showPending("در حال بررسی وضعیت فعال‌سازی این گوشی...");
+            showPending("در حال بررسی وضعیت فعال‌سازی...");
             checkActivation(true);
         }
     }
@@ -70,7 +71,10 @@ public class RegistrationActivity extends Activity {
         t.setTextColor(color);
 
         if (bold) {
-            t.setTypeface(t.getTypeface(), Typeface.BOLD);
+            t.setTypeface(
+                    t.getTypeface(),
+                    android.graphics.Typeface.BOLD
+            );
         }
 
         return t;
@@ -79,13 +83,14 @@ public class RegistrationActivity extends Activity {
     private EditText input(String hint) {
         EditText e = new EditText(this);
         e.setHint(hint);
-        e.setTextSize(17);
+        e.setTextSize(16);
         e.setSingleLine(true);
         e.setPadding(dp(14), dp(10), dp(14), dp(10));
         e.setBackground(bg(Color.WHITE, 16));
 
         LinearLayout.LayoutParams p =
-                new LinearLayout.LayoutParams(-1, dp(62));
+                new LinearLayout.LayoutParams(-1, dp(58));
+
         p.setMargins(0, dp(6), 0, dp(6));
         e.setLayoutParams(p);
 
@@ -94,6 +99,7 @@ public class RegistrationActivity extends Activity {
 
     private Button button(String s, int color) {
         Button b = new Button(this);
+
         b.setText(s);
         b.setAllCaps(false);
         b.setTextColor(Color.WHITE);
@@ -101,7 +107,8 @@ public class RegistrationActivity extends Activity {
         b.setBackground(bg(color, 18));
 
         LinearLayout.LayoutParams p =
-                new LinearLayout.LayoutParams(-1, dp(60));
+                new LinearLayout.LayoutParams(-1, dp(58));
+
         p.setMargins(0, dp(6), 0, dp(6));
         b.setLayoutParams(p);
 
@@ -111,94 +118,108 @@ public class RegistrationActivity extends Activity {
     private void render() {
         ScrollView sc = new ScrollView(this);
         sc.setFillViewport(true);
-        sc.setBackgroundColor(Color.rgb(244, 249, 253));
+        sc.setBackgroundColor(Color.rgb(244,249,253));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(28), dp(18), dp(30));
+        root.setPadding(
+                dp(18),
+                dp(30),
+                dp(18),
+                dp(30)
+        );
 
         TextView title = text(
                 "فعال‌سازی Care AI",
                 28,
-                Color.rgb(22, 62, 101),
+                Color.rgb(22,62,101),
                 true
         );
+
         title.setGravity(Gravity.CENTER);
         root.addView(title);
 
         TextView desc = text(
-                "شناسه گوشی به‌صورت خودکار خوانده می‌شود. "
-                        + "هر شماره فقط روی یک گوشی فعال می‌شود و "
-                        + "فعال‌سازی تست مدیر ۳۰ روز اعتبار دارد.",
+                "فعال‌سازی به‌صورت خودکار با شناسه واقعی همین گوشی انجام می‌شود. "
+                        + "کاربر فقط شماره موبایل و کد پیامکی را وارد می‌کند. "
+                        + "پس از تأیید پیامکی، مدیر حساب را برای یک ماه فعال می‌کند.",
                 14,
-                Color.rgb(91, 111, 134),
+                Color.rgb(91,111,134),
                 false
         );
+
         desc.setGravity(Gravity.CENTER);
         desc.setPadding(
-                dp(8), dp(10), dp(8), dp(16)
+                dp(8),
+                dp(10),
+                dp(8),
+                dp(18)
         );
+
         root.addView(desc);
 
         LinearLayout deviceCard = new LinearLayout(this);
         deviceCard.setOrientation(LinearLayout.VERTICAL);
         deviceCard.setPadding(
-                dp(14), dp(12), dp(14), dp(12)
+                dp(14),
+                dp(12),
+                dp(14),
+                dp(12)
         );
         deviceCard.setBackground(
-                bg(Color.rgb(232, 243, 254), 16)
+                bg(Color.rgb(233,246,255),16)
         );
 
         TextView deviceLabel = text(
                 "شناسه این گوشی",
                 13,
-                Color.rgb(65, 93, 119),
+                Color.rgb(71,104,132),
                 true
         );
 
-        TextView deviceValue = text(
+        deviceIdView = text(
                 AuthManager.deviceId(this),
-                16,
-                Color.rgb(22, 62, 101),
+                17,
+                Color.rgb(22,62,101),
                 true
         );
-        deviceValue.setTextDirection(
+
+        deviceIdView.setTextDirection(
                 View.TEXT_DIRECTION_LTR
         );
-        deviceValue.setGravity(Gravity.LEFT);
-        deviceValue.setPadding(0, dp(5), 0, 0);
 
         deviceCard.addView(deviceLabel);
-        deviceCard.addView(deviceValue);
+        deviceCard.addView(deviceIdView);
 
-        LinearLayout.LayoutParams dcp =
-                new LinearLayout.LayoutParams(-1, -2);
-        dcp.setMargins(0, 0, 0, dp(14));
-        root.addView(deviceCard, dcp);
+        LinearLayout.LayoutParams deviceParams =
+                new LinearLayout.LayoutParams(-1,-2);
+
+        deviceParams.setMargins(
+                0,
+                0,
+                0,
+                dp(12)
+        );
+
+        root.addView(deviceCard,deviceParams);
 
         phone = input("شماره موبایل");
-        phone.setInputType(
-                InputType.TYPE_CLASS_PHONE
-        );
-
         otp = input("کد تایید ۶ رقمی");
-        otp.setInputType(
-                InputType.TYPE_CLASS_NUMBER
-        );
         otp.setVisibility(View.GONE);
 
         root.addView(phone);
         root.addView(otp);
 
-        send = button(
+        Button send = button(
                 "ارسال کد تایید",
-                Color.rgb(18, 185, 170)
+                Color.rgb(18,185,170)
         );
 
         verify = button(
-                "تایید کد و ثبت این گوشی",
-                Color.rgb(29, 120, 220)
+                "ثبت کد و ارسال برای فعال‌سازی",
+                Color.rgb(29,120,220)
         );
+
         verify.setVisibility(View.GONE);
 
         root.addView(send);
@@ -207,28 +228,178 @@ public class RegistrationActivity extends Activity {
         status = text(
                 "",
                 14,
-                Color.rgb(52, 101, 128),
+                Color.rgb(52,101,128),
                 false
         );
+
         status.setGravity(Gravity.CENTER);
         status.setPadding(
-                dp(10), dp(14), dp(10), dp(14)
+                dp(10),
+                dp(14),
+                dp(10),
+                dp(14)
         );
+
         root.addView(status);
 
         refresh = button(
                 "بررسی وضعیت فعال‌سازی",
-                Color.rgb(116, 83, 207)
+                Color.rgb(116,83,207)
         );
+
         refresh.setVisibility(
                 AuthManager.hasToken(this)
                         ? View.VISIBLE
                         : View.GONE
         );
+
         root.addView(refresh);
 
-        send.setOnClickListener(v -> requestOtp());
-        verify.setOnClickListener(v -> verifyOtp());
+        send.setOnClickListener(v -> {
+            String p =
+                    phone.getText()
+                            .toString()
+                            .trim();
+
+            if (p.isEmpty()) {
+                Toast.makeText(
+                        this,
+                        "شماره موبایل را وارد کنید",
+                        Toast.LENGTH_LONG
+                ).show();
+                return;
+            }
+
+            String deviceId =
+                    AuthManager.deviceId(this);
+
+            if ("unknown-device".equals(deviceId)) {
+                status.setText(
+                        "شناسه گوشی قابل خواندن نیست. "
+                                + "گوشی را یک‌بار راه‌اندازی مجدد کنید."
+                );
+                return;
+            }
+
+            status.setText(
+                    "در حال ارسال کد..."
+            );
+
+            AuthManager.requestOtp(
+                    this,
+                    p,
+                    (result,error) ->
+                            runOnUiThread(() -> {
+                                if (error != null
+                                        || result == null) {
+
+                                    status.setText(
+                                            "ارتباط با سرور انجام نشد."
+                                    );
+                                    return;
+                                }
+
+                                if (!result.optBoolean("ok")) {
+                                    status.setText(
+                                            result.optString(
+                                                    "message",
+                                                    "ثبت این حساب ممکن نیست: "
+                                                            + result.optString("code")
+                                            )
+                                    );
+                                    return;
+                                }
+
+                                otp.setVisibility(View.VISIBLE);
+                                verify.setVisibility(View.VISIBLE);
+
+                                status.setText(
+                                        "کد تایید ارسال شد. "
+                                                + "شناسه دستگاه به‌صورت خودکار ثبت می‌شود."
+                                );
+                            })
+            );
+        });
+
+        verify.setOnClickListener(v -> {
+            String p =
+                    phone.getText()
+                            .toString()
+                            .trim();
+
+            String code =
+                    otp.getText()
+                            .toString()
+                            .trim();
+
+            if (p.isEmpty() || code.isEmpty()) {
+                Toast.makeText(
+                        this,
+                        "شماره و کد تایید را وارد کنید",
+                        Toast.LENGTH_LONG
+                ).show();
+                return;
+            }
+
+            status.setText(
+                    "در حال تایید..."
+            );
+
+            AuthManager.verifyOtp(
+                    this,
+                    p,
+                    code,
+                    (result,error) ->
+                            runOnUiThread(() -> {
+                                if (error != null
+                                        || result == null) {
+
+                                    status.setText(
+                                            "ارتباط با سرور انجام نشد."
+                                    );
+                                    return;
+                                }
+
+                                if (!result.optBoolean("ok")) {
+                                    status.setText(
+                                            result.optString(
+                                                    "message",
+                                                    "کد تایید صحیح نیست."
+                                            )
+                                    );
+                                    return;
+                                }
+
+                                refresh.setVisibility(View.VISIBLE);
+
+                                if (result.optBoolean("active")) {
+                                    showActivationSuccess(result);
+                                    handler.postDelayed(
+                                            this::openMain,
+                                            900L
+                                    );
+                                    return;
+                                }
+
+                                showPending(
+                                        result.optString(
+                                                "message",
+                                                "ثبت‌نام انجام شد؛ "
+                                                        + "منتظر فعال‌سازی مدیر باشید."
+                                        )
+                                );
+
+                                if (!"ACTIVATION_EXPIRED".equals(
+                                        result.optString(
+                                                "activation_code",
+                                                ""
+                                        ))) {
+                                    startPolling();
+                                }
+                            })
+            );
+        });
+
         refresh.setOnClickListener(
                 v -> checkActivation(false)
         );
@@ -237,122 +408,51 @@ public class RegistrationActivity extends Activity {
         setContentView(sc);
     }
 
-    private void requestOtp() {
-        String p = phone.getText().toString().trim();
+    private void showActivationSuccess(
+            JSONObject result) {
 
-        if (p.isEmpty()) {
-            Toast.makeText(
-                    this,
-                    "شماره موبایل را وارد کنید",
-                    Toast.LENGTH_LONG
-            ).show();
-            return;
-        }
+        String mode =
+                result.optString(
+                        "activation_mode",
+                        "active"
+                );
 
-        send.setEnabled(false);
-        status.setText("در حال ارسال کد تایید...");
+        long expiresAt =
+                result.optLong(
+                        "expires_at",
+                        0L
+                );
 
-        AuthManager.requestOtp(
-                this,
-                p,
-                (result, error) ->
-                        runOnUiThread(() -> {
-                            send.setEnabled(true);
+        String modeFa =
+                "test".equals(mode)
+                        ? "حالت تست"
+                        : "فعال";
 
-                            if (error != null || result == null) {
-                                status.setText(
-                                        "ارتباط با سرور انجام نشد."
-                                );
-                                return;
-                            }
+        String expiry =
+                formatExpiry(expiresAt);
 
-                            if (!result.optBoolean("ok")) {
-                                status.setText(
-                                        result.optString(
-                                                "message",
-                                                "ثبت این گوشی ممکن نیست: "
-                                                        + result.optString("code")
-                                        )
-                                );
-                                return;
-                            }
-
-                            otp.setVisibility(View.VISIBLE);
-                            verify.setVisibility(View.VISIBLE);
-
-                            status.setText(
-                                    "کد تایید ارسال شد. "
-                                            + "شناسه گوشی به‌صورت خودکار ثبت می‌شود."
-                            );
-                        })
+        status.setText(
+                "حساب " + modeFa
+                        + " شد"
+                        + (expiry.isEmpty()
+                        ? ""
+                        : " • اعتبار تا " + expiry)
         );
     }
 
-    private void verifyOtp() {
-        String p = phone.getText().toString().trim();
-        String code = otp.getText().toString().trim();
+    private String formatExpiry(long seconds) {
+        if (seconds <= 0L) return "";
 
-        if (p.isEmpty() || code.isEmpty()) {
-            Toast.makeText(
-                    this,
-                    "شماره موبایل و کد تایید را وارد کنید",
-                    Toast.LENGTH_LONG
-            ).show();
-            return;
+        try {
+            return new SimpleDateFormat(
+                    "yyyy/MM/dd HH:mm",
+                    Locale.US
+            ).format(
+                    new Date(seconds * 1000L)
+            );
+        } catch (Exception e) {
+            return "";
         }
-
-        verify.setEnabled(false);
-        status.setText("در حال تایید کد و ثبت گوشی...");
-
-        AuthManager.verifyOtp(
-                this,
-                p,
-                code,
-                (result, error) ->
-                        runOnUiThread(() -> {
-                            verify.setEnabled(true);
-
-                            if (error != null || result == null) {
-                                status.setText(
-                                        "ارتباط با سرور انجام نشد."
-                                );
-                                return;
-                            }
-
-                            if (!result.optBoolean("ok")) {
-                                status.setText(
-                                        result.optString(
-                                                "message",
-                                                "کد تایید صحیح نیست."
-                                        )
-                                );
-                                return;
-                            }
-
-                            refresh.setVisibility(View.VISIBLE);
-
-                            if (result.optBoolean("active")) {
-                                status.setText(
-                                        result.optString(
-                                                "message",
-                                                "حساب فعال است."
-                                        )
-                                );
-                                openMain();
-                                return;
-                            }
-
-                            showPending(
-                                    result.optString(
-                                            "message",
-                                            "ثبت گوشی انجام شد؛ "
-                                                    + "منتظر فعال‌سازی مدیر باشید."
-                                    )
-                            );
-
-                            startPolling();
-                        })
-        );
     }
 
     private void showPending(String message) {
@@ -362,20 +462,13 @@ public class RegistrationActivity extends Activity {
     }
 
     private void checkActivation(boolean auto) {
-        if (!AuthManager.hasToken(this)) {
-            if (!auto) {
-                status.setText(
-                        "ابتدا شماره موبایل را با کد پیامکی تایید کنید."
-                );
-            }
-            return;
-        }
-
         AuthManager.checkStatus(
                 this,
-                (result, error) ->
+                (result,error) ->
                         runOnUiThread(() -> {
-                            if (error != null || result == null) {
+                            if (error != null
+                                    || result == null) {
+
                                 if (!auto) {
                                     status.setText(
                                             "سرور در دسترس نیست."
@@ -395,34 +488,33 @@ public class RegistrationActivity extends Activity {
                             }
 
                             if (result.optBoolean("active")) {
-                                int days = result.optInt(
-                                        "remaining_days",
-                                        AuthManager.remainingDays(this)
-                                );
+                                showActivationSuccess(result);
 
-                                status.setText(
-                                        "حساب فعال است • "
-                                                + days
-                                                + " روز از اعتبار تست باقی مانده"
+                                handler.postDelayed(
+                                        this::openMain,
+                                        650L
                                 );
-
-                                openMain();
                                 return;
                             }
 
-                            String message = result.optString(
-                                    "message",
-                                    result.optBoolean("expired")
-                                            ? "اعتبار ۳۰ روزه تمام شده است. "
-                                                + "مدیر باید حساب را تمدید کند."
-                                            : "حساب هنوز توسط مدیر فعال نشده است."
+                            String activationCode =
+                                    result.optString(
+                                            "activation_code",
+                                            ""
+                                    );
+
+                            status.setText(
+                                    result.optString(
+                                            "message",
+                                            "حساب هنوز توسط مدیر فعال نشده است."
+                                    )
                             );
 
-                            status.setText(message);
-
-                            // چه در انتظار تایید و چه منقضی،
-                            // با فعال/تمدید مدیر خودکار وارد برنامه می‌شود.
-                            startPolling();
+                            if (!"ACTIVATION_EXPIRED".equals(
+                                    activationCode
+                            )) {
+                                startPolling();
+                            }
                         })
         );
     }
@@ -440,54 +532,61 @@ public class RegistrationActivity extends Activity {
 
                         AuthManager.checkStatus(
                                 RegistrationActivity.this,
-                                (result, error) ->
+                                (result,error) ->
                                         runOnUiThread(() -> {
-                                            if (isFinishing()) return;
-
-                                            if (result != null
-                                                    && result.optBoolean("ok")
-                                                    && result.optBoolean("active")) {
-
-                                                status.setText(
-                                                        result.optString(
-                                                                "message",
-                                                                "حساب فعال شد."
-                                                        )
-                                                );
-                                                openMain();
-                                                return;
-                                            }
-
                                             if (result != null
                                                     && result.optBoolean("ok")) {
+
+                                                if (result.optBoolean("active")) {
+                                                    polling = false;
+                                                    showActivationSuccess(result);
+                                                    handler.postDelayed(
+                                                            RegistrationActivity.this::openMain,
+                                                            500L
+                                                    );
+                                                    return;
+                                                }
+
+                                                String code =
+                                                        result.optString(
+                                                                "activation_code",
+                                                                ""
+                                                        );
+
                                                 status.setText(
                                                         result.optString(
                                                                 "message",
-                                                                "منتظر فعال‌سازی مدیر..."
+                                                                "منتظر فعال‌سازی مدیر باشید."
                                                         )
                                                 );
+
+                                                if ("ACTIVATION_EXPIRED".equals(code)) {
+                                                    polling = false;
+                                                    return;
+                                                }
                                             }
 
                                             handler.postDelayed(
                                                     this,
-                                                    8000L
+                                                    10000L
                                             );
                                         })
                         );
                     }
                 },
-                8000L
+                10000L
         );
     }
 
     private void openMain() {
         polling = false;
-        handler.removeCallbacksAndMessages(null);
 
-        Intent i = new Intent(
-                this,
-                MainActivity.class
-        );
+        Intent i =
+                new Intent(
+                        this,
+                        MainActivity.class
+                );
+
         i.addFlags(
                 Intent.FLAG_ACTIVITY_CLEAR_TOP
                         | Intent.FLAG_ACTIVITY_NEW_TASK
