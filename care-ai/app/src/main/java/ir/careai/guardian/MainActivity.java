@@ -866,6 +866,15 @@ public class MainActivity extends Activity {
         if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE)
                 != PackageManager.PERMISSION_GRANTED) return false;
 
+        if (checkSelfPermission(Manifest.permission.SEND_SMS)
+                != PackageManager.PERMISSION_GRANTED) return false;
+
+        if (checkSelfPermission(Manifest.permission.RECEIVE_SMS)
+                != PackageManager.PERMISSION_GRANTED) return false;
+
+        if (checkSelfPermission(Manifest.permission.READ_SMS)
+                != PackageManager.PERMISSION_GRANTED) return false;
+
         if (Build.VERSION.SDK_INT >= 33) {
             if (checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO)
                     != PackageManager.PERMISSION_GRANTED) return false;
