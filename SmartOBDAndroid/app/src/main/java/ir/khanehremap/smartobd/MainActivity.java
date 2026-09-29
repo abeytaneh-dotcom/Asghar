@@ -370,10 +370,12 @@ public class MainActivity extends Activity {
         float eyeX=0f, eyeY=0f, eyeTargetX=0f, eyeTargetY=0f, blink=0f;
         long nextLook=0, nextBlink=0, blinkStart=0;
         boolean blinking=false;
+        Bitmap carArtwork;
 
         ProView(Context c){
             super(c);
             setLayerType(View.LAYER_TYPE_SOFTWARE,null);
+            try{carArtwork=BitmapFactory.decodeResource(getResources(),R.drawable.living_206);}catch(Exception ignored){}
             nextLook=SystemClock.uptimeMillis()+900;
             nextBlink=SystemClock.uptimeMillis()+2200;
         }
@@ -505,94 +507,76 @@ public class MainActivity extends Activity {
 
         void drawLivingCar(Canvas c,float cx,float cy,float scale){
             c.save();c.translate(cx,cy);c.scale(scale,scale);
-            float bob=(float)Math.sin(SystemClock.uptimeMillis()/760.0)*1.6f;
+            float bob=(float)Math.sin(SystemClock.uptimeMillis()/820.0)*1.35f;
             c.translate(0,bob);
 
-            // shadow
-            p.reset();p.setAntiAlias(true);p.setColor(argb(130,0,0,0));
-            c.drawOval(new RectF(-154,92,154,132),p);
-
-            // optional open doors; architecture is ready for future commands.
-            if(doorsOpen){
-                p.setColor(rgb(7,98,214));
-                Path dl=new Path();dl.moveTo(-128,-22);dl.lineTo(-182,5);dl.lineTo(-175,82);dl.lineTo(-120,65);dl.close();c.drawPath(dl,p);
-                Path dr=new Path();dr.moveTo(128,-22);dr.lineTo(182,5);dr.lineTo(175,82);dr.lineTo(120,65);dr.close();c.drawPath(dr,p);
+            // Use the approved 206 artwork as the actual body. The character is no longer
+            // a simplified vector car; only living parts are animated on top of the artwork.
+            if(carArtwork!=null){
+                p.reset();p.setAntiAlias(true);p.setFilterBitmap(true);
+                Rect src=new Rect(0,0,carArtwork.getWidth(),carArtwork.getHeight());
+                RectF dst=new RectF(-174,-126,174,129);
+                c.drawBitmap(carArtwork,src,dst,p);
+            }else{
+                rr(c,-160,-95,160,115,40,rgb(7,101,210),0);
             }
 
-            // body
-            p.setStyle(Paint.Style.FILL);
-            LinearGradient bodyG=new LinearGradient(0,-92,0,92,rgb(38,158,255),rgb(0,78,190),Shader.TileMode.CLAMP);
-            p.setShader(bodyG);
-            Path body=new Path();
-            body.moveTo(-154,65);body.cubicTo(-154,9,-135,-38,-100,-62);
-            body.cubicTo(-77,-103,77,-103,100,-62);
-            body.cubicTo(135,-38,154,9,154,65);
-            body.quadTo(148,103,118,108);body.lineTo(-118,108);
-            body.quadTo(-148,103,-154,65);body.close();c.drawPath(body,p);p.setShader(null);
+            // Rebuild the windshield as one coherent living face so there is no frame swapping.
+            // This opaque glass layer hides the static eyes embedded in the artwork.
+            Path glass=new Path();
+            glass.moveTo(-100,-84);
+            glass.quadTo(-77,-119,-42,-126);
+            glass.quadTo(0,-135,42,-126);
+            glass.quadTo(77,-119,100,-84);
+            glass.lineTo(78,-23);
+            glass.quadTo(0,-14,-78,-23);
+            glass.close();
+            p.reset();p.setAntiAlias(true);p.setStyle(Paint.Style.FILL);
+            LinearGradient wg=new LinearGradient(0,-132,0,-18,rgb(18,116,207),rgb(5,54,103),Shader.TileMode.CLAMP);
+            p.setShader(wg);c.drawPath(glass,p);p.setShader(null);
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(4);p.setColor(rgb(1,14,30));c.drawPath(glass,p);
 
-            // roof + windshield
-            p.setColor(rgb(1,39,82));
-            Path wind=new Path();wind.moveTo(-92,-57);wind.quadTo(-73,-94,-42,-104);wind.quadTo(0,-116,42,-104);
-            wind.quadTo(73,-94,92,-57);wind.lineTo(78,-10);wind.lineTo(-78,-10);wind.close();c.drawPath(wind,p);
+            // brows + eyes are native moving layers and remain visually inside the windshield.
+            line(c,-72,-83,-22,-94,rgb(0,9,18),7);
+            line(c,72,-83,22,-94,rgb(0,9,18),7);
+            drawEye(c,-40,-59);
+            drawEye(c,40,-59);
 
-            p.setColor(rgb(13,93,150));
-            Path glass=new Path();glass.moveTo(-82,-55);glass.quadTo(-64,-85,-38,-94);glass.quadTo(0,-104,38,-94);
-            glass.quadTo(64,-85,82,-55);glass.lineTo(70,-18);glass.lineTo(-70,-18);glass.close();c.drawPath(glass,p);
-
-            // eyebrows integrated into glass
-            line(c,-67,-67,-20,-78,rgb(0,8,16),7);
-            line(c,67,-67,20,-78,rgb(0,8,16),7);
-
-            // eyes live inside windshield, not image swapping
-            drawEye(c,-38,-50);
-            drawEye(c,38,-50);
-
-            // wipers future-ready
+            // Future live features already map to BLE states and animate over the real artwork.
+            if(headlightsOn){
+                p.reset();p.setAntiAlias(true);p.setStyle(Paint.Style.FILL);
+                p.setColor(argb(120,255,244,185));p.setShadowLayer(28,0,0,rgb(255,239,170));
+                c.drawOval(new RectF(-145,7,-93,36),p);
+                c.drawOval(new RectF(93,7,145,36),p);p.clearShadowLayer();
+            }
+            if(leftSignal||rightSignal){
+                long phase=(SystemClock.uptimeMillis()/420)%2;
+                if(phase==0){
+                    if(leftSignal){p.setColor(AMBER);p.setShadowLayer(18,0,0,AMBER);c.drawCircle(-128,24,8,p);p.clearShadowLayer();}
+                    if(rightSignal){p.setColor(AMBER);p.setShadowLayer(18,0,0,AMBER);c.drawCircle(128,24,8,p);p.clearShadowLayer();}
+                }
+            }
             if(wipersOn){
-                float a=(float)Math.sin(SystemClock.uptimeMillis()/180.0)*.65f;
-                float x=(float)(Math.sin(a)*54), y=(float)(-16-Math.cos(a)*46);
-                line(c,-4,-11,x-4,y,rgb(12,18,24),5);
-                line(c,9,-11,-x+9,y,rgb(12,18,24),5);
+                float a=(float)Math.sin(SystemClock.uptimeMillis()/175.0)*.58f;
+                float x=(float)(Math.sin(a)*62), y=(float)(-28-Math.cos(a)*55);
+                line(c,-5,-23,x-5,y,rgb(8,12,18),5);
+                line(c,8,-23,-x+8,y,rgb(8,12,18),5);
             }
 
-            // hood; moves if HOOD:OPEN arrives in future firmware
-            p.setColor(rgb(17,124,238));
-            Path hood=new Path();
-            float hoodLift=hoodOpen?-26:0;
-            hood.moveTo(-119,-7+hoodLift);hood.lineTo(119,-7+hoodLift);hood.lineTo(139,51);hood.lineTo(-139,51);hood.close();c.drawPath(hood,p);
-            line(c,-116,-5+hoodLift,116,-5+hoodLift,rgb(70,190,255),2);
-
-            // headlights
-            drawHeadlight(c,-116,44,headlightsOn,leftSignal);
-            drawHeadlight(c,116,44,headlightsOn,rightSignal);
-
-            // grille + lion badge
-            rr(c,-66,48,66,69,9,rgb(0,13,24),0);
-            rr(c,-17,39,17,70,6,rgb(4,14,25),rgb(215,230,244));
-            txt(c,"♌",0,61,20,WHITE,Paint.Align.CENTER,true);
-
-            // bumper / smile
-            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(8);p.setStrokeCap(Paint.Cap.ROUND);p.setColor(rgb(0,15,26));
-            c.drawArc(new RectF(-72,57,72,104),8,164,false,p);
-            p.setStrokeWidth(4);p.setColor(rgb(244,248,250));c.drawArc(new RectF(-52,63,52,90),18,144,false,p);
-
-            // tongue ONLY on coolant warning
+            // Tongue exists only for a genuine low-coolant alarm.
             if(lowCoolant){
-                p.setStyle(Paint.Style.FILL);p.setColor(rgb(255,82,95));
-                Path tongue=new Path();tongue.moveTo(-15,82);tongue.cubicTo(-11,112,12,116,17,87);
-                tongue.cubicTo(8,92,-2,91,-15,82);tongue.close();c.drawPath(tongue,p);
-                line(c,2,91,5,106,rgb(194,47,62),2.2f);
+                p.reset();p.setAntiAlias(true);p.setStyle(Paint.Style.FILL);p.setColor(rgb(255,78,92));
+                Path tongue=new Path();
+                tongue.moveTo(-15,74);tongue.cubicTo(-12,105,12,108,18,78);
+                tongue.cubicTo(8,84,-3,83,-15,74);tongue.close();c.drawPath(tongue,p);
+                line(c,2,87,5,101,rgb(188,42,57),2.2f);
+
+                rr(c,68,-129,148,-86,22,rgb(255,249,245),rgb(255,79,88));
+                txt(c,"تشنمه",108,-101,18,rgb(145,13,27),Paint.Align.CENTER,true);
+                circle(c,140,-76,4,rgb(64,190,255));
+                circle(c,149,-68,3,rgb(64,190,255));
             }
 
-            // plate
-            rr(c,-45,97,45,119,5,rgb(5,13,24),rgb(130,155,176));
-            txt(c,"206",0,114,18,WHITE,Paint.Align.CENTER,true);
-
-            if(lowCoolant){
-                rr(c,69,-118,147,-77,20,rgb(255,248,244),rgb(255,84,90));
-                txt(c,"تشنمه",108,-91,17,rgb(138,11,28),Paint.Align.CENTER,true);
-                circle(c,139,-66,4,rgb(69,190,255));circle(c,148,-58,3,rgb(69,190,255));
-            }
             c.restore();
         }
 
