@@ -36,86 +36,42 @@ if (isset($_GET['logout'])) {
 
 $logged = !empty($_SESSION['careai_admin']);
 
-if ($logged && isset($_POST['patient_id_action'])) {
-    $action = (string)($_POST['patient_id_action'] ?? '');
-    $id = (int)($_POST['registry_id'] ?? 0);
-
-    if ($action === 'add') {
-        $newId = trim((string)($_POST['new_patient_id'] ?? ''));
-        $note = trim((string)($_POST['new_patient_note'] ?? ''));
-        if ($newId !== '') {
-            try {
-                $db->prepare('INSERT INTO patient_ids(patient_id,enabled,note,created_at,updated_at)
-                    VALUES(?,1,?,?,?)')->execute([$newId,$note,now_iso(),now_iso()]);
-            } catch (PDOException $e) {
-                $flash = 'این Patient ID قبلاً ثبت شده است.';
-            }
-        }
-    }
-
-    if ($action === 'toggle') {
-        $db->prepare('UPDATE patient_ids SET enabled=CASE enabled WHEN 1 THEN 0 ELSE 1 END,updated_at=? WHERE id=?')
-            ->execute([now_iso(),$id]);
-    }
-
-    if ($action === 'edit') {
-        $newId = trim((string)($_POST['patient_id'] ?? ''));
-        $note = trim((string)($_POST['note'] ?? ''));
-        $old = $db->prepare('SELECT patient_id FROM patient_ids WHERE id=?');
-        $old->execute([$id]);
-        $oldId = (string)$old->fetchColumn();
-        try {
-            $db->beginTransaction();
-            $db->prepare('UPDATE patient_ids SET patient_id=?,note=?,updated_at=? WHERE id=?')
-                ->execute([$newId,$note,now_iso(),$id]);
-            if ($oldId !== '' && $oldId !== $newId) {
-                $db->prepare('UPDATE accounts SET patient_id=?,updated_at=? WHERE patient_id=?')
-                    ->execute([$newId,now_iso(),$oldId]);
-            }
-            $db->commit();
-        } catch (Throwable $e) {
-            if ($db->inTransaction()) $db->rollBack();
-            $flash = 'تغییر Patient ID انجام نشد؛ احتمالاً ID تکراری است.';
-        }
-    }
-
-    if ($action === 'delete') {
-        $q = $db->prepare('SELECT patient_id FROM patient_ids WHERE id=?');
-        $q->execute([$id]);
-        $pid = (string)$q->fetchColumn();
-        if ($pid !== '') {
-            $db->prepare('UPDATE accounts SET active=0,updated_at=? WHERE patient_id=?')
-                ->execute([now_iso(),$pid]);
-        }
-        $db->prepare('DELETE FROM patient_ids WHERE id=?')->execute([$id]);
-    }
-}
-
 if ($logged && isset($_POST['account_action'])) {
     $id = (int)($_POST['id'] ?? 0);
     $action = (string)($_POST['account_action'] ?? '');
 
-    if ($action === 'activate' || $action === 'renew') {
+    if (in_array($action, ['activate','test','renew_active','renew_test'], true)) {
         $now = time();
-        $until = $now + (30 * 86400);
+        $until = strtotime('+1 month', $now);
+
+        $mode = in_array($action, ['test','renew_test'], true)
+            ? 'test'
+            : 'active';
 
         $db->prepare("UPDATE accounts
             SET active=1,
-                activation_mode='trial',
+                activation_mode=?,
                 activated_at=?,
                 expires_at=?,
                 updated_at=?
             WHERE id=?")
-            ->execute([$now,$until,now_iso(),$id]);
+            ->execute([$mode,$now,$until,now_iso(),$id]);
 
-        $flash = $action === 'renew'
-            ? 'اعتبار حساب ۳۰ روز دیگر تمدید شد.'
-            : 'حساب در حالت تست ۳۰ روزه فعال شد.';
+        $flash = $mode === 'test'
+            ? 'حساب در حالت تست برای یک ماه فعال شد.'
+            : 'حساب برای یک ماه فعال شد.';
     }
 
     if ($action === 'deactivate') {
-        $db->prepare('UPDATE accounts SET active=0,updated_at=? WHERE id=?')
+        $db->prepare("UPDATE accounts
+            SET active=0,
+                activation_mode='inactive',
+                activated_at=0,
+                expires_at=0,
+                updated_at=?
+            WHERE id=?")
             ->execute([now_iso(),$id]);
+
         $flash = 'حساب غیرفعال شد.';
     }
 
@@ -124,13 +80,14 @@ if ($logged && isset($_POST['account_action'])) {
             SET device_id='UNBOUND:'||id||':'||strftime('%s','now'),
                 auth_token=NULL,
                 active=0,
+                activation_mode='inactive',
                 activated_at=0,
                 expires_at=0,
                 updated_at=?
             WHERE id=?")
             ->execute([now_iso(),$id]);
 
-        $flash = 'اتصال حساب به گوشی آزاد شد. کاربر می‌تواند با همان شماره روی یک گوشی جدید ثبت شود.';
+        $flash = 'اتصال حساب به گوشی آزاد شد. کاربر می‌تواند با همان شماره روی گوشی جدید ثبت شود.';
     }
 
     if ($action === 'delete') {
@@ -215,37 +172,50 @@ table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px so
 <div class="card">
 <h3>فعال‌سازی بر اساس شناسه خود گوشی</h3>
 <p style="line-height:2;color:#64788c">
-از این نسخه کاربر دیگر Patient ID را دستی وارد نمی‌کند. اپ شناسه دستگاه را از خود Android می‌خواند
-و حساب را با <b>شماره موبایل + Device ID</b> قفل می‌کند.
-هر فعال‌سازی در حالت تست برای <b>۳۰ روز</b> معتبر است و پس از آن به‌صورت خودکار منقضی می‌شود.
+کاربر دیگر هیچ Patient ID را دستی وارد نمی‌کند. اپ شناسه دستگاه را مستقیماً از Android می‌خواند
+و حساب با <b>شماره موبایل + Device ID</b> قفل می‌شود.
+مدیر می‌تواند حساب را در حالت <b>فعال</b> یا <b>تست</b> برای یک ماه فعال کند.
+پس از پایان تاریخ، اپ به‌صورت خودکار خطای انقضای فعال‌سازی می‌دهد.
 </p>
 </div>
 
-<div class="card"><h3>حساب‌ها و فعال‌سازی ۳۰ روزه</h3>
+<div class="card"><h3>حساب‌ها و فعال‌سازی یک‌ماهه</h3>
+<div style="overflow-x:auto">
 <table>
 <tr>
 <th>موبایل</th>
-<th>شناسه حساب</th>
 <th>Device ID گوشی</th>
+<th>نوع</th>
 <th>وضعیت</th>
-<th>اعتبار</th>
+<th>اعتبار تا</th>
 <th>مدیریت</th>
 </tr>
 <?php foreach($db->query('SELECT * FROM accounts ORDER BY id DESC') as $a):
-    $state = account_activation_state($a);
+    $state = expire_account_if_needed($db,$a);
     $isActive = $state['active'];
     $isExpired = $state['expired'];
+    $mode = $state['mode'];
     $expiresText = (int)$state['expires_at'] > 0
         ? date('Y-m-d H:i',(int)$state['expires_at'])
         : '—';
 ?>
 <tr>
 <td><?=h($a['phone'])?></td>
-<td><small><?=h($a['patient_id'])?></small></td>
-<td><small style="direction:ltr;display:inline-block"><?=h($a['device_id'])?></small></td>
+<td><small style="direction:ltr;display:inline-block;word-break:break-all"><?=h($a['device_id'])?></small></td>
+<td>
+<?php if($isActive && $mode==='test'):?>
+<span class="badge">تست</span>
+<?php elseif($isActive):?>
+<span class="badge">فعال</span>
+<?php elseif($isExpired):?>
+<span class="badge">منقضی</span>
+<?php else:?>
+<span class="badge">—</span>
+<?php endif;?>
+</td>
 <td class="<?=$isActive?'on':'off'?>">
 <?php if($isActive):?>
-تست فعال
+فعال
 <?php elseif($isExpired):?>
 منقضی
 <?php else:?>
@@ -254,7 +224,8 @@ table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px so
 </td>
 <td>
 <?php if($isActive):?>
-<?=h((string)$state['remaining_days'])?> روز باقی‌مانده<br><small><?=h($expiresText)?></small>
+<?=h((string)$state['remaining_days'])?> روز باقی‌مانده<br>
+<small><?=h($expiresText)?></small>
 <?php elseif($isExpired):?>
 پایان یافته<br><small><?=h($expiresText)?></small>
 <?php else:?>
@@ -262,14 +233,17 @@ table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px so
 <?php endif;?>
 </td>
 <td>
-<form method="post" style="display:flex;gap:4px;flex-wrap:wrap">
+<form method="post" style="display:flex;gap:5px;flex-wrap:wrap">
 <input type="hidden" name="id" value="<?=$a['id']?>">
 
 <?php if($isActive):?>
-<button class="ok" name="account_action" value="renew">تمدید ۳۰ روز</button>
+<button class="ok" name="account_action" value="<?=$mode==='test'?'renew_test':'renew_active'?>">
+تمدید یک ماه
+</button>
 <button class="muted" name="account_action" value="deactivate">غیرفعال</button>
 <?php else:?>
-<button class="ok" name="account_action" value="activate">فعال‌سازی تست ۳۰ روزه</button>
+<button class="ok" name="account_action" value="activate">فعال ۱ ماه</button>
+<button name="account_action" value="test">تست ۱ ماه</button>
 <?php endif;?>
 
 <button name="account_action" value="reset_device">آزادسازی گوشی</button>
@@ -279,6 +253,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px so
 </tr>
 <?php endforeach;?>
 </table>
+</div>
 </div>
 
 <div class="card"><h3>تنظیمات پیامک OTP — IranPayamak / FarazSMS</h3><form method="post">
