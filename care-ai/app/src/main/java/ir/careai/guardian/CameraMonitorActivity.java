@@ -614,7 +614,11 @@ public class CameraMonitorActivity extends Activity
     }
 
     private void showPrompt(int index) {
-        if (calibrationStage != 2 || mediaMode || sleepMode) return;
+        if (calibrationStage != 2
+                || mediaMode
+                || sleepMode
+                || smsComposerMode
+                || incomingSmsMode) return;
 
         List<CommandStore.Command> commands = currentCommands();
         if (commands.isEmpty()) {
@@ -1349,6 +1353,11 @@ public class CameraMonitorActivity extends Activity
 
         handler.removeCallbacks(promptTimeout);
         handler.removeCallbacks(countdown);
+        handler.removeCallbacks(smsSymbolLoop);
+
+        if (smsOverlay != null && (smsComposerMode || incomingSmsMode)) {
+            smsOverlay.setVisibility(View.GONE);
+        }
 
         stopMediaSilently();
         stopCommandVoice();
@@ -1370,6 +1379,27 @@ public class CameraMonitorActivity extends Activity
         wakeOpenStartedAt = 0L;
         promptText.setBackgroundColor(0xFF1A5688);
         faceState.setText("بیداری تشخیص داده شد");
+
+        if (smsComposerMode) {
+            if (smsOverlay != null) smsOverlay.setVisibility(View.VISIBLE);
+            updateSmsComposerUi();
+            speak("بیداری تشخیص داده شد. نوشتن پیام ادامه دارد.");
+            handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
+            return;
+        }
+
+        if (incomingSmsMode) {
+            long elapsed = System.currentTimeMillis() - incomingSmsShownAt;
+            if (elapsed < INCOMING_SMS_VISIBLE_MS) {
+                if (smsOverlay != null) smsOverlay.setVisibility(View.VISIBLE);
+                speak("بیداری تشخیص داده شد. پیام جدید هنوز منتظر پاسخ است.");
+                return;
+            } else {
+                dismissIncomingSms();
+                return;
+            }
+        }
+
         speak("بیداری تشخیص داده شد. مراقبت ادامه دارد.");
         handler.postDelayed(() -> showPrompt(0), 1800L);
     }
@@ -1633,8 +1663,11 @@ public class CameraMonitorActivity extends Activity
             return;
         }
 
-        if (smsNumberBuffer.length() < 4) {
+        if (smsNumberBuffer.length() < 10) {
             speak("شماره گیرنده هنوز کامل نیست.");
+            smsHintText.setText(
+                    "شماره حداقل باید ۱۰ رقم باشد • نگاه چپ = ادامه ورود عدد"
+            );
             return;
         }
 
