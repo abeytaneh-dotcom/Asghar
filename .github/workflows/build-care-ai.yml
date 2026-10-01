@@ -1,4 +1,4 @@
-name: Build Care AI V17 Slow Eye Keyboard
+name: Build Care AI V18 High Eye Sensitivity
 
 on:
   push:
@@ -84,7 +84,7 @@ jobs:
             "version_code": $VERSION_CODE,
             "version_name": "$VERSION_NAME",
             "apk_url": "https://raw.githubusercontent.com/abeytaneh-dotcom/Asghar/care-ai-eye-m2/dist/CareAI-latest.apk",
-            "notes": "کیبورد چشمی کندتر و ایمن‌تر، جلوگیری از ثبت خودکار حروف، تایید متن قبل از ورود شماره و تایید نهایی قبل از ارسال پیام."
+            "notes": "حساسیت بیشتر مردمک و پلک، نرخ تحلیل سریع‌تر، دوپلک قابل‌اعتمادتر، تایید با پلک بلند و جلوگیری از اجرای دستور بعدی هنگام پاسخ بیمار."
           }
           EOF
 
@@ -100,6 +100,6 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CareAI-V17-Slow-Eye-Keyboard
+          name: CareAI-V18-High-Eye-Sensitivity
           path: care-ai/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
