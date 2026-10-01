@@ -19,8 +19,8 @@ android {
         applicationId "ir.careai.guardian"
         minSdk 26
         targetSdk 35
-        versionCode 16
-        versionName "16.0-EYE-SMS-REELS"
+        versionCode 17
+        versionName "17.0-SLOW-EYE-KEYBOARD"
     }
 
     buildFeatures {
