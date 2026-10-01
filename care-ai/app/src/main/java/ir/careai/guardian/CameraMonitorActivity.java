@@ -79,8 +79,10 @@ public class CameraMonitorActivity extends Activity
     private static final long DOUBLE_BLINK_WINDOW_MS = 1800L;
     private static final long SLEEP_HOLD_MS = 6000L;
     private static final long WAKE_OPEN_MS = 1800L;
-    private static final long SMS_SYMBOL_INTERVAL_MS = 2200L;
-    private static final long SMS_GAZE_HOLD_MS = 420L;
+    private static final long SMS_SYMBOL_INTERVAL_MS = 5000L;
+    private static final long SMS_GAZE_HOLD_MS = 1200L;
+    private static final long SMS_NEUTRAL_REARM_MS = 900L;
+    private static final long SMS_AFTER_SYMBOL_GUARD_MS = 1400L;
     private static final long INCOMING_SMS_VISIBLE_MS = 60000L;
 
     private static final String[] SMS_LETTERS = new String[]{
@@ -135,6 +137,10 @@ public class CameraMonitorActivity extends Activity
     private boolean smsReplyMode = false;
     private boolean smsLeftLatched = false;
     private boolean smsRightLatched = false;
+    private boolean smsInputArmed = false;
+    private long smsNeutralStartedAt = 0L;
+    private long smsGuardUntil = 0L;
+    // 0=text scan, 1=text confirmation, 2=number scan, 3=final send confirmation
     private int smsStage = 0;
     private int smsSymbolIndex = 0;
     private int smsReturnPromptIndex = -1;
@@ -201,11 +207,19 @@ public class CameraMonitorActivity extends Activity
         @Override
         public void run() {
             if (!smsComposerMode) return;
+            if (smsStage != 0 && smsStage != 2) return;
 
             String[] symbols = smsStage == 0 ? SMS_LETTERS : SMS_DIGITS;
             smsSymbolIndex = (smsSymbolIndex + 1) % symbols.length;
-            updateSmsComposerUi();
 
+            // بعد از تغییر هر نماد، انتخاب تا بازگشت نگاه به مرکز دوباره مسلح نمی‌شود.
+            smsInputArmed = false;
+            smsNeutralStartedAt = 0L;
+            smsGuardUntil = System.currentTimeMillis() + SMS_AFTER_SYMBOL_GUARD_MS;
+            leftGazeStartedAt = 0L;
+            rightGazeStartedAt = 0L;
+
+            updateSmsComposerUi();
             handler.postDelayed(this, SMS_SYMBOL_INTERVAL_MS);
         }
     };
@@ -1419,6 +1433,9 @@ public class CameraMonitorActivity extends Activity
         smsSymbolIndex = 0;
         smsLeftLatched = false;
         smsRightLatched = false;
+        smsInputArmed = false;
+        smsNeutralStartedAt = 0L;
+        smsGuardUntil = System.currentTimeMillis() + 1800L;
         smsTextBuffer.setLength(0);
         smsNumberBuffer.setLength(0);
         smsReturnPromptIndex = replyMode ? promptIndex : promptIndex + 1;
@@ -1444,13 +1461,46 @@ public class CameraMonitorActivity extends Activity
     private void updateSmsComposerUi() {
         if (!smsComposerMode) return;
 
+        if (smsStage == 1) {
+            smsStageText.setText("تأیید متن پیام");
+            smsTypedText.setText(
+                    smsTextBuffer.length() == 0
+                            ? "متن پیام خالی است"
+                            : smsTextBuffer.toString()
+            );
+            smsSymbolText.setText("متن کامل شد؟");
+            smsHintText.setText(
+                    "نگاه چپ و نگه‌داشتن = تأیید متن"
+                            + " • نگاه راست و نگه‌داشتن = ادامه نوشتن"
+            );
+            return;
+        }
+
+        if (smsStage == 3) {
+            String targetNumber = smsReplyMode
+                    ? smsReplyNumber
+                    : smsNumberBuffer.toString();
+
+            smsStageText.setText("تأیید نهایی پیام");
+            smsTypedText.setText(
+                    "پیام:\n" + smsTextBuffer
+                            + "\n\nگیرنده: " + targetNumber
+            );
+            smsSymbolText.setText("ارسال شود؟");
+            smsHintText.setText(
+                    "نگاه چپ و نگه‌داشتن = ارسال"
+                            + " • نگاه راست و نگه‌داشتن = برگشت و اصلاح"
+            );
+            return;
+        }
+
         String[] symbols = smsStage == 0 ? SMS_LETTERS : SMS_DIGITS;
         String symbol = symbols[smsSymbolIndex % symbols.length];
 
         if (smsStage == 0) {
             smsStageText.setText(
                     smsReplyMode
-                            ? "پاسخ به " + smsReplyNumber
+                            ? "نوشتن پاسخ برای " + smsReplyNumber
                             : "مرحله ۱ • نوشتن متن پیام"
             );
 
@@ -1462,8 +1512,9 @@ public class CameraMonitorActivity extends Activity
 
             smsSymbolText.setText(symbol);
             smsHintText.setText(
-                    "نگاه چپ = انتخاب «" + symbol
-                            + "» • نگاه راست = پایان متن"
+                    "هر حرف ۵ ثانیه نمایش داده می‌شود"
+                            + "\nنگاه چپ را نگه دار = انتخاب «" + symbol + "»"
+                            + " • نگاه راست را نگه دار = پایان متن"
             );
 
         } else {
@@ -1480,8 +1531,9 @@ public class CameraMonitorActivity extends Activity
 
             smsSymbolText.setText(symbol);
             smsHintText.setText(
-                    "نگاه چپ = انتخاب عدد " + symbol
-                            + " • نگاه راست = ارسال پیام"
+                    "هر عدد ۵ ثانیه نمایش داده می‌شود"
+                            + "\nنگاه چپ را نگه دار = انتخاب " + symbol
+                            + " • نگاه راست را نگه دار = پایان شماره"
             );
         }
     }
@@ -1542,6 +1594,9 @@ public class CameraMonitorActivity extends Activity
         incomingSmsShownAt = 0L;
         smsLeftLatched = false;
         smsRightLatched = false;
+        smsInputArmed = false;
+        smsNeutralStartedAt = 0L;
+        smsGuardUntil = 0L;
         leftGazeStartedAt = 0L;
         rightGazeStartedAt = 0L;
 
@@ -1561,44 +1616,109 @@ public class CameraMonitorActivity extends Activity
             float leftScore,
             float rightScore) {
 
-        float threshold = rightThreshold * 0.80f;
+        float threshold = rightThreshold * 0.95f;
+        float neutralBand = rightThreshold * 0.38f;
+
+        // هر عمل فقط زمانی مجاز است که بیمار ابتدا حداقل ۰.۹ ثانیه
+        // مستقیم/وسط نگاه کرده باشد. این مانع ثبت خودکار ناشی از drift می‌شود.
+        boolean neutral =
+                Math.abs(leftScore) < neutralBand
+                        && Math.abs(rightScore) < neutralBand;
+
+        if (!smsInputArmed) {
+            leftGazeStartedAt = 0L;
+            rightGazeStartedAt = 0L;
+            smsLeftLatched = false;
+            smsRightLatched = false;
+
+            if (now < smsGuardUntil) {
+                faceState.setText("مکث کوتاه • مستقیم به صفحه نگاه کن");
+                return;
+            }
+
+            if (neutral) {
+                if (smsNeutralStartedAt == 0L) {
+                    smsNeutralStartedAt = now;
+                }
+
+                long held = now - smsNeutralStartedAt;
+                faceState.setText(
+                        "برای انتخاب آماده شو • نگاه مستقیم "
+                                + Math.min(100L, held * 100L / SMS_NEUTRAL_REARM_MS)
+                                + "%"
+                );
+
+                if (held >= SMS_NEUTRAL_REARM_MS) {
+                    smsInputArmed = true;
+                    smsNeutralStartedAt = 0L;
+                    faceState.setText("آماده • حالا انتخاب کن");
+                }
+            } else {
+                smsNeutralStartedAt = 0L;
+            }
+            return;
+        }
 
         if (leftScore > threshold) {
             rightGazeStartedAt = 0L;
-            smsRightLatched = false;
 
-            if (!smsLeftLatched) {
-                if (leftGazeStartedAt == 0L) leftGazeStartedAt = now;
+            if (leftGazeStartedAt == 0L) {
+                leftGazeStartedAt = now;
+            }
 
-                long held = now - leftGazeStartedAt;
-                if (held >= SMS_GAZE_HOLD_MS) {
-                    smsLeftLatched = true;
-                    leftGazeStartedAt = 0L;
+            long held = now - leftGazeStartedAt;
+            faceState.setText(
+                    "انتخاب با نگاه چپ • "
+                            + Math.min(100L, held * 100L / SMS_GAZE_HOLD_MS)
+                            + "%"
+            );
+
+            if (held >= SMS_GAZE_HOLD_MS) {
+                leftGazeStartedAt = 0L;
+                smsInputArmed = false;
+                smsNeutralStartedAt = 0L;
+                smsGuardUntil = now + SMS_AFTER_SYMBOL_GUARD_MS;
+
+                if (smsStage == 0 || smsStage == 2) {
                     selectSmsSymbol();
+                } else {
+                    confirmSmsStageByLeft();
                 }
             }
             return;
         }
 
         leftGazeStartedAt = 0L;
-        smsLeftLatched = false;
 
         if (rightScore > threshold) {
-            if (!smsRightLatched) {
-                if (rightGazeStartedAt == 0L) rightGazeStartedAt = now;
+            if (rightGazeStartedAt == 0L) {
+                rightGazeStartedAt = now;
+            }
 
-                long held = now - rightGazeStartedAt;
-                if (held >= SMS_GAZE_HOLD_MS) {
-                    smsRightLatched = true;
-                    rightGazeStartedAt = 0L;
+            long held = now - rightGazeStartedAt;
+            faceState.setText(
+                    "انتخاب با نگاه راست • "
+                            + Math.min(100L, held * 100L / SMS_GAZE_HOLD_MS)
+                            + "%"
+            );
+
+            if (held >= SMS_GAZE_HOLD_MS) {
+                rightGazeStartedAt = 0L;
+                smsInputArmed = false;
+                smsNeutralStartedAt = 0L;
+                smsGuardUntil = now + SMS_AFTER_SYMBOL_GUARD_MS;
+
+                if (smsStage == 0 || smsStage == 2) {
                     finishSmsStage();
+                } else {
+                    returnSmsStageByRight();
                 }
             }
             return;
         }
 
         rightGazeStartedAt = 0L;
-        smsRightLatched = false;
+        faceState.setText("مستقیم نگاه کن تا انتخاب بعدی آماده شود");
     }
 
     private void handleIncomingSmsGaze(long now, float leftScore) {
@@ -1622,6 +1742,8 @@ public class CameraMonitorActivity extends Activity
     }
 
     private void selectSmsSymbol() {
+        if (smsStage != 0 && smsStage != 2) return;
+
         String[] symbols = smsStage == 0 ? SMS_LETTERS : SMS_DIGITS;
         String symbol = symbols[smsSymbolIndex % symbols.length];
 
@@ -1633,48 +1755,122 @@ public class CameraMonitorActivity extends Activity
             smsNumberBuffer.append(symbol);
         }
 
-        smsSymbolIndex = (smsSymbolIndex + 1) % symbols.length;
         handler.removeCallbacks(smsSymbolLoop);
-        updateSmsComposerUi();
-        handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
+
+        // همان نماد انتخاب‌شده برای لحظه‌ای روی صفحه می‌ماند تا بیمار
+        // نتیجه انتخابش را ببیند؛ سپس چرخه با نماد بعدی ادامه پیدا می‌کند.
+        smsStageText.setText("✓ انتخاب شد");
+        smsHintText.setText(
+                "«" + symbol + "» ثبت شد • مستقیم نگاه کن"
+        );
+
+        smsSymbolIndex = (smsSymbolIndex + 1) % symbols.length;
+
+        handler.postDelayed(() -> {
+            if (!smsComposerMode) return;
+            updateSmsComposerUi();
+            handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
+        }, 1600L);
     }
 
     private void finishSmsStage() {
+        handler.removeCallbacks(smsSymbolLoop);
+
         if (smsStage == 0) {
             if (smsTextBuffer.length() == 0) {
                 speak("متن پیام هنوز خالی است.");
+                smsGuardUntil = System.currentTimeMillis() + 1200L;
+                handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
                 return;
             }
 
-            if (smsReplyMode && !smsReplyNumber.isEmpty()) {
-                sendEyeSms(smsReplyNumber, smsTextBuffer.toString());
-                return;
-            }
-
+            // فقط درخواست پایان متن ثبت می‌شود؛ هنوز به شماره نمی‌رویم.
             smsStage = 1;
-            smsSymbolIndex = 0;
-            smsLeftLatched = false;
-            smsRightLatched = true;
-
-            handler.removeCallbacks(smsSymbolLoop);
+            smsInputArmed = false;
+            smsNeutralStartedAt = 0L;
+            smsGuardUntil = System.currentTimeMillis() + 1600L;
             updateSmsComposerUi();
-            speak("متن تمام شد. حالا شماره گیرنده را وارد کنید.");
+            speak("آیا متن پیام کامل شده؟ نگاه چپ یعنی تایید. نگاه راست یعنی ادامه نوشتن.");
+            return;
+        }
+
+        if (smsStage == 2) {
+            if (smsNumberBuffer.length() < 10) {
+                speak("شماره گیرنده هنوز کامل نیست.");
+                smsHintText.setText(
+                        "شماره حداقل باید ۱۰ رقم باشد • برای ادامه مستقیم نگاه کن"
+                );
+                smsGuardUntil = System.currentTimeMillis() + 1200L;
+                handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
+                return;
+            }
+
+            smsStage = 3;
+            smsInputArmed = false;
+            smsNeutralStartedAt = 0L;
+            smsGuardUntil = System.currentTimeMillis() + 1600L;
+            updateSmsComposerUi();
+            speak("شماره و پیام آماده است. برای ارسال نگاه چپ و برای اصلاح نگاه راست.");
+        }
+    }
+
+    private void confirmSmsStageByLeft() {
+        if (smsStage == 1) {
+            if (smsReplyMode && !smsReplyNumber.isEmpty()) {
+                smsStage = 3;
+                smsInputArmed = false;
+                smsNeutralStartedAt = 0L;
+                smsGuardUntil = System.currentTimeMillis() + 1600L;
+                updateSmsComposerUi();
+                speak("پیام آماده است. برای ارسال نگاه چپ و برای اصلاح نگاه راست.");
+                return;
+            }
+
+            smsStage = 2;
+            smsSymbolIndex = 0;
+            smsInputArmed = false;
+            smsNeutralStartedAt = 0L;
+            smsGuardUntil = System.currentTimeMillis() + 1800L;
+            updateSmsComposerUi();
+            speak("متن تایید شد. حالا شماره گیرنده را وارد کنید.");
             handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
             return;
         }
 
-        if (smsNumberBuffer.length() < 10) {
-            speak("شماره گیرنده هنوز کامل نیست.");
-            smsHintText.setText(
-                    "شماره حداقل باید ۱۰ رقم باشد • نگاه چپ = ادامه ورود عدد"
-            );
+        if (smsStage == 3) {
+            String number = smsReplyMode
+                    ? smsReplyNumber
+                    : smsNumberBuffer.toString();
+
+            sendEyeSms(number, smsTextBuffer.toString());
+        }
+    }
+
+    private void returnSmsStageByRight() {
+        if (smsStage == 1) {
+            smsStage = 0;
+            smsInputArmed = false;
+            smsNeutralStartedAt = 0L;
+            smsGuardUntil = System.currentTimeMillis() + 1800L;
+            updateSmsComposerUi();
+            speak("ادامه نوشتن متن.");
+            handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
             return;
         }
 
-        sendEyeSms(
-                smsNumberBuffer.toString(),
-                smsTextBuffer.toString()
-        );
+        if (smsStage == 3) {
+            smsStage = smsReplyMode ? 0 : 2;
+            smsInputArmed = false;
+            smsNeutralStartedAt = 0L;
+            smsGuardUntil = System.currentTimeMillis() + 1800L;
+            updateSmsComposerUi();
+            speak(
+                    smsReplyMode
+                            ? "برگشت به متن برای اصلاح."
+                            : "برگشت به شماره برای اصلاح."
+            );
+            handler.postDelayed(smsSymbolLoop, SMS_SYMBOL_INTERVAL_MS);
+        }
     }
 
     private void sendEyeSms(String number, String text) {
