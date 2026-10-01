@@ -68,15 +68,17 @@ import java.util.concurrent.Executors;
 public class CameraMonitorActivity extends Activity
         implements TextToSpeech.OnInitListener, SensorEventListener {
 
-    private static final long FRAME_INTERVAL_MS = 120L;
-    private static final long PROMPT_DURATION_MS = 20000L;
-    private static final long READING_LOCK_MS = 3000L;
-    private static final long RIGHT_GAZE_HOLD_MS = 320L;
-    private static final long LEFT_GAZE_HOLD_MS = 320L;
+    private static final long FRAME_INTERVAL_MS = 75L;
+    private static final long PROMPT_DURATION_MS = 45000L;
+    private static final long READING_LOCK_MS = 1400L;
+    private static final long RIGHT_GAZE_HOLD_MS = 220L;
+    private static final long LEFT_GAZE_HOLD_MS = 240L;
 
-    private static final long BLINK_MIN_MS = 90L;
-    private static final long BLINK_MAX_MS = 750L;
-    private static final long DOUBLE_BLINK_WINDOW_MS = 1800L;
+    private static final long BLINK_MIN_MS = 45L;
+    private static final long BLINK_MAX_MS = 1600L;
+    private static final long DOUBLE_BLINK_WINDOW_MS = 3200L;
+    private static final long BLINK_PROMPT_GUARD_MS = 6500L;
+    private static final long INTENT_GUARD_MS = 3200L;
     private static final long SLEEP_HOLD_MS = 6000L;
     private static final long WAKE_OPEN_MS = 1800L;
     private static final long SMS_SYMBOL_INTERVAL_MS = 5000L;
@@ -177,6 +179,7 @@ public class CameraMonitorActivity extends Activity
     private long rightGazeStartedAt = 0L;
     private long leftGazeStartedAt = 0L;
     private long lastActionAt = 0L;
+    private long lastUserIntentAt = 0L;
     private float smoothedGaze = Float.NaN;
 
     private boolean sleepMode = false;
@@ -299,10 +302,37 @@ public class CameraMonitorActivity extends Activity
     private final Runnable promptTimeout = new Runnable() {
         @Override
         public void run() {
-            if (calibrationStage == 2 && !mediaMode && !sleepMode) {
-                faceState.setText("پاسخی ثبت نشد • سؤال بعدی");
-                advancePrompt(900L);
+            if (calibrationStage != 2
+                    || mediaMode
+                    || sleepMode
+                    || smsComposerMode
+                    || incomingSmsMode
+                    || commandExecutionLocked) {
+                return;
             }
+
+            long now = System.currentTimeMillis();
+
+            // اگر بیمار در حال پلک‌زدن، نگاه‌دادن یا تکمیل دوپلک باشد،
+            // سؤال فعلی حفظ می‌شود تا عمل او روی سؤال بعدی نیفتد.
+            boolean interactionInProgress =
+                    eyesClosed
+                            || blinkCount == 1
+                            || rightGazeStartedAt > 0L
+                            || leftGazeStartedAt > 0L
+                            || now - lastUserIntentAt < INTENT_GUARD_MS;
+
+            if (interactionInProgress) {
+                promptDeadline = now + BLINK_PROMPT_GUARD_MS;
+                faceState.setText("حرکت چشم تشخیص داده شد • منتظر تکمیل پاسخ");
+                handler.removeCallbacks(countdown);
+                handler.post(countdown);
+                handler.postDelayed(this, BLINK_PROMPT_GUARD_MS);
+                return;
+            }
+
+            faceState.setText("پاسخی ثبت نشد • سؤال بعدی");
+            advancePrompt(900L);
         }
     };
 
@@ -582,7 +612,7 @@ public class CameraMonitorActivity extends Activity
         neutralGaze = center;
         rightDirectionSign = diff >= 0f ? 1 : -1;
         rightThreshold =
-                Math.max(0.010f, Math.min(0.050f, Math.abs(diff) * 0.28f));
+                Math.max(0.007f, Math.min(0.038f, Math.abs(diff) * 0.20f));
 
         prefs.edit()
                 .putFloat("gaze_neutral", neutralGaze)
@@ -651,8 +681,12 @@ public class CameraMonitorActivity extends Activity
         promptDeadline = promptShownAt + PROMPT_DURATION_MS;
         smoothedGaze = Float.NaN;
         rightGazeStartedAt = 0L;
+        leftGazeStartedAt = 0L;
         blinkCount = 0;
         firstBlinkAt = 0L;
+        eyesClosed = false;
+        eyeClosedStartedAt = 0L;
+        lastUserIntentAt = 0L;
 
         CommandStore.Command cmd = commands.get(promptIndex);
 
@@ -679,7 +713,7 @@ public class CameraMonitorActivity extends Activity
 
     private void rejectCurrentByGaze() {
         long now = System.currentTimeMillis();
-        if (now - lastActionAt < 1200L || mediaMode || sleepMode) return;
+        if (now - lastActionAt < 650L || mediaMode || sleepMode) return;
         lastActionAt = now;
 
         faceState.setText("نگاه راست تشخیص داده شد • رد شد");
@@ -2024,9 +2058,9 @@ public class CameraMonitorActivity extends Activity
         }
 
         boolean closed =
-                ear < Math.max(0.035f, openEarBaseline * 0.48f);
+                ear < Math.max(0.040f, openEarBaseline * 0.60f);
         boolean open =
-                ear > Math.max(0.060f, openEarBaseline * 0.70f);
+                ear > Math.max(0.055f, openEarBaseline * 0.66f);
 
         if (calibrationStage == 0) {
             if (open) {
@@ -2065,10 +2099,21 @@ public class CameraMonitorActivity extends Activity
         if (closed) {
             wakeOpenStartedAt = 0L;
             rightGazeStartedAt = 0L;
+            lastUserIntentAt = now;
 
             if (!eyesClosed) {
                 eyesClosed = true;
                 eyeClosedStartedAt = now;
+
+                if (!sleepMode
+                        && !mediaMode
+                        && !smsComposerMode
+                        && !incomingSmsMode
+                        && calibrationStage == 2) {
+                    handler.removeCallbacks(promptTimeout);
+                    promptDeadline = now + BLINK_PROMPT_GUARD_MS;
+                    handler.postDelayed(promptTimeout, BLINK_PROMPT_GUARD_MS);
+                }
             }
 
             long held = now - eyeClosedStartedAt;
@@ -2107,7 +2152,15 @@ public class CameraMonitorActivity extends Activity
 
                 blinkCount = 1;
                 firstBlinkAt = now;
-                faceState.setText("پلک اول ثبت شد • یک پلک دیگر");
+                lastUserIntentAt = now;
+
+                handler.removeCallbacks(promptTimeout);
+                promptDeadline = now + BLINK_PROMPT_GUARD_MS;
+                handler.removeCallbacks(countdown);
+                handler.post(countdown);
+                handler.postDelayed(promptTimeout, BLINK_PROMPT_GUARD_MS);
+
+                faceState.setText("پلک اول ثبت شد ✓ • تا ۳ ثانیه برای پلک دوم فرصت داری");
                 return;
             }
         }
@@ -2116,6 +2169,8 @@ public class CameraMonitorActivity extends Activity
                 && now - firstBlinkAt > DOUBLE_BLINK_WINDOW_MS) {
             blinkCount = 0;
             firstBlinkAt = 0L;
+            lastUserIntentAt = now;
+            faceState.setText("پلک دوم ثبت نشد • همان سؤال هنوز فعال است");
         }
 
         if (sleepMode) {
@@ -2138,7 +2193,7 @@ public class CameraMonitorActivity extends Activity
         if (Float.isNaN(smoothedGaze)) {
             smoothedGaze = gaze;
         } else {
-            smoothedGaze = smoothedGaze * 0.55f + gaze * 0.45f;
+            smoothedGaze = smoothedGaze * 0.28f + gaze * 0.72f;
         }
 
         float rightScore =
@@ -2234,7 +2289,9 @@ public class CameraMonitorActivity extends Activity
             return;
         }
 
-        if (rightScore > rightThreshold) {
+        if (rightScore > rightThreshold * 0.72f) {
+            lastUserIntentAt = now;
+
             if (rightGazeStartedAt == 0L) {
                 rightGazeStartedAt = now;
             }
