@@ -77,6 +77,7 @@ public class CameraMonitorActivity extends Activity
     private static final long BLINK_MIN_MS = 45L;
     private static final long BLINK_MAX_MS = 1600L;
     private static final long DOUBLE_BLINK_WINDOW_MS = 3200L;
+    private static final long LONG_BLINK_CONFIRM_MS = 850L;
     private static final long BLINK_PROMPT_GUARD_MS = 6500L;
     private static final long INTENT_GUARD_MS = 3200L;
     private static final long SLEEP_HOLD_MS = 6000L;
@@ -345,7 +346,7 @@ public class CameraMonitorActivity extends Activity
             long seconds = (left + 999L) / 1000L;
 
             instruction.setText(
-                    "دو پلک = تأیید  •  نگاه راست = رد  •  "
+                    "دو پلک یا پلک بلند = تأیید  •  نگاه راست = رد  •  "
                             + seconds + " ثانیه"
             );
 
@@ -384,9 +385,9 @@ public class CameraMonitorActivity extends Activity
             FaceLandmarker.FaceLandmarkerOptions options =
                     FaceLandmarker.FaceLandmarkerOptions.builder()
                             .setBaseOptions(baseOptions)
-                            .setMinFaceDetectionConfidence(0.5f)
-                            .setMinFacePresenceConfidence(0.5f)
-                            .setMinTrackingConfidence(0.5f)
+                            .setMinFaceDetectionConfidence(0.38f)
+                            .setMinFacePresenceConfidence(0.38f)
+                            .setMinTrackingConfidence(0.40f)
                             .setNumFaces(1)
                             .setRunningMode(RunningMode.IMAGE)
                             .build();
@@ -623,7 +624,7 @@ public class CameraMonitorActivity extends Activity
         calibrationStage = 2;
 
         speak(
-                "کالیبراسیون انجام شد. دو پلک پشت سر هم یعنی تأیید. "
+                "کالیبراسیون انجام شد. دو پلک پشت سر هم یا یک پلک کمی بلند یعنی تأیید. "
                         + "نگاه به راست یعنی رد. بسته ماندن چشم‌ها یعنی خواب."
         );
 
@@ -694,7 +695,10 @@ public class CameraMonitorActivity extends Activity
         setPanelFull();
         promptText.setBackgroundColor(0xFF1A5688);
 
-        modeState.setText(CommandStore.actionLabel(cmd.action) + " • دو پلک = اجرا");
+        modeState.setText(
+                CommandStore.actionLabel(cmd.action)
+                        + " • دو پلک یا پلک بلند = اجرا"
+        );
         promptText.setText(cmd.question);
         faceState.setText("در حال انتظار برای تصمیم بیمار");
 
@@ -2140,6 +2144,19 @@ public class CameraMonitorActivity extends Activity
                     && duration >= BLINK_MIN_MS
                     && duration <= BLINK_MAX_MS
                     && now >= promptShownAt + READING_LOCK_MS) {
+
+                // برای بیمارانی که پلک‌زدن سریع برایشان دشوار است:
+                // یک پلک عمدی کمی بلند نیز تأیید محسوب می‌شود.
+                if (duration >= LONG_BLINK_CONFIRM_MS
+                        && !smsComposerMode
+                        && !incomingSmsMode) {
+                    blinkCount = 0;
+                    firstBlinkAt = 0L;
+                    lastUserIntentAt = now;
+                    faceState.setText("✓ پلک بلند تشخیص داده شد • تأیید");
+                    confirmCurrentByDoubleBlink();
+                    return;
+                }
 
                 if (blinkCount == 1
                         && now - firstBlinkAt <= DOUBLE_BLINK_WINDOW_MS) {
