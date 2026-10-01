@@ -1925,6 +1925,9 @@ public class CameraMonitorActivity extends Activity
         smsNumberBuffer.setLength(0);
         smsLeftLatched = false;
         smsRightLatched = false;
+        smsInputArmed = false;
+        smsNeutralStartedAt = 0L;
+        smsGuardUntil = 0L;
         leftGazeStartedAt = 0L;
         rightGazeStartedAt = 0L;
         smoothedGaze = Float.NaN;
