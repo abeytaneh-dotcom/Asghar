@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="kh_bg">#07131D</color>
+    <color name="kh_panel">#102633</color>
+    <color name="kh_primary">#0B6FA4</color>
+    <color name="kh_primary_dark">#0B3558</color>
+    <color name="kh_text">#F2F7FA</color>
+    <color name="kh_muted">#AABBC5</color>
+</resources>
