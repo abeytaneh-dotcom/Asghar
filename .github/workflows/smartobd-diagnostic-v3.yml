@@ -1,0 +1,27 @@
+name: SmartOBD Diagnostic v3
+
+on:
+  push:
+    branches: [smartobd-diagnostic-v3]
+  workflow_dispatch:
+
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build ESP32-C3 firmware
+        working-directory: SmartOBD-Diagnostic-v3/firmware/KhanehRemap_SmartOBD_Diag_v5
+        run: pio run
+      - name: Upload firmware binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: KhanehRemap-SmartOBD-Diag-v5
+          path: |
+            SmartOBD-Diagnostic-v3/firmware/KhanehRemap_SmartOBD_Diag_v5/.pio/build/esp32-c3/firmware.bin
+            SmartOBD-Diagnostic-v3/firmware/KhanehRemap_SmartOBD_Diag_v5/.pio/build/esp32-c3/firmware.elf
