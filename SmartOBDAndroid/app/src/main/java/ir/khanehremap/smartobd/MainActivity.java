@@ -601,7 +601,7 @@ public class MainActivity extends Activity {
             rr(c,0,y,w,h,0,Color.rgb(2,19,29),0);
             line(c,0,y,w,y,Color.rgb(7,45,59),1);
             String[] icons={"⌂","▥","≋","⌁"};
-            String[] labels={"داشبورد","داده زنده","عیب‌یابی","اتصال"};
+            String[] labels={"داشبورد","عیب‌یابی","داده زنده","اتصال"};
             for(int i=0;i<4;i++){
                 float cx=w*(i+.5f)/4;
                 boolean on=page==i;
@@ -618,7 +618,7 @@ public class MainActivity extends Activity {
             rr(c,12,12,220,h-12,22,Color.argb(230,5,29,43),0);
             txt(c,"خانه ریمپ",200,52,21,WHITE,Paint.Align.RIGHT,true);
             txt(c,"SMART OBD",200,76,12,CYAN,Paint.Align.RIGHT,true);
-            String[] n={"داشبورد","داده زنده","عیب‌یابی","اتصال"};
+            String[] n={"داشبورد","عیب‌یابی","داده زنده","اتصال"};
             for(int i=0;i<4;i++){float y=110+i*58;rr(c,25,y,207,y+46,14,page==i?Color.rgb(5,67,84):Color.TRANSPARENT,page==i?CYAN:0);txt(c,n[i],190,y+30,14,page==i?CYAN:WHITE,Paint.Align.RIGHT,page==i);}
             if(page==3){
                 txt(c,"اتصال و تنظیمات",w-35,55,25,WHITE,Paint.Align.RIGHT,true);
@@ -659,8 +659,6 @@ public class MainActivity extends Activity {
                 if(y>sw1-42&&y<sw1+42){demo=!demo;if(demo)disconnect();invalidate();return true;}
                 float sw2=t+220+140+100+42;
                 if(y>sw2-42&&y<sw2+42){soundAlert=!soundAlert;toast(soundAlert?"هشدار صوتی فعال شد":"هشدار صوتی خاموش شد");invalidate();return true;}
-                // long-ish tap footer area clears serial binding
-                if(y>h-190&&y<h-110&&x<w*.45f){clearActivation();return true;}
             }else if(page==1){
                 if(y>348&&y<414){readDtc();return true;}
                 if(y>414&&y<480){clearDtc();return true;}
