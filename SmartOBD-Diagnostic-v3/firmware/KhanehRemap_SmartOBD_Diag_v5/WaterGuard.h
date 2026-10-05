@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include "BoardConfig.h"
+#include "SafeProtocol.h"
 
 struct KRWaterState {
   float level = 0.0f;
@@ -43,10 +44,10 @@ class KRWaterGuard {
     bool bad = lowPhaseBad || highPhaseBad || shortHigh;
 
     if (bad) {
-      badCount_ = min<uint8_t>(255, badCount_ + 1);
+      badCount_ = kr::saturatingIncrement(badCount_);
       goodCount_ = 0;
     } else {
-      goodCount_ = min<uint8_t>(255, goodCount_ + 1);
+      goodCount_ = kr::saturatingIncrement(goodCount_);
       badCount_ = 0;
     }
 

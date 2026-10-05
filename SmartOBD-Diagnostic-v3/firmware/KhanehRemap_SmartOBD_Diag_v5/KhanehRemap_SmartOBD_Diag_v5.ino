@@ -6,7 +6,10 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include <HTTPUpdate.h>
+#include <atomic>
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
 #include <Preferences.h>
 #include <ArduinoJson.h>
 #include <NimBLEDevice.h>
@@ -15,7 +18,7 @@
 #include "CanObd.h"
 #include "KLineObd.h"
 
-static const char* FW_VERSION="5.0-diag";
+static const char* FW_VERSION="5.1-bench-safe";
 static const char* UUID_SERVICE="7f640201-7c7d-4f0a-8b6f-4f484f4d4501";
 static const char* UUID_CMD    ="7f640202-7c7d-4f0a-8b6f-4f484f4d4501";
 static const char* UUID_DATA   ="7f640203-7c7d-4f0a-8b6f-4f484f4d4501";
@@ -33,9 +36,19 @@ KRCanObd canObd;
 KRKLineObd klineObd;
 KRTelemetry telem;
 NimBLECharacteristic *chCmd=nullptr,*chData=nullptr;
-bool bleConnected=false,otaRunning=false,wifiEnabled=false;
-String configuredSsid,selectedProfile="AUTO",rxLong;
-int rxId=-1,rxNext=0,rxTotal=0;
+std::atomic<bool> bleConnected{false};
+std::atomic<uint32_t> connectionEpoch{0}, droppedCommands{0};
+bool wifiEnabled=false;
+struct KRCommand { uint32_t epoch; char text[KR_COMMAND_MAX_BYTES+1]; };
+QueueHandle_t commandQueue=nullptr;
+TaskHandle_t waterTaskHandle=nullptr;
+portMUX_TYPE waterMux=portMUX_INITIALIZER_UNLOCKED;
+KRWaterState waterSnapshot;
+uint32_t waterHeartbeat=0, rpmUpdated=0, lastPoll=0, handledEpoch=0;
+bool rpmValid=false;
+KRProtocol requestedProtocol=PROTO_NONE;
+String configuredSsid,selectedProfile="AUTO";
+kr::CommandFragments<KR_COMMAND_MAX_BYTES> fragments;
 uint32_t lastFast=0,lastFull=0,lastLegacy=0,lastDetect=0,lastWifiRetry=0;
 uint8_t pidIndex=0,busFails=0,txId=0;
 
@@ -55,13 +68,6 @@ static const char* protoName(KRProtocol p){
   case PROTO_KLINE_FAST:return "KLINE_FAST"; case PROTO_KLINE_5BAUD:return "KLINE_5BAUD";
   default:return "NONE";
  }
-}
-static String field(const String&s,int wanted){
- int from=0,idx=0;
- for(int i=0;i<=(int)s.length();i++) if(i==(int)s.length()||s[i]=='|'){
-   if(idx==wanted)return s.substring(from,i); from=i+1; idx++;
- }
- return "";
 }
 static void rawNotify(const String&s){
  if(!chData)return; chData->setValue((uint8_t*)s.c_str(),s.length());
@@ -83,7 +89,7 @@ static float batteryVoltage(){
 }
 static void disconnectBus(){
  canObd.stop();klineObd.stop();telem.proto=PROTO_NONE;telem.ecuConnected=false;
- telem.rpm=0;telem.speed=0;busFails=0;
+ telem.rpm=0;telem.speed=0;telem.coolant=NAN;telem.fuel=NAN;busFails=0;rpmValid=false;
 }
 static bool testCan(uint32_t rate){
  if(!canObd.begin(rate))return false;
@@ -100,12 +106,18 @@ static void setProto(KRProtocol p){
  bleOut("ECU:CONNECTED,"+String(protoName(p)));
 }
 static void autoDetect(){
- if(telem.proto!=PROTO_NONE||millis()-lastDetect<3000)return;lastDetect=millis();
- bleOut("ECU:SCAN,CAN500");if(testCan(500000)){setProto(PROTO_CAN500);return;}
- bleOut("ECU:SCAN,CAN250");if(testCan(250000)){setProto(PROTO_CAN250);return;}
- bleOut("ECU:SCAN,KFAST");if(testK(true)){setProto(PROTO_KLINE_FAST);return;}
- bleOut("ECU:SCAN,K5B");if(testK(false)){setProto(PROTO_KLINE_5BAUD);return;}
- disconnectBus();bleOut("ECU:NOT_FOUND");
+ if(!KR_HARDWARE_VERIFIED || !waterTaskHandle || requestedProtocol==PROTO_NONE) return;
+ if(telem.proto!=PROTO_NONE||millis()-lastDetect<3000)return;
+ lastDetect=millis();bool ok=false;
+ switch(requestedProtocol){
+  case PROTO_CAN500:ok=testCan(500000);break;
+  case PROTO_CAN250:ok=testCan(250000);break;
+  case PROTO_KLINE_FAST:ok=testK(true);break;
+  case PROTO_KLINE_5BAUD:ok=testK(false);break;
+  default:break;
+ }
+ if(ok)setProto(requestedProtocol);
+ else{disconnectBus();bleOut("ECU:NOT_FOUND");}
 }
 static bool readPid(uint8_t pid,uint8_t*d,size_t&n){
  if(telem.proto==PROTO_CAN500||telem.proto==PROTO_CAN250)return canObd.requestPid(pid,d,n,50);
@@ -113,31 +125,45 @@ static bool readPid(uint8_t pid,uint8_t*d,size_t&n){
  return false;
 }
 static void decodePid(uint8_t pid,const uint8_t*d,size_t n){
- if(!n)return;
+ size_t expected=(pid==0x0C||pid==0x42)?2:1;
+ if(n!=expected){if(pid==0x0C)rpmValid=false;return;}
  if(pid==0x05)telem.coolant=(float)d[0]-40;
- else if(pid==0x0C&&n>=2)telem.rpm=((uint16_t)d[0]*256+d[1])/4.0f;
+ else if(pid==0x0C&&n>=2){telem.rpm=((uint16_t)d[0]*256+d[1])/4.0f;rpmUpdated=millis();rpmValid=true;}
  else if(pid==0x0D)telem.speed=d[0];
  else if(pid==0x2F)telem.fuel=d[0]*100.0f/255.0f;
  else if(pid==0x42&&n>=2)telem.voltage=((uint16_t)d[0]*256+d[1])/1000.0f;
 }
 static void pollVehicle(){
+ if(millis()-lastPoll<KR_OBD_POLL_MS)return;lastPoll=millis();
  if(telem.proto==PROTO_NONE){autoDetect();return;}
  static const uint8_t pids[]={0x0C,0x0D,0x0C,0x05,0x0D,0x2F,0x0C,0x42};
  uint8_t pid=pids[pidIndex++%(sizeof(pids)/sizeof(pids[0]))],d[4];size_t n=0;
  if(readPid(pid,d,n)){busFails=0;telem.ecuConnected=true;decodePid(pid,d,n);}
- else if(++busFails>=14){disconnectBus();bleOut("ECU:NOT_FOUND");}
+ else {if(pid==0x0C)rpmValid=false;if(++busFails>=14){disconnectBus();bleOut("ECU:NOT_FOUND");}}
+}
+// Only this task owns the sensor and buzzer; no BLE, Wi-Fi or ECU calls here.
+static void waterTask(void*){
+ bool on=false;uint32_t buzzerAt=millis();
+ for(;;){
+  if(waterGuard.due()){
+   KRWaterState w=waterGuard.update();
+   portENTER_CRITICAL(&waterMux);waterSnapshot=w;waterHeartbeat=millis();portEXIT_CRITICAL(&waterMux);
+  }
+  if(KR_BUZZER_PIN>=0){
+   if(!waterGuard.state().noWater){on=false;digitalWrite(KR_BUZZER_PIN,LOW);}
+   else if(millis()-buzzerAt>=(on?230u:120u)){buzzerAt=millis();on=!on;digitalWrite(KR_BUZZER_PIN,on?HIGH:LOW);}
+  }
+  vTaskDelay(pdMS_TO_TICKS(10));
+ }
 }
 static void waterTick(){
- if(!waterGuard.due())return;
- bool old=telem.noWater;KRWaterState w=waterGuard.update();
+ KRWaterState w;uint32_t heartbeat;
+ portENTER_CRITICAL(&waterMux);w=waterSnapshot;heartbeat=waterHeartbeat;portEXIT_CRITICAL(&waterMux);
+ if(!waterTaskHandle||millis()-heartbeat>750){w.noWater=true;w.sensorFault=true;}
+ bool old=telem.noWater;
  telem.waterLevel=w.level;telem.noWater=w.noWater;telem.waterSensorFault=w.sensorFault;
  if(telem.noWater&&!old)bleOut("ALARM:LOW_COOLANT,"+String(telem.waterLevel,0));
  else if(!telem.noWater&&old)bleOut("COOLANT:OK");
-}
-static void buzzerTick(){
- static bool on=false;static uint32_t tm=0;
- if(!telem.noWater){on=false;digitalWrite(KR_BUZZER_PIN,LOW);return;}
- uint32_t now=millis(),iv=on?230:120;if(now-tm>=iv){tm=now;on=!on;digitalWrite(KR_BUZZER_PIN,on);}
 }
 static void telemetryTick(){
  uint32_t now=millis();
@@ -182,29 +208,31 @@ static bool saveWifi(const String&ssid,const String&pass){
  prefs.begin("net",false);prefs.putString("ssid",ssid);prefs.putString("pass",pass);prefs.putBool("enabled",true);prefs.end();
  configuredSsid=ssid;return wifiSaved(false);
 }
-static void otaTask(void*){
- otaRunning=true;bleOut("OTA|START");
- if(!wifiEnabled||WiFi.status()!=WL_CONNECTED){bleOut("OTA|NO_WIFI");otaRunning=false;vTaskDelete(nullptr);return;}
- WiFiClientSecure c;
-#if KR_OTA_ALLOW_INSECURE
- c.setInsecure();
-#else
- if(strlen(KR_OTA_ROOT_CA)<64){bleOut("OTA|NO_CA");otaRunning=false;vTaskDelete(nullptr);return;}
- c.setCACert(KR_OTA_ROOT_CA);
-#endif
- httpUpdate.rebootOnUpdate(true);
- t_httpUpdate_return r=httpUpdate.update(c,KR_OTA_URL,FW_VERSION);
- if(r==HTTP_UPDATE_FAILED)bleOut("OTA|FAIL");else if(r==HTTP_UPDATE_NO_UPDATES)bleOut("OTA|CURRENT");
- otaRunning=false;vTaskDelete(nullptr);
+static void startOta(){bleOut("DENY|OTA_DISABLED");}
+static bool mayMutate(){
+ if(!KR_ENABLE_MUTATING_COMMANDS){bleOut("DENY|BENCH_READ_ONLY");return false;}
+ if(!KR_HARDWARE_VERIFIED || !telem.ecuConnected || telem.proto==PROTO_NONE ||
+    !kr::freshStopped(telem.rpm,rpmValid,millis()-rpmUpdated)){
+  bleOut("DENY|RPM_UNKNOWN_OR_RUNNING");return false;
+ }
+ return true;
 }
-static void startOta(){if(otaRunning){bleOut("OTA|BUSY");return;}xTaskCreate(otaTask,"krOta",12288,nullptr,1,nullptr);}
 static void handle(String s){
  s.trim();if(!s.length())return;
  if(s=="GET_SERIAL"){bleOut("S|"+serialNumber());return;}
  if(s=="PING"){bleOut("PONG|"+String(millis()));return;}
  if(s=="STATUS"){bleOut("ST|"+String(protoName(telem.proto))+"|"+String(telem.ecuConnected?1:0)+"|WIFI:"+String(wifiEnabled?1:0));return;}
  if(s=="BUS?"){bleOut("BUS|"+String(protoName(telem.proto)));return;}
- if(s=="REDETECT"){disconnectBus();lastDetect=0;bleOut("ECU:SCAN,AUTO");return;}
+ if(s=="BUS|OFF"){requestedProtocol=PROTO_NONE;disconnectBus();bleOut("BUS|OFF");return;}
+ if(s.startsWith("BUS|")){
+  if(!KR_HARDWARE_VERIFIED||!waterTaskHandle){bleOut("DENY|HARDWARE_UNVERIFIED");return;}
+  KRProtocol p=PROTO_NONE;
+  if(s=="BUS|CAN500")p=PROTO_CAN500;else if(s=="BUS|CAN250")p=PROTO_CAN250;
+  else if(s=="BUS|KLINE_FAST")p=PROTO_KLINE_FAST;else if(s=="BUS|KLINE_5BAUD")p=PROTO_KLINE_5BAUD;
+  if(p==PROTO_NONE){bleOut("DENY|PROTOCOL");return;}
+  disconnectBus();requestedProtocol=p;lastDetect=millis()-3000;autoDetect();return;
+ }
+ if(s=="REDETECT"){disconnectBus();lastDetect=millis()-3000;bleOut("ECU:SCAN,SELECTED");return;}
  if(s.startsWith("E|")||s.startsWith("ECU_SELECT:")){
   selectedProfile=s.startsWith("E|")?s.substring(2):s.substring(11);selectedProfile.trim();if(!selectedProfile.length())selectedProfile="AUTO";
   bleOut("EC|"+selectedProfile);if(telem.proto==PROTO_NONE){lastDetect=0;autoDetect();}return;
@@ -223,13 +251,13 @@ static void handle(String s){
   bleOut("DT|BEGIN");int from=0;while(from<(int)codes.length()){int q=codes.indexOf(',',from);String x=q<0?codes.substring(from):codes.substring(from,q);if(x.length())bleOut("DT|"+x);if(q<0)break;from=q+1;}bleOut("DT|END");return;
  }
  if(s=="CLEAR_DTC"){
-  if(telem.rpm>50){bleOut("DENY|ENGINE_RUNNING");return;}if(telem.proto==PROTO_NONE)autoDetect();bool ok=false;
+  if(!mayMutate())return;bool ok=false;
   if(telem.proto==PROTO_CAN500||telem.proto==PROTO_CAN250)ok=canObd.clearDtcs();
   else if(telem.proto==PROTO_KLINE_FAST||telem.proto==PROTO_KLINE_5BAUD)ok=klineObd.clearDtcs();
   bleOut(ok?"CLEAR_DTC:SENT":"CLEAR_DTC:FAIL");return;
  }
  if(s=="ECU|RESET"){
-  if(telem.rpm>50){bleOut("DENY|ENGINE_RUNNING");return;}if(telem.proto==PROTO_NONE)autoDetect();bool ok=false;
+  if(!mayMutate())return;bool ok=false;
   if(telem.proto==PROTO_CAN500||telem.proto==PROTO_CAN250)ok=canObd.ecuReset();
   else if(telem.proto==PROTO_KLINE_FAST||telem.proto==PROTO_KLINE_5BAUD)ok=klineObd.ecuReset();
   bleOut(ok?"RESET|OK":"RESET|UNSUPPORTED");return;
@@ -245,21 +273,34 @@ static void handle(String s){
  if(s.startsWith("PRG|")||s.startsWith("ACT|")||s.startsWith("WRITE|")||s.startsWith("ERASE|")){bleOut("DENY|READ_ONLY");return;}
  bleOut("DENY|CMD");
 }
+static void resetFragments(){fragments.clear();}
+static void acceptCommand(const String& s){
+ if(!s.startsWith("Y|")){resetFragments();handle(s);return;}
+ auto result=fragments.feed(s.c_str(),s.length(),millis());
+ if(result==kr::FragmentResult::Invalid){bleOut("DENY|RX_FRAGMENT");return;}
+ if(result==kr::FragmentResult::Complete){String full=fragments.value();resetFragments();handle(full);}
+}
+static void processCommands(){
+ uint32_t epoch=connectionEpoch.load();
+ if(epoch!=handledEpoch){resetFragments();handledEpoch=epoch;}
+ if(fragments.expired(millis(),KR_FRAGMENT_TIMEOUT_MS)){resetFragments();bleOut("DENY|RX_TIMEOUT");}
+ if(droppedCommands.exchange(0)){resetFragments();if(commandQueue)xQueueReset(commandQueue);bleOut("DENY|RX_QUEUE");}
+ KRCommand command;
+ if(commandQueue && xQueueReceive(commandQueue,&command,0)==pdTRUE &&
+    bleConnected.load() && command.epoch==connectionEpoch.load())acceptCommand(String(command.text));
+}
 class ServerCB:public NimBLEServerCallbacks{
- void onConnect(NimBLEServer*,NimBLEConnInfo&)override{bleConnected=true;}
- void onDisconnect(NimBLEServer*,NimBLEConnInfo&,int)override{bleConnected=false;NimBLEDevice::startAdvertising();}
+ void onConnect(NimBLEServer*,NimBLEConnInfo&)override{connectionEpoch.fetch_add(1);bleConnected=true;}
+ void onDisconnect(NimBLEServer*,NimBLEConnInfo&,int)override{bleConnected=false;connectionEpoch.fetch_add(1);NimBLEDevice::startAdvertising();}
 };
 class CmdCB:public NimBLECharacteristicCallbacks{
  void onWrite(NimBLECharacteristic*c,NimBLEConnInfo&)override{
-  String s=c->getValue().c_str();
-  if(s.startsWith("Y|")){
-   int id=strtol(field(s,1).c_str(),nullptr,16),seq=strtol(field(s,2).c_str(),nullptr,16),tot=strtol(field(s,3).c_str(),nullptr,16);
-   String p=field(s,4);
-   if(seq==0||id!=rxId){rxId=id;rxNext=0;rxTotal=tot;rxLong="";}
-   if(id!=rxId||seq!=rxNext||tot!=rxTotal){rxLong="";rxNext=rxTotal=0;bleOut("DENY|RX_SEQ");return;}
-   rxLong+=p;rxNext++;if(rxNext>=rxTotal){String full=rxLong;rxLong="";rxNext=rxTotal=0;handle(full);}return;
-  }
-  handle(s);
+  auto value=c->getValue();
+  if(!commandQueue||value.size()==0||value.size()>KR_COMMAND_MAX_BYTES||
+     memchr(value.data(),0,value.size())){droppedCommands.fetch_add(1);return;}
+  KRCommand command={};command.epoch=connectionEpoch.load();
+  memcpy(command.text,value.data(),value.size());
+  if(xQueueSend(commandQueue,&command,0)!=pdTRUE)droppedCommands.fetch_add(1);
  }
 };
 static void setupBle(){
@@ -274,13 +315,16 @@ static void setupBle(){
 }
 void setup(){
  Serial.begin(115200);delay(180);analogReadResolution(12);
- pinMode(KR_BUZZER_PIN,OUTPUT);digitalWrite(KR_BUZZER_PIN,LOW);waterGuard.begin();
+ if(KR_BUZZER_PIN>=0){pinMode(KR_BUZZER_PIN,OUTPUT);digitalWrite(KR_BUZZER_PIN,LOW);}
+ waterGuard.begin();
+ xTaskCreate(waterTask,"krWater",3072,nullptr,2,&waterTaskHandle);
+ commandQueue=xQueueCreate(8,sizeof(KRCommand));
  telem.voltage=batteryVoltage();setupBle();loadNet();
  if(wifiEnabled)wifiSaved(false);else{WiFi.mode(WIFI_OFF);WiFi.setAutoReconnect(false);}
  Serial.println("BOOT|KHANEH_REMAP|SMART_OBD|"+String(FW_VERSION));
 }
 void loop(){
- waterTick();buzzerTick();
+ waterTick();processCommands();
  static uint32_t bat=0;if(millis()-bat>1000){bat=millis();float v=batteryVoltage();if(!isnan(v)&&(isnan(telem.voltage)||telem.proto==PROTO_NONE))telem.voltage=v;}
  pollVehicle();telemetryTick();
  if(wifiEnabled&&configuredSsid.length()&&WiFi.status()!=WL_CONNECTED&&millis()-lastWifiRetry>15000){lastWifiRetry=millis();wifiSaved(false);}
