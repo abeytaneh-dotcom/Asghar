@@ -15,16 +15,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Save WebSaza index.html via cPanel UAPI
+      - name: Deploy all WebSaza files via cPanel UAPI
         shell: bash
         run: |
           set -euo pipefail
-          RESPONSE=$(curl --fail-with-body --silent --show-error \
-            -H "Authorization: cpanel vt6qdx8:${{ secrets.WEBSAZA_CPANEL_TOKEN }}" \
-            --request POST \
-            --data-urlencode "dir=public_html" \
-            --data-urlencode "file=index.html" \
-            --data-urlencode "content@WebSaza/index.html" \
-            "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
-          echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
-          echo "cPanel file save completed successfully."
+          for file in WebSaza/*; do
+            [ -f "$file" ] || continue
+            name=$(basename "$file")
+            echo "Deploying $name"
+            RESPONSE=$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: cpanel vt6qdx8:${{ secrets.WEBSAZA_CPANEL_TOKEN }}" \
+              --request POST \
+              --data-urlencode "dir=public_html" \
+              --data-urlencode "file=$name" \
+              --data-urlencode "content@$file" \
+              "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
+            echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
+          done
+          echo "All WebSaza files deployed successfully."
