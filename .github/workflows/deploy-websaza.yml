@@ -15,7 +15,72 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy all WebSaza files via cPanel UAPI
+      - name: Build local premium image assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          download() {
+            url="$1"
+            out="$2"
+            echo "Downloading $out"
+            curl -fL --retry 4 --retry-delay 2 --connect-timeout 20 --max-time 120 "$url" -o "WebSaza/$out"
+            test -s "WebSaza/$out"
+            bytes=$(wc -c < "WebSaza/$out")
+            if [ "$bytes" -lt 20000 ]; then
+              echo "Downloaded asset is unexpectedly small: $out ($bytes bytes)"
+              exit 1
+            fi
+          }
+
+          # Free Unsplash images, downloaded once during deployment and then served locally by websaza.ir.
+          download "https://unsplash.com/photos/gMZEXKtzoO8/download?force=true&w=1600" "hero-premium-v7.jpg"
+          download "https://unsplash.com/photos/t-UZ2o2l7nQ/download?force=true&w=1400" "service-web-v7.jpg"
+          download "https://unsplash.com/photos/_p1xev53tjQ/download?force=true&w=1400" "service-app-v7.jpg"
+          download "https://unsplash.com/photos/X89VSmdDKE0/download?force=true&w=1400" "service-seo-v7.jpg"
+
+          # Real project previews, cached locally so visitors never depend on a third-party screenshot request.
+          download "https://image.thum.io/get/width/1600/crop/1000/noanimate/https://htaelec.ir/" "project-htaelec-v7.png"
+          download "https://image.thum.io/get/width/1400/crop/875/noanimate/https://achinu.ir/" "project-achinu-v7.png"
+          download "https://image.thum.io/get/width/1400/crop/875/noanimate/https://goldartmis.ir/" "project-goldartmis-v7.png"
+
+      - name: Prepare production HTML
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('WebSaza/index.html')
+          html = path.read_text(encoding='utf-8')
+
+          # No external runtime image dependency for the hero.
+          html = re.sub(r'<link rel="preconnect" href="https://images\.unsplash\.com" crossorigin>\n?', '', html)
+          html = re.sub(r'<link rel="preload" as="image" href="https://images\.unsplash\.com[^>]+>\n?', '', html)
+          if 'href="/hero-premium-v7.jpg"' not in html:
+              html = html.replace('<link rel="preload" href="/YekanBakhMedium.woff" as="font" type="font/woff" crossorigin>', '<link rel="preload" href="/YekanBakhMedium.woff" as="font" type="font/woff" crossorigin>\n<link rel="preload" as="image" href="/hero-premium-v7.jpg" fetchpriority="high">')
+
+          html = re.sub(r'<meta property="og:image" content="[^"]+">', '<meta property="og:image" content="https://websaza.ir/hero-premium-v7.jpg">', html)
+          html = re.sub(r'<meta name="twitter:image" content="[^"]+">', '<meta name="twitter:image" content="https://websaza.ir/hero-premium-v7.jpg">', html)
+
+          if '/premium-v7.css' not in html:
+              html = html.replace('<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">', '<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">\n<link rel="stylesheet" href="/premium-v7.css?v=20261017-1">')
+
+          hero = '<div class="hero-photo-layer"><img src="/hero-premium-v7.jpg" width="1600" height="1067" fetchpriority="high" loading="eager" decoding="async" alt="محیط حرفه‌ای طراحی سایت با مانیتور و موبایل"></div>'
+          html = re.sub(r'<div class="hero-photo-layer"><img[^>]*></div>', hero, html, count=1)
+
+          replacements = {
+              'https://image.thum.io/get/width/1600/crop/1000/noanimate/https://htaelec.ir/': '/project-htaelec-v7.png',
+              'https://image.thum.io/get/width/1200/crop/750/noanimate/https://achinu.ir/': '/project-achinu-v7.png',
+              'https://image.thum.io/get/width/1200/crop/750/noanimate/https://goldartmis.ir/': '/project-goldartmis-v7.png',
+          }
+          for old, new in replacements.items():
+              html = html.replace(old, new)
+
+          path.write_text(html, encoding='utf-8')
+          PY
+
+      - name: Deploy text files via cPanel UAPI
         shell: bash
         run: |
           set -euo pipefail
@@ -23,7 +88,10 @@ jobs:
           for file in WebSaza/*; do
             [ -f "$file" ] || continue
             name=$(basename "$file")
-            echo "Deploying $name"
+            case "$name" in
+              *.jpg|*.jpeg|*.png|*.webp|*.gif|*.ico|*.woff|*.woff2) continue ;;
+            esac
+            echo "Deploying text: $name"
             RESPONSE=$(curl --fail-with-body --silent --show-error \
               -H "Authorization: cpanel vt6qdx8:${{ secrets.WEBSAZA_CPANEL_TOKEN }}" \
               --request POST \
@@ -33,13 +101,40 @@ jobs:
               "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
             echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
           done
-          echo "All WebSaza files deployed successfully."
 
-      - name: Verify live domain
+      - name: Upload premium binary images via cPanel UAPI
         shell: bash
         run: |
           set -euo pipefail
+          upload_binary() {
+            file="$1"
+            name=$(basename "$file")
+            echo "Uploading image: $name"
+            RESPONSE=$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: cpanel vt6qdx8:${{ secrets.WEBSAZA_CPANEL_TOKEN }}" \
+              -F "file-1=@$file;filename=$name" \
+              -F "dir=public_html" \
+              "https://mch4444.dnsuserver.com:2083/execute/Fileman/upload_files")
+            echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
+          }
+          upload_binary WebSaza/hero-premium-v7.jpg
+          upload_binary WebSaza/service-web-v7.jpg
+          upload_binary WebSaza/service-app-v7.jpg
+          upload_binary WebSaza/service-seo-v7.jpg
+          upload_binary WebSaza/project-htaelec-v7.png
+          upload_binary WebSaza/project-achinu-v7.png
+          upload_binary WebSaza/project-goldartmis-v7.png
+
+      - name: Verify live domain and local assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 8
           echo "Root response"
-          curl -sS -I --max-time 20 https://websaza.ir/ | head -n 8
+          curl -fsSI --max-time 20 https://websaza.ir/ | head -n 8
           echo "WWW response"
           curl -sS -I --max-time 20 https://www.websaza.ir/ | head -n 10
+          for asset in hero-premium-v7.jpg service-web-v7.jpg service-app-v7.jpg service-seo-v7.jpg project-htaelec-v7.png project-achinu-v7.png project-goldartmis-v7.png premium-v7.css; do
+            echo "Checking $asset"
+            curl -fsSI --max-time 20 "https://websaza.ir/$asset" | head -n 4
+          done
