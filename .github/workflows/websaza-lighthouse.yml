@@ -1,0 +1,44 @@
+name: WebSaza Lighthouse QA
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'WebSaza/**'
+      - '.github/workflows/websaza-lighthouse.yml'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for deployment
+        run: sleep 45
+
+      - name: Run Lighthouse
+        shell: bash
+        run: |
+          set -e
+          npx -y lighthouse@13.0.1 https://websaza.ir/ \
+            --only-categories=performance,accessibility,best-practices,seo \
+            --output=json --output=html \
+            --output-path="$GITHUB_WORKSPACE/websaza-lighthouse" \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --quiet
+          node - <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync('websaza-lighthouse.report.json','utf8'));
+          for (const k of ['performance','accessibility','best-practices','seo']) console.log(`${k}: ${Math.round(r.categories[k].score*100)}`);
+          console.log('LCP:',r.audits['largest-contentful-paint'].displayValue);
+          console.log('CLS:',r.audits['cumulative-layout-shift'].displayValue);
+          console.log('TBT:',r.audits['total-blocking-time'].displayValue);
+          NODE
+
+      - name: Upload Lighthouse report
+        uses: actions/upload-artifact@v4
+        with:
+          name: websaza-lighthouse
+          path: |
+            websaza-lighthouse.report.json
+            websaza-lighthouse.report.html
+          retention-days: 3
