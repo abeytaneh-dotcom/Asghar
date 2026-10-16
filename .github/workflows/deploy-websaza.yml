@@ -20,7 +20,7 @@ jobs:
         run: |
           set -euo pipefail
           RESPONSE=$(curl --fail-with-body --silent --show-error \
-            -H "Authorization: cpanel ${{ secrets.WEBSAZA_FTP_USERNAME }}:${{ secrets.WEBSAZA_CPANEL_TOKEN }}" \
+            -H "Authorization: cpanel vt6qdx8:${{ secrets.WEBSAZA_CPANEL_TOKEN }}" \
             -F "file=@WebSaza/index.html;filename=index.html" \
             -F "dir=public_html" \
             "https://mch4444.dnsuserver.com:2083/execute/Fileman/upload_files")
