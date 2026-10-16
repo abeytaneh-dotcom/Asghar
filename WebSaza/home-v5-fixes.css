@@ -19,7 +19,8 @@
 .wow-v6 .hero-v6 .hero-copy{max-width:650px!important}
 .wow-v6 .hero-v6 h1{font-size:clamp(44px,4.25vw,62px)!important;line-height:1.16!important;letter-spacing:-1.8px!important;margin:18px 0 18px!important}
 .wow-v6 .hero-v6 .hero-lead{font-size:15px!important;line-height:1.95!important;max-width:610px!important;color:#626a73!important}
-.wow-v6 .hero-v6 .hero-showcase{min-height:510px!important;border-radius:38px!important;overflow:hidden!important;background:#11161c url('https://images.pexels.com/photos/450035/pexels-photo-450035.jpeg?auto=compress&cs=tinysrgb&w=1600') center center/cover no-repeat!important;box-shadow:0 34px 90px rgba(17,20,25,.18)!important;isolation:isolate!important;position:relative!important}
+.wow-v6 .hero-v6 .hero-showcase{min-height:510px!important;border-radius:38px!important;overflow:hidden!important;background:#11161c url('https://images.pexels.com/photos/285814/pexels-photo-285814.jpeg?auto=compress&cs=tinysrgb&w=1600') center center/cover no-repeat!important;box-shadow:0 34px 90px rgba(17,20,25,.18)!important;isolation:isolate!important;position:relative!important;transition:transform .35s ease,box-shadow .35s ease!important}
+.wow-v6 .hero-v6 .hero-showcase:hover{transform:translateY(-4px)!important;box-shadow:0 42px 110px rgba(17,20,25,.22)!important}
 .wow-v6 .hero-v6 .hero-showcase:before{content:"WEB  •  APP  •  UI/UX";position:absolute;z-index:4;top:24px;left:24px;padding:10px 13px;border-radius:999px;background:rgba(12,17,22,.78);color:#d9ff7c;border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(14px);font:800 10px/1 Arial,sans-serif;letter-spacing:.7px;box-shadow:0 10px 28px rgba(0,0,0,.18)}
 .wow-v6 .hero-v6 .hero-showcase:after{content:"طراحی برای برندهایی که می‌خواهند متفاوت دیده شوند";position:absolute;z-index:4;right:24px;bottom:24px;max-width:330px;padding:16px 18px;border-radius:20px;background:rgba(255,255,255,.92);color:#171b20;border:1px solid rgba(255,255,255,.8);backdrop-filter:blur(16px);box-shadow:0 18px 44px rgba(0,0,0,.16);font:800 15px/1.8 YekanBakh,Tahoma,sans-serif;text-align:right}
 .wow-v6 .hero-v6 .hero-photo-layer,.wow-v6 .hero-v6 .browser-mockup,.wow-v6 .hero-v6 .phone-mockup,.wow-v6 .hero-v6 .floating-chip{display:none!important}
@@ -29,11 +30,29 @@
 .wow-v6 .hero-v6 .eyebrow{background:#eef8d8!important;border-color:#d7e9af!important;color:#33401c!important}
 .wow-v6 .hero-v6 .trust-strip{margin-top:30px!important;border-radius:20px!important;background:#fff!important;box-shadow:0 14px 38px rgba(17,20,25,.05)!important}
 
+/* Premium photographic service cards */
+.wow-v6 .services-v6 .service-card{background:#fff!important;border-color:#e7e9e1!important;box-shadow:0 16px 42px rgba(17,20,25,.06)!important;transition:transform .28s ease,box-shadow .28s ease!important}
+.wow-v6 .services-v6 .service-card:hover{transform:translateY(-8px)!important;box-shadow:0 26px 65px rgba(17,20,25,.12)!important}
+.wow-v6 .services-v6 .service-visual{height:285px!important;background-position:center!important;background-size:cover!important;position:relative!important}
+.wow-v6 .services-v6 .visual-web{background-image:linear-gradient(180deg,rgba(10,14,18,.05),rgba(10,14,18,.28)),url('https://images.pexels.com/photos/285814/pexels-photo-285814.jpeg?auto=compress&cs=tinysrgb&w=1000')!important}
+.wow-v6 .services-v6 .visual-app{background-image:linear-gradient(180deg,rgba(10,14,18,.04),rgba(10,14,18,.24)),url('https://images.pexels.com/photos/6322367/pexels-photo-6322367.jpeg?auto=compress&cs=tinysrgb&w=1000')!important}
+.wow-v6 .services-v6 .visual-seo{background-image:linear-gradient(180deg,rgba(10,14,18,.04),rgba(10,14,18,.24)),url('https://images.pexels.com/photos/3861957/pexels-photo-3861957.jpeg?auto=compress&cs=tinysrgb&w=1000')!important}
+.wow-v6 .services-v6 .screen-stack,.wow-v6 .services-v6 .app-phone,.wow-v6 .services-v6 .seo-board{display:none!important}
+.wow-v6 .services-v6 .service-index{z-index:3!important;background:rgba(255,255,255,.92)!important;color:#15191d!important;box-shadow:0 10px 28px rgba(0,0,0,.12)!important}
+.wow-v6 .services-v6 .service-body{padding:24px 24px 26px!important}
+
+/* Real live previews for portfolio cards, local SVG remains fallback */
+.wow-v6 .portfolio-v6 .project:nth-child(1) .project-shot{background-image:linear-gradient(180deg,rgba(10,14,18,.02),rgba(10,14,18,.18)),url('https://s.wordpress.com/mshots/v1/https%3A%2F%2Fhtaelec.ir?w=1200'),url('/real-htaelec.svg')!important;background-size:cover!important;background-position:top center!important}
+.wow-v6 .portfolio-v6 .project:nth-child(2) .project-shot{background-image:linear-gradient(180deg,rgba(10,14,18,.02),rgba(10,14,18,.18)),url('https://s.wordpress.com/mshots/v1/https%3A%2F%2Fachinu.ir?w=1200'),url('/real-achinu.svg')!important;background-size:cover!important;background-position:top center!important}
+.wow-v6 .portfolio-v6 .project:nth-child(3) .project-shot{background-image:linear-gradient(180deg,rgba(10,14,18,.02),rgba(10,14,18,.18)),url('https://s.wordpress.com/mshots/v1/https%3A%2F%2Fgoldartmis.ir?w=1200'),url('/real-goldartmis.svg')!important;background-size:cover!important;background-position:top center!important}
+.wow-v6 .portfolio-v6 .project-shot img{opacity:0!important}
+
 @media(max-width:1180px) and (min-width:901px){
   .wow-v6 .hero-v6 .hero-grid{gap:36px!important}
   .wow-v6 .hero-v6 h1{font-size:clamp(40px,4.2vw,52px)!important}
   .wow-v6 .hero-v6 .hero-showcase{min-height:450px!important}
   .wow-v6 .hero-v6 .hero-showcase:after{max-width:280px;font-size:13px;padding:13px 15px}
+  .wow-v6 .services-v6 .service-visual{height:250px!important}
 }
 @media(max-width:900px){
   .wow-v6 .hero-v6 .hero-grid{grid-template-columns:1fr!important;gap:28px!important}
@@ -47,4 +66,5 @@
   .wow-v6 .hero-v6 .hero-showcase:before{top:14px;left:14px;font-size:8px;padding:8px 10px}
   .wow-v6 .hero-v6 .hero-showcase:after{right:14px;left:14px;bottom:14px;max-width:none;font-size:12px;padding:12px 14px;border-radius:16px}
   .wow-v6 .hero-v6 h1{font-size:clamp(34px,10vw,47px)!important;letter-spacing:-1px!important}
+  .wow-v6 .services-v6 .service-visual{height:220px!important}
 }
