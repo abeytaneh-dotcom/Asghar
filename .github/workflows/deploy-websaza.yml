@@ -1,4 +1,4 @@
-name: Deploy WebSaza to MahanCloud
+name: Deploy WebSaza to cPanel
 
 on:
   push:
@@ -15,13 +15,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy WebSaza to cPanel hosting
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: 159.69.20.154
-          username: ${{ secrets.WEBSAZA_FTP_USERNAME }}
-          password: ${{ secrets.WEBSAZA_FTP_PASSWORD }}
-          protocol: ftps
-          local-dir: ./WebSaza/
-          server-dir: /public_html/
-          log-level: standard
+      - name: Upload WebSaza to cPanel via UAPI
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESPONSE=$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: cpanel ${{ secrets.WEBSAZA_FTP_USERNAME }}:${{ secrets.WEBSAZA_CPANEL_TOKEN }}" \
+            -F "file=@WebSaza/index.html;filename=index.html" \
+            -F "dir=public_html" \
+            "https://mch4444.dnsuserver.com:2083/execute/Fileman/upload_files")
+          echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
+          echo "cPanel upload completed successfully."
