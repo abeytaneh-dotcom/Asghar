@@ -1,0 +1,9 @@
+/* WebSaza v7 performance polish */
+.wow-v6 .site-header{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(255,255,255,.97)!important}
+.floating-chip{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.hero-photo-layer img{filter:none!important}
+.feature-photo-real{background:radial-gradient(circle at 22% 18%,rgba(201,243,106,.24),transparent 28%),linear-gradient(145deg,#dfe4df 0%,#c9d0ce 48%,#e9ece8 100%)!important}
+.feature-photo-real:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,255,255,.18) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.18) 1px,transparent 1px);background-size:36px 36px;opacity:.55}
+.feature-photo-real img{display:none!important}
+.feature-photo-real:after{background:linear-gradient(180deg,rgba(16,22,28,.02),rgba(16,22,28,.28))!important}
+@media(max-width:760px){.feature-photo-real:before{background-size:28px 28px}}
