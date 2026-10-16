@@ -1,0 +1,14 @@
+/* WebSaza visual QA refinements */
+.hero-media{background:#11171c url('/showcase-1.svg') center/cover no-repeat}
+.hero-media>img{object-position:center 22%;transform:scale(1.075)}
+.hero-media:hover>img{transform:scale(1.095)}
+.hero-media:before{content:"WEB  ·  APP  ·  SEO";position:absolute;z-index:3;top:18px;right:18px;padding:8px 11px;border-radius:999px;background:rgba(17,22,27,.82);color:#d9ff7c;border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(12px);font:700 9px/1 Arial,sans-serif;letter-spacing:.6px;box-shadow:0 10px 30px rgba(0,0,0,.12)}
+.feature-media{background:#e9eae5 url('/showcase-1.svg') center/cover no-repeat}
+.cta-media{background:#151a20 url('/showcase-3.svg') center/cover no-repeat}
+.project:nth-child(1) .project-shot{background:#0e1317 url('/real-htaelec.svg') center/cover no-repeat}
+.project:nth-child(2) .project-shot{background:#0e1317 url('/real-achinu.svg') center/cover no-repeat}
+.project:nth-child(3) .project-shot{background:#0e1317 url('/real-goldartmis.svg') center/cover no-repeat}
+.section-head h2,.feature-panel h2,.seo-panel h2{color:#171b20}
+.portfolio .section-head h2{color:#fff}
+.service-body h3{color:#171b20}
+@media(max-width:760px){.hero-media>img{object-position:center 18%;transform:scale(1.09)}.hero-media:hover>img{transform:scale(1.09)}.hero-media:before{top:12px;right:12px;font-size:8px;padding:7px 9px}}
