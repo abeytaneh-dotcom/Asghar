@@ -40,3 +40,38 @@
 .score-card .score{font-size:0!important}.score-card .score:after{content:"100";font:800 68px/1 Arial;color:var(--lime)}
 .score-card .score-label{font-size:0!important}.score-card .score-label:after{content:"SEO در آخرین تست";font-size:11px;color:#aeb5bd}
 @media(max-width:760px){.score-card .score:after{font-size:58px}}
+
+/* Real-browser viewport tuning: keep the first screen balanced on common Windows scaling/zoom levels */
+@media (min-width:1101px){
+  .wow-v6 .nav{height:72px}
+  .hero-v6{padding:46px 0 56px}
+  .hero-v6 .hero-grid{grid-template-columns:1fr 1fr;gap:46px;align-items:center}
+  .hero-v6 h1{font-size:clamp(46px,4.35vw,64px);line-height:1.12;letter-spacing:-2px;margin:17px 0 19px}
+  .hero-v6 .hero-lead{max-width:620px;font-size:15px;line-height:1.9}
+  .hero-showcase{min-height:500px}
+  .hero-photo-layer{inset:28px 7% 32px 10%;border-radius:28px}
+  .browser-mockup{width:72%;right:0;top:16%}
+  .phone-mockup{width:23%;left:0;bottom:3%;border-width:7px;border-radius:28px}
+  .floating-chip{padding:10px 12px}
+  .wow-v6 .trust-strip{margin-top:28px}
+}
+@media (min-width:1101px) and (max-height:850px){
+  .hero-v6{padding-top:32px;padding-bottom:42px}
+  .hero-v6 h1{font-size:clamp(44px,4vw,58px);margin:13px 0 15px}
+  .hero-v6 .hero-lead{line-height:1.72}
+  .hero-showcase{min-height:440px}
+  .hero-v6 .hero-actions{margin-top:18px}
+  .hero-v6 .hero-points{margin-top:14px}
+  .wow-v6 .trust-strip{margin-top:20px}
+}
+@media (min-width:960px) and (max-width:1100px){
+  .hero-v6{padding:40px 0 50px}
+  .hero-v6 .hero-grid{grid-template-columns:1fr 1fr;gap:28px}
+  .hero-v6 .hero-copy{max-width:none}
+  .hero-v6 h1{font-size:clamp(40px,4.9vw,52px);line-height:1.14;letter-spacing:-1.6px}
+  .hero-showcase{min-height:430px}
+  .hero-photo-layer{inset:24px 7% 30px 9%}
+  .browser-mockup{width:77%;right:-1%;top:17%}
+  .phone-mockup{width:24%;left:-1%;border-width:6px}
+  .wow-v6 .trust-strip{margin-top:24px}
+}
