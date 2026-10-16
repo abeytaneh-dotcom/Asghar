@@ -32,11 +32,11 @@ jobs:
             fi
           }
 
-          # Curated free Unsplash photos. Downloaded during deployment, then served locally by websaza.ir.
-          download "https://images.unsplash.com/photo-1692355120033-a008cb7500f2?auto=format&fit=crop&w=1600&q=85" "hero-premium-v7.jpg"
-          download "https://images.unsplash.com/photo-1681684227142-67c970ec26b3?auto=format&fit=crop&w=1400&q=85" "service-web-v7.jpg"
-          download "https://images.unsplash.com/photo-1759505017950-25e0733b9e68?auto=format&fit=crop&w=1400&q=85" "service-app-v7.jpg"
-          download "https://images.unsplash.com/photo-1617240016072-d92174e44171?auto=format&fit=crop&w=1400&q=85" "service-seo-v7.jpg"
+          # Real photographic assets from Pexels, downloaded at deploy time and served locally.
+          download "https://images.pexels.com/photos/31198911/pexels-photo-31198911.jpeg?auto=compress&cs=tinysrgb&w=1600" "hero-premium-v8.jpg"
+          download "https://images.pexels.com/photos/6804581/pexels-photo-6804581.jpeg?auto=compress&cs=tinysrgb&w=1400" "service-web-v8.jpg"
+          download "https://images.pexels.com/photos/12123390/pexels-photo-12123390.jpeg?auto=compress&cs=tinysrgb&w=1400" "service-app-v8.jpg"
+          download "https://images.pexels.com/photos/12969403/pexels-photo-12969403.jpeg?auto=compress&cs=tinysrgb&w=1400" "service-seo-v8.jpg"
 
           # Real project previews, cached locally so visitors never depend on a third-party screenshot request.
           download "https://image.thum.io/get/width/1600/crop/1000/noanimate/https://htaelec.ir/" "project-htaelec-v7.png"
@@ -56,16 +56,18 @@ jobs:
 
           html = re.sub(r'<link rel="preconnect" href="https://images\.unsplash\.com" crossorigin>\n?', '', html)
           html = re.sub(r'<link rel="preload" as="image" href="https://images\.unsplash\.com[^>]+>\n?', '', html)
-          if 'href="/hero-premium-v7.jpg"' not in html:
-              html = html.replace('<link rel="preload" href="/YekanBakhMedium.woff" as="font" type="font/woff" crossorigin>', '<link rel="preload" href="/YekanBakhMedium.woff" as="font" type="font/woff" crossorigin>\n<link rel="preload" as="image" href="/hero-premium-v7.jpg" fetchpriority="high">')
+          html = re.sub(r'<link rel="preload" as="image" href="/hero-premium-v\d+\.jpg"[^>]*>\n?', '', html)
+          html = html.replace('<link rel="preload" href="/YekanBakhMedium.woff" as="font" type="font/woff" crossorigin>', '<link rel="preload" href="/YekanBakhMedium.woff" as="font" type="font/woff" crossorigin>\n<link rel="preload" as="image" href="/hero-premium-v8.jpg" fetchpriority="high">')
 
-          html = re.sub(r'<meta property="og:image" content="[^"]+">', '<meta property="og:image" content="https://websaza.ir/hero-premium-v7.jpg">', html)
-          html = re.sub(r'<meta name="twitter:image" content="[^"]+">', '<meta name="twitter:image" content="https://websaza.ir/hero-premium-v7.jpg">', html)
+          html = re.sub(r'<meta property="og:image" content="[^"]+">', '<meta property="og:image" content="https://websaza.ir/hero-premium-v8.jpg">', html)
+          html = re.sub(r'<meta name="twitter:image" content="[^"]+">', '<meta name="twitter:image" content="https://websaza.ir/hero-premium-v8.jpg">', html)
 
           if '/premium-v7.css' not in html:
-              html = html.replace('<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">', '<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">\n<link rel="stylesheet" href="/premium-v7.css?v=20261017-2">')
+              html = html.replace('<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">', '<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">\n<link rel="stylesheet" href="/premium-v7.css?v=20261017-3">')
+          else:
+              html = re.sub(r'/premium-v7\.css\?v=[^\"]+', '/premium-v7.css?v=20261017-3', html)
 
-          hero = '<div class="hero-photo-layer"><img src="/hero-premium-v7.jpg" width="1600" height="1067" fetchpriority="high" loading="eager" decoding="async" alt="محیط حرفه‌ای طراحی سایت با مانیتور و موبایل"></div>'
+          hero = '<div class="hero-photo-layer"><img src="/hero-premium-v8.jpg" width="1600" height="1067" fetchpriority="high" loading="eager" decoding="async" alt="استودیوی حرفه‌ای طراحی سایت با مانیتور، لپ‌تاپ و میز کار مدرن"></div>'
           html = re.sub(r'<div class="hero-photo-layer"><img[^>]*></div>', hero, html, count=1)
 
           replacements = {
@@ -120,10 +122,10 @@ jobs:
               "https://mch4444.dnsuserver.com:2083/execute/Fileman/upload_files")
             echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
           }
-          upload_binary WebSaza/hero-premium-v7.jpg
-          upload_binary WebSaza/service-web-v7.jpg
-          upload_binary WebSaza/service-app-v7.jpg
-          upload_binary WebSaza/service-seo-v7.jpg
+          upload_binary WebSaza/hero-premium-v8.jpg
+          upload_binary WebSaza/service-web-v8.jpg
+          upload_binary WebSaza/service-app-v8.jpg
+          upload_binary WebSaza/service-seo-v8.jpg
           upload_binary WebSaza/project-htaelec-v7.png
           upload_binary WebSaza/project-achinu-v7.png
           upload_binary WebSaza/project-goldartmis-v7.png
@@ -137,7 +139,7 @@ jobs:
           curl -fsSI --max-time 20 https://websaza.ir/ | head -n 8
           echo "WWW response"
           curl -sS -I --max-time 20 https://www.websaza.ir/ | head -n 10
-          for asset in hero-premium-v7.jpg service-web-v7.jpg service-app-v7.jpg service-seo-v7.jpg project-htaelec-v7.png project-achinu-v7.png project-goldartmis-v7.png premium-v7.css; do
+          for asset in hero-premium-v8.jpg service-web-v8.jpg service-app-v8.jpg service-seo-v8.jpg project-htaelec-v7.png project-achinu-v7.png project-goldartmis-v7.png premium-v7.css; do
             echo "Checking $asset"
             curl -fsSI --max-time 20 "https://websaza.ir/$asset" | head -n 4
           done
