@@ -63,7 +63,7 @@ jobs:
           html = re.sub(r'<meta name="twitter:image" content="[^"]+">', '<meta name="twitter:image" content="https://websaza.ir/hero-premium-v7.jpg">', html)
 
           if '/premium-v7.css' not in html:
-              html = html.replace('<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">', '<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">\n<link rel="stylesheet" href="/premium-v7.css?v=20261017-1">')
+              html = html.replace('<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">', '<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">\n<link rel="stylesheet" href="/premium-v7.css?v=20261017-2">')
 
           hero = '<div class="hero-photo-layer"><img src="/hero-premium-v7.jpg" width="1600" height="1067" fetchpriority="high" loading="eager" decoding="async" alt="محیط حرفه‌ای طراحی سایت با مانیتور و موبایل"></div>'
           html = re.sub(r'<div class="hero-photo-layer"><img[^>]*></div>', hero, html, count=1)
@@ -108,6 +108,10 @@ jobs:
           upload_binary() {
             file="$1"
             name=$(basename "$file")
+            if curl -fsSI --max-time 15 "https://websaza.ir/$name" >/dev/null 2>&1; then
+              echo "Image already present on live site, keeping it: $name"
+              return 0
+            fi
             echo "Uploading image: $name"
             RESPONSE=$(curl --fail-with-body --silent --show-error \
               -H "Authorization: cpanel vt6qdx8:${{ secrets.WEBSAZA_CPANEL_TOKEN }}" \
