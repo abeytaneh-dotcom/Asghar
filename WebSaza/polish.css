@@ -1,0 +1,43 @@
+/* Final visual polish: desktop balance, fold fit, typography and mobile rhythm */
+.hero{min-height:calc(100svh - 76px);display:flex;align-items:center;padding:58px 0 54px}
+.hero-grid{grid-template-columns:minmax(0,1.08fr) minmax(400px,.92fr);gap:48px;width:100%}
+.hero h1{font-size:clamp(42px,5vw,66px);line-height:1.22;letter-spacing:-2px;max-width:760px;text-wrap:balance;margin:16px 0 18px}
+.hero-lead{font-size:17px;line-height:2;max-width:650px}
+.hero-actions{margin-top:24px}.trust-row{margin-top:22px}
+.hero-visual{min-height:430px}.browser{width:min(100%,500px);transform:perspective(1000px) rotateY(-3deg) rotateX(1deg)}
+.floating-card.a{top:48px;left:0}.floating-card.b{bottom:46px;right:0}
+.section{padding:82px 0}.section-tight{padding:58px 0}
+.card,.panel,.cta-box{box-shadow:0 18px 54px rgba(0,0,0,.18)}
+.nav-links a{font-weight:700}.brand small{opacity:.86}
+@media(max-width:1100px){
+  .hero-grid{grid-template-columns:minmax(0,1fr) minmax(360px,.9fr);gap:34px}
+  .hero h1{font-size:clamp(40px,5.2vw,58px)}
+  .hero-visual{min-height:390px}
+  .browser{max-width:460px}
+}
+@media(max-width:900px){
+  .hero{min-height:auto;padding:50px 0 44px}
+  .hero-grid{grid-template-columns:1fr;gap:36px}
+  .hero-copy{text-align:center}
+  .hero h1{font-size:clamp(36px,8vw,54px);max-width:760px;margin:16px auto 18px}
+  .hero-lead{margin-inline:auto;max-width:690px}
+  .hero-actions,.trust-row{justify-content:center}
+  .hero-visual{min-height:360px}
+  .browser{transform:none;max-width:560px}
+  .floating-card.a{left:4%;top:34px}.floating-card.b{right:4%;bottom:34px}
+}
+@media(max-width:600px){
+  .hero{padding:38px 0 34px}
+  .hero h1{font-size:clamp(32px,10.5vw,44px);line-height:1.27;letter-spacing:-1.2px}
+  .hero-lead{font-size:15px;line-height:1.95}
+  .hero-actions{display:grid;grid-template-columns:1fr;gap:10px}
+  .hero-actions .btn{width:100%}
+  .trust-row{gap:10px 14px;font-size:12px}
+  .hero-visual{min-height:300px}
+  .browser{border-radius:22px}
+  .browser-body{padding:20px}.mini-card{height:105px}
+  .floating-card{padding:10px 12px;border-radius:14px;font-size:10px}.floating-card b{font-size:14px}
+  .floating-card.a{left:0;top:20px}.floating-card.b{right:0;bottom:20px}
+  .section{padding:64px 0}.section-tight{padding:46px 0}
+  .section-head{margin-bottom:24px}
+}
