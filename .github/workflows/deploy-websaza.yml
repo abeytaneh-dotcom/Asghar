@@ -19,7 +19,7 @@ jobs:
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: 159.69.20.154
-          username: vt6qdx8
+          username: ${{ secrets.WEBSAZA_FTP_USERNAME }}
           password: ${{ secrets.WEBSAZA_FTP_PASSWORD }}
           protocol: ftps
           local-dir: ./WebSaza/
