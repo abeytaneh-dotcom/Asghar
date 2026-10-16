@@ -25,8 +25,8 @@ jobs:
           set -e
           BROWSER="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)"
           test -n "$BROWSER"
-          "$BROWSER" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1600,1200 --screenshot="$GITHUB_WORKSPACE/websaza-desktop.png" https://websaza.ir/
-          "$BROWSER" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=390,844 --screenshot="$GITHUB_WORKSPACE/websaza-mobile.png" https://websaza.ir/
+          "$BROWSER" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1600,6500 --screenshot="$GITHUB_WORKSPACE/websaza-desktop.png" https://websaza.ir/
+          "$BROWSER" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=390,5000 --screenshot="$GITHUB_WORKSPACE/websaza-mobile.png" https://websaza.ir/
           ls -lh "$GITHUB_WORKSPACE"/websaza-*.png
 
       - name: Upload visual QA
