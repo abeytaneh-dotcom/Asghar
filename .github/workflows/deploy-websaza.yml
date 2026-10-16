@@ -32,11 +32,11 @@ jobs:
             fi
           }
 
-          # Free Unsplash images, downloaded once during deployment and then served locally by websaza.ir.
-          download "https://unsplash.com/photos/gMZEXKtzoO8/download?force=true&w=1600" "hero-premium-v7.jpg"
-          download "https://unsplash.com/photos/t-UZ2o2l7nQ/download?force=true&w=1400" "service-web-v7.jpg"
-          download "https://unsplash.com/photos/_p1xev53tjQ/download?force=true&w=1400" "service-app-v7.jpg"
-          download "https://unsplash.com/photos/X89VSmdDKE0/download?force=true&w=1400" "service-seo-v7.jpg"
+          # Curated free Unsplash photos. Downloaded during deployment, then served locally by websaza.ir.
+          download "https://images.unsplash.com/photo-1692355120033-a008cb7500f2?auto=format&fit=crop&w=1600&q=85" "hero-premium-v7.jpg"
+          download "https://images.unsplash.com/photo-1681684227142-67c970ec26b3?auto=format&fit=crop&w=1400&q=85" "service-web-v7.jpg"
+          download "https://images.unsplash.com/photo-1759505017950-25e0733b9e68?auto=format&fit=crop&w=1400&q=85" "service-app-v7.jpg"
+          download "https://images.unsplash.com/photo-1617240016072-d92174e44171?auto=format&fit=crop&w=1400&q=85" "service-seo-v7.jpg"
 
           # Real project previews, cached locally so visitors never depend on a third-party screenshot request.
           download "https://image.thum.io/get/width/1600/crop/1000/noanimate/https://htaelec.ir/" "project-htaelec-v7.png"
@@ -54,7 +54,6 @@ jobs:
           path = Path('WebSaza/index.html')
           html = path.read_text(encoding='utf-8')
 
-          # No external runtime image dependency for the hero.
           html = re.sub(r'<link rel="preconnect" href="https://images\.unsplash\.com" crossorigin>\n?', '', html)
           html = re.sub(r'<link rel="preload" as="image" href="https://images\.unsplash\.com[^>]+>\n?', '', html)
           if 'href="/hero-premium-v7.jpg"' not in html:
