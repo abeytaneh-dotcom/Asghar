@@ -1,0 +1,39 @@
+name: WebSaza Visual QA
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'WebSaza/**'
+      - '.github/workflows/websaza-visual-test.yml'
+  workflow_dispatch:
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for deployment
+        run: sleep 40
+
+      - name: Check live page
+        run: |
+          curl -fsSI --max-time 20 https://websaza.ir/ | head -n 10
+
+      - name: Capture desktop and mobile screenshots
+        shell: bash
+        run: |
+          set -e
+          BROWSER="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)"
+          test -n "$BROWSER"
+          "$BROWSER" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1600,1200 --screenshot="$GITHUB_WORKSPACE/websaza-desktop.png" https://websaza.ir/
+          "$BROWSER" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=390,844 --screenshot="$GITHUB_WORKSPACE/websaza-mobile.png" https://websaza.ir/
+          ls -lh "$GITHUB_WORKSPACE"/websaza-*.png
+
+      - name: Upload visual QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: websaza-visual-qa
+          path: |
+            websaza-desktop.png
+            websaza-mobile.png
+          retention-days: 3
