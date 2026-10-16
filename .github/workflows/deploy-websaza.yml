@@ -24,5 +24,6 @@ jobs:
             -F "file=@WebSaza/index.html;filename=index.html" \
             -F "dir=public_html" \
             "https://mch4444.dnsuserver.com:2083/execute/Fileman/upload_files")
+          echo "$RESPONSE"
           echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
           echo "cPanel upload completed successfully."
