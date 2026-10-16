@@ -1,70 +1,63 @@
-/* WebSaza visual QA refinements */
-.hero-media{background:#11171c url('/showcase-1.svg') center/cover no-repeat}
-.hero-media>img{object-position:center 22%;transform:scale(1.075)}
-.hero-media:hover>img{transform:scale(1.095)}
-.hero-media:before{content:"WEB  ·  APP  ·  SEO";position:absolute;z-index:3;top:18px;right:18px;padding:8px 11px;border-radius:999px;background:rgba(17,22,27,.82);color:#d9ff7c;border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(12px);font:700 9px/1 Arial,sans-serif;letter-spacing:.6px;box-shadow:0 10px 30px rgba(0,0,0,.12)}
+/* WebSaza visual refinements — local, crisp, no remote-image dependency */
+.section-head h2,.feature-panel h2,.seo-panel h2,.service-body h3{color:#171b20}
+.portfolio .section-head h2{color:#fff}
 .feature-media{background:#e9eae5 url('/showcase-1.svg') center/cover no-repeat}
-.cta-media{background:#151a20 url('/showcase-3.svg') center/cover no-repeat}
+.cta-media{background:#151a20 url('/hero-studio.svg') center/cover no-repeat}
 .project:nth-child(1) .project-shot{background:#0e1317 url('/real-htaelec.svg') center/cover no-repeat}
 .project:nth-child(2) .project-shot{background:#0e1317 url('/real-achinu.svg') center/cover no-repeat}
 .project:nth-child(3) .project-shot{background:#0e1317 url('/real-goldartmis.svg') center/cover no-repeat}
-.section-head h2,.feature-panel h2,.seo-panel h2{color:#171b20}
-.portfolio .section-head h2{color:#fff}
-.service-body h3{color:#171b20}
-@media(max-width:760px){.hero-media>img{object-position:center 18%;transform:scale(1.09)}.hero-media:hover>img{transform:scale(1.09)}.hero-media:before{top:12px;right:12px;font-size:8px;padding:7px 9px}}
 
-/* Hero V7 — real-photo premium direction */
-.wow-v6 .hero-v6{background:radial-gradient(circle at 78% 12%,rgba(201,243,106,.18),transparent 26%),linear-gradient(180deg,#ffffff 0%,#fbfcf8 100%)!important}
-.wow-v6 .hero-v6 .hero-grid{grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr)!important;gap:62px!important;align-items:center!important}
+/* Hero — clean agency direction */
+.wow-v6 .hero-v6{background:radial-gradient(circle at 78% 10%,rgba(201,243,106,.17),transparent 24%),linear-gradient(180deg,#fff 0%,#fbfcf8 100%)!important}
+.wow-v6 .hero-v6 .hero-grid{grid-template-columns:minmax(0,1.02fr) minmax(0,.98fr)!important;gap:54px!important;align-items:center!important}
 .wow-v6 .hero-v6 .hero-copy{max-width:650px!important}
-.wow-v6 .hero-v6 h1{font-size:clamp(44px,4.25vw,62px)!important;line-height:1.16!important;letter-spacing:-1.8px!important;margin:18px 0 18px!important}
-.wow-v6 .hero-v6 .hero-lead{font-size:15px!important;line-height:1.95!important;max-width:610px!important;color:#626a73!important}
-.wow-v6 .hero-v6 .hero-showcase{min-height:510px!important;border-radius:38px!important;overflow:hidden!important;background:#11161c url('https://images.pexels.com/photos/285814/pexels-photo-285814.jpeg?auto=compress&cs=tinysrgb&w=1600') center center/cover no-repeat!important;box-shadow:0 34px 90px rgba(17,20,25,.18)!important;isolation:isolate!important;position:relative!important;transition:transform .35s ease,box-shadow .35s ease!important}
-.wow-v6 .hero-v6 .hero-showcase:hover{transform:translateY(-4px)!important;box-shadow:0 42px 110px rgba(17,20,25,.22)!important}
-.wow-v6 .hero-v6 .hero-showcase:before{content:"WEB  •  APP  •  UI/UX";position:absolute;z-index:4;top:24px;left:24px;padding:10px 13px;border-radius:999px;background:rgba(12,17,22,.78);color:#d9ff7c;border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(14px);font:800 10px/1 Arial,sans-serif;letter-spacing:.7px;box-shadow:0 10px 28px rgba(0,0,0,.18)}
-.wow-v6 .hero-v6 .hero-showcase:after{content:"طراحی برای برندهایی که می‌خواهند متفاوت دیده شوند";position:absolute;z-index:4;right:24px;bottom:24px;max-width:330px;padding:16px 18px;border-radius:20px;background:rgba(255,255,255,.92);color:#171b20;border:1px solid rgba(255,255,255,.8);backdrop-filter:blur(16px);box-shadow:0 18px 44px rgba(0,0,0,.16);font:800 15px/1.8 YekanBakh,Tahoma,sans-serif;text-align:right}
-.wow-v6 .hero-v6 .hero-photo-layer,.wow-v6 .hero-v6 .browser-mockup,.wow-v6 .hero-v6 .phone-mockup,.wow-v6 .hero-v6 .floating-chip{display:none!important}
-.wow-v6 .hero-v6 .hero-actions{margin-top:24px!important}
-.wow-v6 .hero-v6 .hero-points{margin-top:20px!important}
+.wow-v6 .hero-v6 h1{font-size:clamp(43px,4.05vw,59px)!important;line-height:1.15!important;letter-spacing:-1.6px!important;margin:17px 0 17px!important}
+.wow-v6 .hero-v6 .hero-lead{font-size:15px!important;line-height:1.9!important;max-width:600px!important;color:#626a73!important}
+.wow-v6 .hero-v6 .hero-actions{margin-top:22px!important}
+.wow-v6 .hero-v6 .hero-points{margin-top:17px!important}
 .wow-v6 .hero-v6 .hero-points span{background:#fff!important;border-color:#e2e5dd!important;padding:8px 11px!important;font-size:10px!important}
 .wow-v6 .hero-v6 .eyebrow{background:#eef8d8!important;border-color:#d7e9af!important;color:#33401c!important}
-.wow-v6 .hero-v6 .trust-strip{margin-top:30px!important;border-radius:20px!important;background:#fff!important;box-shadow:0 14px 38px rgba(17,20,25,.05)!important}
+.wow-v6 .hero-v6 .hero-showcase{min-height:475px!important;border-radius:30px!important;overflow:hidden!important;background:#111820 url('/hero-studio.svg') center/cover no-repeat!important;box-shadow:0 28px 75px rgba(17,20,25,.16)!important;isolation:isolate!important;position:relative!important;transform:none!important}
+.wow-v6 .hero-v6 .hero-showcase:hover{transform:translateY(-3px)!important;box-shadow:0 34px 90px rgba(17,20,25,.19)!important}
+.wow-v6 .hero-v6 .hero-showcase:before{content:"WEBSITE • APP • SEO";position:absolute;z-index:4;top:18px;left:18px;padding:8px 11px;border-radius:999px;background:rgba(10,15,21,.78);color:#d9ff7c;border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(12px);font:800 9px/1 Arial,sans-serif;letter-spacing:.6px}
+.wow-v6 .hero-v6 .hero-showcase:after{display:none!important}
+.wow-v6 .hero-v6 .hero-photo-layer,.wow-v6 .hero-v6 .browser-mockup,.wow-v6 .hero-v6 .phone-mockup,.wow-v6 .hero-v6 .floating-chip{display:none!important}
+.wow-v6 .hero-v6 .trust-strip{margin-top:24px!important;border-radius:18px!important;background:#fff!important;box-shadow:0 10px 30px rgba(17,20,25,.04)!important;border:1px solid #e9ebe5!important}
+.wow-v6 .hero-v6 .trust-item{padding:14px 18px!important}
 
-/* Premium photographic service cards */
-.wow-v6 .services-v6 .service-card{background:#fff!important;border-color:#e7e9e1!important;box-shadow:0 16px 42px rgba(17,20,25,.06)!important;transition:transform .28s ease,box-shadow .28s ease!important}
-.wow-v6 .services-v6 .service-card:hover{transform:translateY(-8px)!important;box-shadow:0 26px 65px rgba(17,20,25,.12)!important}
-.wow-v6 .services-v6 .service-visual{height:285px!important;background-position:center!important;background-size:cover!important;position:relative!important}
-.wow-v6 .services-v6 .visual-web{background-image:linear-gradient(180deg,rgba(10,14,18,.05),rgba(10,14,18,.28)),url('https://images.pexels.com/photos/285814/pexels-photo-285814.jpeg?auto=compress&cs=tinysrgb&w=1000')!important}
-.wow-v6 .services-v6 .visual-app{background-image:linear-gradient(180deg,rgba(10,14,18,.04),rgba(10,14,18,.24)),url('https://images.pexels.com/photos/6322367/pexels-photo-6322367.jpeg?auto=compress&cs=tinysrgb&w=1000')!important}
-.wow-v6 .services-v6 .visual-seo{background-image:linear-gradient(180deg,rgba(10,14,18,.04),rgba(10,14,18,.24)),url('https://images.pexels.com/photos/3861957/pexels-photo-3861957.jpeg?auto=compress&cs=tinysrgb&w=1000')!important}
+/* Services — local artwork instead of external photos */
+.wow-v6 .services-v6 .service-card{background:#fff!important;border-color:#e7e9e1!important;box-shadow:0 14px 36px rgba(17,20,25,.055)!important;transition:transform .25s ease,box-shadow .25s ease!important}
+.wow-v6 .services-v6 .service-card:hover{transform:translateY(-6px)!important;box-shadow:0 22px 54px rgba(17,20,25,.1)!important}
+.wow-v6 .services-v6 .service-visual{height:265px!important;background-position:center!important;background-size:cover!important;position:relative!important}
+.wow-v6 .services-v6 .visual-web{background:#eaf2f8 url('/showcase-1.svg') center/cover no-repeat!important}
+.wow-v6 .services-v6 .visual-app{background:#f5ece8 url('/showcase-3.svg') center/cover no-repeat!important}
+.wow-v6 .services-v6 .visual-seo{background:#ecf5e5 url('/showcase-2.svg') center/cover no-repeat!important}
 .wow-v6 .services-v6 .screen-stack,.wow-v6 .services-v6 .app-phone,.wow-v6 .services-v6 .seo-board{display:none!important}
-.wow-v6 .services-v6 .service-index{z-index:3!important;background:rgba(255,255,255,.92)!important;color:#15191d!important;box-shadow:0 10px 28px rgba(0,0,0,.12)!important}
-.wow-v6 .services-v6 .service-body{padding:24px 24px 26px!important}
+.wow-v6 .services-v6 .service-index{z-index:3!important;background:rgba(255,255,255,.94)!important;color:#15191d!important;box-shadow:0 8px 22px rgba(0,0,0,.1)!important}
+.wow-v6 .services-v6 .service-body{padding:23px 23px 25px!important}
 
-/* Real live previews for portfolio cards, local SVG remains fallback */
-.wow-v6 .portfolio-v6 .project:nth-child(1) .project-shot{background-image:linear-gradient(180deg,rgba(10,14,18,.02),rgba(10,14,18,.18)),url('https://s.wordpress.com/mshots/v1/https%3A%2F%2Fhtaelec.ir?w=1200'),url('/real-htaelec.svg')!important;background-size:cover!important;background-position:top center!important}
-.wow-v6 .portfolio-v6 .project:nth-child(2) .project-shot{background-image:linear-gradient(180deg,rgba(10,14,18,.02),rgba(10,14,18,.18)),url('https://s.wordpress.com/mshots/v1/https%3A%2F%2Fachinu.ir?w=1200'),url('/real-achinu.svg')!important;background-size:cover!important;background-position:top center!important}
-.wow-v6 .portfolio-v6 .project:nth-child(3) .project-shot{background-image:linear-gradient(180deg,rgba(10,14,18,.02),rgba(10,14,18,.18)),url('https://s.wordpress.com/mshots/v1/https%3A%2F%2Fgoldartmis.ir?w=1200'),url('/real-goldartmis.svg')!important;background-size:cover!important;background-position:top center!important}
+/* Portfolio local fallbacks stay visible and reliable */
+.wow-v6 .portfolio-v6 .project:nth-child(1) .project-shot{background:#111820 url('/real-htaelec.svg') top center/cover no-repeat!important}
+.wow-v6 .portfolio-v6 .project:nth-child(2) .project-shot{background:#111820 url('/real-achinu.svg') top center/cover no-repeat!important}
+.wow-v6 .portfolio-v6 .project:nth-child(3) .project-shot{background:#111820 url('/real-goldartmis.svg') top center/cover no-repeat!important}
 .wow-v6 .portfolio-v6 .project-shot img{opacity:0!important}
 
 @media(max-width:1180px) and (min-width:901px){
-  .wow-v6 .hero-v6 .hero-grid{gap:36px!important}
-  .wow-v6 .hero-v6 h1{font-size:clamp(40px,4.2vw,52px)!important}
-  .wow-v6 .hero-v6 .hero-showcase{min-height:450px!important}
-  .wow-v6 .hero-v6 .hero-showcase:after{max-width:280px;font-size:13px;padding:13px 15px}
-  .wow-v6 .services-v6 .service-visual{height:250px!important}
+  .wow-v6 .hero-v6 .hero-grid{gap:34px!important}
+  .wow-v6 .hero-v6 h1{font-size:clamp(39px,4vw,50px)!important}
+  .wow-v6 .hero-v6 .hero-showcase{min-height:420px!important}
+  .wow-v6 .services-v6 .service-visual{height:240px!important}
 }
 @media(max-width:900px){
-  .wow-v6 .hero-v6 .hero-grid{grid-template-columns:1fr!important;gap:28px!important}
+  .wow-v6 .hero-v6 .hero-grid{grid-template-columns:1fr!important;gap:26px!important}
   .wow-v6 .hero-v6 .hero-copy{max-width:none!important;order:1!important}
-  .wow-v6 .hero-v6 .hero-showcase{order:2!important;min-height:430px!important}
-  .wow-v6 .hero-v6 h1{font-size:clamp(38px,8vw,54px)!important}
+  .wow-v6 .hero-v6 .hero-showcase{order:2!important;min-height:410px!important}
+  .wow-v6 .hero-v6 h1{font-size:clamp(37px,7.8vw,52px)!important}
 }
 @media(max-width:600px){
-  .wow-v6 .hero-v6{padding-top:28px!important}
-  .wow-v6 .hero-v6 .hero-showcase{min-height:320px!important;border-radius:26px!important}
-  .wow-v6 .hero-v6 .hero-showcase:before{top:14px;left:14px;font-size:8px;padding:8px 10px}
-  .wow-v6 .hero-v6 .hero-showcase:after{right:14px;left:14px;bottom:14px;max-width:none;font-size:12px;padding:12px 14px;border-radius:16px}
-  .wow-v6 .hero-v6 h1{font-size:clamp(34px,10vw,47px)!important;letter-spacing:-1px!important}
-  .wow-v6 .services-v6 .service-visual{height:220px!important}
+  .wow-v6 .hero-v6{padding-top:26px!important}
+  .wow-v6 .hero-v6 .hero-showcase{min-height:300px!important;border-radius:24px!important}
+  .wow-v6 .hero-v6 .hero-showcase:before{top:12px;left:12px;font-size:8px;padding:7px 9px}
+  .wow-v6 .hero-v6 h1{font-size:clamp(33px,9.5vw,45px)!important;letter-spacing:-.9px!important}
+  .wow-v6 .services-v6 .service-visual{height:210px!important}
 }
