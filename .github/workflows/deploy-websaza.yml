@@ -1,0 +1,27 @@
+name: Deploy WebSaza to MahanCloud
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'WebSaza/**'
+      - '.github/workflows/deploy-websaza.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy WebSaza to cPanel hosting
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: 159.69.20.154
+          username: vt6qdx8
+          password: ${{ secrets.WEBSAZA_FTP_PASSWORD }}
+          protocol: ftps
+          local-dir: ./WebSaza/
+          server-dir: /public_html/
+          log-level: standard
