@@ -32,6 +32,26 @@
 .cta-v6 .cta-box{border-radius:30px;overflow:hidden;box-shadow:0 30px 74px rgba(17,20,25,.14)}
 .home-v5.wow-v6 footer{background:#0f1419}
 
+/* Premium minimal copy pass: keep the message, remove explanatory clutter. */
+.home-v5.wow-v6 .hero-lead,
+.home-v5.wow-v6 .section-head>p,
+.home-v5.wow-v6 .service-body>p,
+.home-v5.wow-v6 .feature-panel>p,
+.home-v5.wow-v6 .feature-item div>span,
+.home-v5.wow-v6 .project-body>p,
+.home-v5.wow-v6 .concept>span,
+.home-v5.wow-v6 .process-card>p,
+.home-v5.wow-v6 .seo-panel>p,
+.home-v5.wow-v6 .cta-copy>p,
+.home-v5.wow-v6 .trust-item>span{display:none!important}
+.home-v5.wow-v6 .hero-actions{margin-top:28px}
+.home-v5.wow-v6 .service-premium .service-body{padding:21px 24px 23px}
+.home-v5.wow-v6 .project-body{padding:18px 22px 20px}
+.home-v5.wow-v6 .process-card{min-height:150px}
+.home-v5.wow-v6 .feature-item{padding-block:13px}
+.home-v5.wow-v6 .trust-item{padding:15px 18px;text-align:center}
+.home-v5.wow-v6 .trust-item b{font-size:12px}
+
 @media(max-width:1100px){.hero-v6 .hero-grid{grid-template-columns:1fr;gap:30px}.hero-v6 .hero-copy{max-width:820px}.hero-showcase{min-height:520px}.service-visual{height:300px!important}}
 @media(max-width:760px){.home-v5.wow-v6 .container{width:min(100% - 24px,1240px)}.hero-v6{padding:30px 0 42px}.hero-v6 .hero-grid{gap:24px}.hero-v6 h1{font-size:clamp(36px,10vw,48px);letter-spacing:-1.45px;line-height:1.22}.hero-v6 .hero-lead{font-size:14px}.hero-showcase{min-height:330px;border-radius:22px}.hero-photo-layer{background-position:center!important}.hero-showcase:after{left:14px;bottom:14px;font-size:9px}.wow-v6 .trust-strip{grid-template-columns:1fr 1fr}.service-visual{height:235px!important}.feature-canvas{min-height:350px}.feature-canvas:before{right:16px;bottom:16px;left:16px;font-size:13px}.portfolio-grid-v6{grid-template-columns:1fr!important}.portfolio-grid-v6 .project-featured{grid-column:auto!important}.portfolio-grid-v6 .project-featured .project-shot{height:300px!important}}
 @media(max-height:800px) and (min-width:1101px){.hero-v6{padding:38px 0 40px}.hero-showcase{min-height:430px}.hero-v6 h1{font-size:clamp(40px,4.1vw,58px)}.wow-v6 .trust-strip{margin-top:22px}}
