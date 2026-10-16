@@ -1,0 +1,40 @@
+/* WebSaza premium self-hosted visual layer */
+.hero-photo{
+  background:
+    linear-gradient(0deg,rgba(10,14,18,.08),rgba(10,14,18,.02)),
+    url('/hero-premium.jpg') center/cover no-repeat!important;
+  min-height:590px;
+  border:1px solid rgba(18,24,32,.08);
+  box-shadow:0 30px 90px rgba(18,24,32,.15)!important;
+}
+.hero-photo>img{opacity:0!important;pointer-events:none}
+.photo-note{background:rgba(255,255,255,.91)!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.84)!important}
+.service-media{background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important}
+.service-card:nth-child(1) .service-media{background-image:url('/web-design-premium.jpg')!important}
+.service-card:nth-child(2) .service-media{background-image:url('/app-design-premium.jpg')!important}
+.service-card:nth-child(3) .service-media{background-image:url('/seo-premium.jpg')!important}
+.service-media>img{opacity:0!important;pointer-events:none}
+.service-card{box-shadow:0 18px 48px rgba(18,24,32,.07)!important}
+.service-card:hover{box-shadow:0 34px 88px rgba(18,24,32,.14)!important;transform:translateY(-7px)!important}
+.feature-photo{
+  background:url('/web-design-premium.jpg') center/cover no-repeat!important;
+  min-height:580px;
+  box-shadow:0 24px 70px rgba(18,24,32,.10);
+}
+.feature-photo>img{opacity:0!important;pointer-events:none}
+.cta-photo{background:url('/app-design-premium.jpg') center/cover no-repeat!important;position:relative}
+.cta-photo:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(19,23,28,.12),transparent 55%);pointer-events:none}
+.cta-photo>img{opacity:0!important;pointer-events:none}
+.hero h1{max-width:760px}
+.hero-stage{isolation:isolate}
+.hero-photo,.service-media,.feature-photo,.cta-photo{background-color:#ecece6}
+.project-shot{background:#101419}
+@media(max-width:1020px){
+  .hero-photo{min-height:480px}
+  .feature-photo{min-height:440px}
+}
+@media(max-width:760px){
+  .hero-photo{min-height:330px;border-radius:22px}
+  .feature-photo{min-height:300px}
+  .photo-note{display:none}
+}
