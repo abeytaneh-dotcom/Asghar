@@ -19,6 +19,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          shopt -s dotglob
           for file in WebSaza/*; do
             [ -f "$file" ] || continue
             name=$(basename "$file")
@@ -33,3 +34,12 @@ jobs:
             echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
           done
           echo "All WebSaza files deployed successfully."
+
+      - name: Verify live domain
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Root response"
+          curl -sS -I --max-time 20 https://websaza.ir/ | head -n 8
+          echo "WWW response"
+          curl -sS -I --max-time 20 https://www.websaza.ir/ | head -n 10
