@@ -33,3 +33,17 @@ jobs:
             echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
           done
           echo "All WebSaza files deployed successfully."
+
+      - name: Check live root and www domains
+        shell: bash
+        run: |
+          set +e
+          echo "=== DNS ==="
+          echo "websaza.ir A: $(dig +short websaza.ir A | tr '\n' ' ')"
+          echo "www.websaza.ir A: $(dig +short www.websaza.ir A | tr '\n' ' ')"
+          echo "www.websaza.ir CNAME: $(dig +short www.websaza.ir CNAME | tr '\n' ' ')"
+          echo "=== HTTPS ==="
+          echo "root:"
+          curl -I -L --max-time 20 --connect-timeout 10 https://websaza.ir || true
+          echo "www:"
+          curl -I -L --max-time 20 --connect-timeout 10 https://www.websaza.ir || true
