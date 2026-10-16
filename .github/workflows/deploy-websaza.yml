@@ -19,6 +19,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # Rebuild the approved custom WebSaza hero from repository text chunks.
+          cat WebSaza/hero-v9.b64.01 WebSaza/hero-v9.b64.02 WebSaza/hero-v9.b64.03 WebSaza/hero-v9.b64.04 \
+            | tr -d '\n\r ' \
+            | base64 --decode > WebSaza/hero-custom-v9.jpg
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('WebSaza/hero-custom-v9.jpg')
+          data = p.read_bytes()
+          assert len(data) > 20000, f'hero too small: {len(data)} bytes'
+          assert data[:2] == b'\xff\xd8', 'hero is not a JPEG'
+          print(f'Custom hero rebuilt: {len(data)} bytes')
+          PY
+
           download() {
             url="$1"
             out="$2"
@@ -32,8 +46,7 @@ jobs:
             fi
           }
 
-          # Real photographic assets from Pexels, downloaded at deploy time and served locally.
-          download "https://images.pexels.com/photos/31198911/pexels-photo-31198911.jpeg?auto=compress&cs=tinysrgb&w=1600" "hero-premium-v8.jpg"
+          # Supporting real photographic assets, downloaded at deploy time and served locally.
           download "https://images.pexels.com/photos/6804581/pexels-photo-6804581.jpeg?auto=compress&cs=tinysrgb&w=1400" "service-web-v8.jpg"
           download "https://images.pexels.com/photos/12123390/pexels-photo-12123390.jpeg?auto=compress&cs=tinysrgb&w=1400" "service-app-v8.jpg"
           download "https://images.pexels.com/photos/12969403/pexels-photo-12969403.jpeg?auto=compress&cs=tinysrgb&w=1400" "service-seo-v8.jpg"
@@ -56,18 +69,21 @@ jobs:
 
           html = re.sub(r'<link rel="preconnect" href="https://images\.unsplash\.com" crossorigin>\n?', '', html)
           html = re.sub(r'<link rel="preload" as="image" href="https://images\.unsplash\.com[^>]+>\n?', '', html)
-          html = re.sub(r'<link rel="preload" as="image" href="/hero-premium-v\d+\.jpg"[^>]*>\n?', '', html)
-          html = html.replace('<link rel="preload" href="/YekanBakhMedium.woff" as="font" type="font/woff" crossorigin>', '<link rel="preload" href="/YekanBakhMedium.woff" as="font" type="font/woff" crossorigin>\n<link rel="preload" as="image" href="/hero-premium-v8.jpg" fetchpriority="high">')
+          html = re.sub(r'<link rel="preload" as="image" href="/hero-[^"]+\.jpg"[^>]*>\n?', '', html)
+          html = html.replace(
+              '<link rel="preload" href="/YekanBakhMedium.woff" as="font" type="font/woff" crossorigin>',
+              '<link rel="preload" href="/YekanBakhMedium.woff" as="font" type="font/woff" crossorigin>\n<link rel="preload" as="image" href="/hero-custom-v9.jpg?v=20261017-6" fetchpriority="high">'
+          )
 
-          html = re.sub(r'<meta property="og:image" content="[^"]+">', '<meta property="og:image" content="https://websaza.ir/hero-premium-v8.jpg">', html)
-          html = re.sub(r'<meta name="twitter:image" content="[^"]+">', '<meta name="twitter:image" content="https://websaza.ir/hero-premium-v8.jpg">', html)
+          html = re.sub(r'<meta property="og:image" content="[^"]+">', '<meta property="og:image" content="https://websaza.ir/hero-custom-v9.jpg?v=20261017-6">', html)
+          html = re.sub(r'<meta name="twitter:image" content="[^"]+">', '<meta name="twitter:image" content="https://websaza.ir/hero-custom-v9.jpg?v=20261017-6">', html)
 
           if '/premium-v7.css' not in html:
-              html = html.replace('<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">', '<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">\n<link rel="stylesheet" href="/premium-v7.css?v=20261017-5">')
+              html = html.replace('<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">', '<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">\n<link rel="stylesheet" href="/premium-v7.css?v=20261017-6">')
           else:
-              html = re.sub(r'/premium-v7\.css\?v=[^\"]+', '/premium-v7.css?v=20261017-5', html)
+              html = re.sub(r'/premium-v7\.css\?v=[^\"]+', '/premium-v7.css?v=20261017-6', html)
 
-          hero = '<div class="hero-photo-layer"><img src="/hero-premium-v8.jpg" width="1600" height="1067" fetchpriority="high" loading="eager" decoding="async" alt="استودیوی حرفه‌ای طراحی سایت با مانیتور، لپ‌تاپ و میز کار مدرن"></div>'
+          hero = '<div class="hero-photo-layer"><img src="/hero-custom-v9.jpg?v=20261017-6" width="800" height="600" fetchpriority="high" loading="eager" decoding="async" alt="نمای حرفه‌ای طراحی سایت و اپلیکیشن وب ساز با تم تیره و سبز"></div>'
           html = re.sub(r'<div class="hero-photo-layer"><img[^>]*></div>', hero, html, count=1)
 
           replacements = {
@@ -90,7 +106,7 @@ jobs:
             [ -f "$file" ] || continue
             name=$(basename "$file")
             case "$name" in
-              *.jpg|*.jpeg|*.png|*.webp|*.gif|*.ico|*.woff|*.woff2) continue ;;
+              *.jpg|*.jpeg|*.png|*.webp|*.gif|*.ico|*.woff|*.woff2|*.b64.*) continue ;;
             esac
             echo "Deploying text: $name"
             RESPONSE=$(curl --fail-with-body --silent --show-error \
@@ -109,8 +125,9 @@ jobs:
           set -euo pipefail
           upload_binary() {
             file="$1"
+            force="${2:-0}"
             name=$(basename "$file")
-            if curl -fsSI --max-time 15 "https://websaza.ir/$name" >/dev/null 2>&1; then
+            if [ "$force" != "1" ] && curl -fsSI --max-time 15 "https://websaza.ir/$name" >/dev/null 2>&1; then
               echo "Image already present on live site, keeping it: $name"
               return 0
             fi
@@ -119,10 +136,11 @@ jobs:
               -H "Authorization: cpanel vt6qdx8:${{ secrets.WEBSAZA_CPANEL_TOKEN }}" \
               -F "file-1=@$file;filename=$name" \
               -F "dir=public_html" \
+              -F "overwrite=1" \
               "https://mch4444.dnsuserver.com:2083/execute/Fileman/upload_files")
             echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
           }
-          upload_binary WebSaza/hero-premium-v8.jpg
+          upload_binary WebSaza/hero-custom-v9.jpg 1
           upload_binary WebSaza/service-web-v8.jpg
           upload_binary WebSaza/service-app-v8.jpg
           upload_binary WebSaza/service-seo-v8.jpg
@@ -138,10 +156,10 @@ jobs:
           echo "Root response"
           curl -fsSI --max-time 20 https://websaza.ir/ | head -n 12
           echo "HTML build markers"
-          curl -fsS --max-time 20 https://websaza.ir/ | grep -E 'premium-v7\.css\?v=20261017-5|hero-premium-v8\.jpg' >/dev/null
+          curl -fsS --max-time 20 https://websaza.ir/ | grep -E 'premium-v7\.css\?v=20261017-6|hero-custom-v9\.jpg\?v=20261017-6' >/dev/null
           echo "WWW response"
           curl -sS -I --max-time 20 https://www.websaza.ir/ | head -n 10
-          for asset in hero-premium-v8.jpg service-web-v8.jpg service-app-v8.jpg service-seo-v8.jpg project-htaelec-v7.png project-achinu-v7.png project-goldartmis-v7.png premium-v7.css; do
+          for asset in hero-custom-v9.jpg service-web-v8.jpg service-app-v8.jpg service-seo-v8.jpg project-htaelec-v7.png project-achinu-v7.png project-goldartmis-v7.png premium-v7.css; do
             echo "Checking $asset"
             curl -fsSI --max-time 20 "https://websaza.ir/$asset" | head -n 4
           done
