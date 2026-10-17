@@ -1,4 +1,4 @@
-# simple-divar-v2-deploy-20261017
+# scalable-orders-v1-deploy-20261017
 name: Deploy Namayandegi Portal
 
 on:
@@ -24,11 +24,55 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import os, re
-          p=Path('WebSaza/namayandegi/index.php')
-          text=p.read_text(encoding='utf-8')
+
+          root=Path('WebSaza/namayandegi')
           v=os.environ['ASSET_VERSION']
+
+          # Cache-busted assets.
+          p=root/'index.php'
+          text=p.read_text(encoding='utf-8')
           text=re.sub(r'style\.css\?v=[^"\']+',f'style.css?v={v}',text)
           text=re.sub(r'app\.js\?v=[^"\']+',f'app.js?v={v}',text)
+
+          # Request-local JSON cache: eliminates repeated disk reads/decodes while
+          # preserving the existing storage format and updating cache after writes.
+          old_j="function j(string $f):array{$x=json_decode((string)@file_get_contents($f),true);return is_array($x)?$x:[];}"
+          new_j="function j(string $f):array{$c=&$GLOBALS['_WSJ_CACHE'];if(!is_array($c??null))$c=[];if(array_key_exists($f,$c))return $c[$f];$x=json_decode((string)@file_get_contents($f),true);return $c[$f]=is_array($x)?$x:[];}"
+          old_sj="function sj(string $f,array $x):bool{$l=fopen($f.'.lock','c');if(!$l||!flock($l,LOCK_EX))return false;try{$t=$f.'.tmp.'.bin2hex(random_bytes(3));$q=json_encode($x,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);if($q===false||file_put_contents($t,$q,LOCK_EX)===false)return false;@chmod($t,0640);return rename($t,$f);}finally{flock($l,LOCK_UN);fclose($l);}}"
+          new_sj="function sj(string $f,array $x):bool{$l=fopen($f.'.lock','c');if(!$l||!flock($l,LOCK_EX))return false;try{$t=$f.'.tmp.'.bin2hex(random_bytes(3));$q=json_encode($x,JSON_UNESCAPED_UNICODE);if($q===false||file_put_contents($t,$q,LOCK_EX)===false)return false;@chmod($t,0640);$ok=rename($t,$f);if($ok){$c=&$GLOBALS['_WSJ_CACHE'];if(!is_array($c??null))$c=[];$c[$f]=$x;}return $ok;}finally{flock($l,LOCK_UN);fclose($l);}}"
+          if old_j not in text or old_sj not in text:
+              raise SystemExit('index.php storage functions changed; performance patch aborted safely')
+          text=text.replace(old_j,new_j,1).replace(old_sj,new_sj,1)
+
+          # Daily compaction of larger live JSON stores. This converts legacy
+          # pretty-printed data to compact JSON without changing any records.
+          old_tick="function systemTick(bool $force=false):array{if(!$force&&is_file(T)){ $last=(int)@file_get_contents(T); if($last>time()-300)return ['expired'=>0,'assigned'=>0]; }$x=recycleExpired();$a=fillQuotas();@file_put_contents(T,(string)time(),LOCK_EX);return ['expired'=>$x,'assigned'=>$a];}"
+          new_tick="function compactStore():void{$stamp=D.'/last_compact.txt';$last=is_file($stamp)?(int)@file_get_contents($stamp):0;if($last>time()-86400)return;foreach([B,L,A,EV,R] as $f){clearstatcache(true,$f);if(is_file($f)&&(int)@filesize($f)>262144){$rows=j($f);sj($f,$rows);}}@file_put_contents($stamp,(string)time(),LOCK_EX);} function systemTick(bool $force=false):array{if(!$force&&is_file(T)){ $last=(int)@file_get_contents(T); if($last>time()-300)return ['expired'=>0,'assigned'=>0]; }compactStore();$x=recycleExpired();$a=fillQuotas();@file_put_contents(T,(string)time(),LOCK_EX);return ['expired'=>$x,'assigned'=>$a];}"
+          if old_tick not in text:
+              raise SystemExit('index.php systemTick changed; compaction patch aborted safely')
+          text=text.replace(old_tick,new_tick,1)
+          p.write_text(text,encoding='utf-8')
+
+          # Apply the same request-local cache + compact writes to smart actions.
+          p=root/'smart-actions.php'
+          text=p.read_text(encoding='utf-8')
+          old_jx="function jx(string $f):array{$x=json_decode((string)@file_get_contents($f),true);return is_array($x)?$x:[];}"
+          new_jx="function jx(string $f):array{$c=&$GLOBALS['_WSJX_CACHE'];if(!is_array($c??null))$c=[];if(array_key_exists($f,$c))return $c[$f];$x=json_decode((string)@file_get_contents($f),true);return $c[$f]=is_array($x)?$x:[];}"
+          old_sjx="function sjx(string $f,array $x):bool{$l=fopen($f.'.lock','c');if(!$l||!flock($l,LOCK_EX))return false;try{$t=$f.'.tmp.'.bin2hex(random_bytes(3));$q=json_encode($x,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);if($q===false||file_put_contents($t,$q,LOCK_EX)===false)return false;@chmod($t,0640);return rename($t,$f);}finally{flock($l,LOCK_UN);fclose($l);}}"
+          new_sjx="function sjx(string $f,array $x):bool{$l=fopen($f.'.lock','c');if(!$l||!flock($l,LOCK_EX))return false;try{$t=$f.'.tmp.'.bin2hex(random_bytes(3));$q=json_encode($x,JSON_UNESCAPED_UNICODE);if($q===false||file_put_contents($t,$q,LOCK_EX)===false)return false;@chmod($t,0640);$ok=rename($t,$f);if($ok){$c=&$GLOBALS['_WSJX_CACHE'];if(!is_array($c??null))$c=[];$c[$f]=$x;}return $ok;}finally{flock($l,LOCK_UN);fclose($l);}}"
+          if old_jx not in text or old_sjx not in text:
+              raise SystemExit('smart-actions.php storage functions changed; performance patch aborted safely')
+          text=text.replace(old_jx,new_jx,1).replace(old_sjx,new_sjx,1)
+          p.write_text(text,encoding='utf-8')
+
+          # Finance uses the same JSON backend; optimize it too.
+          p=root/'finance.php'
+          text=p.read_text(encoding='utf-8')
+          old_fin="function j($f){$x=json_decode((string)@file_get_contents($f),true);return is_array($x)?$x:[];}function sj($f,$x){$l=fopen($f.'.lock','c');if(!$l||!flock($l,LOCK_EX))return false;try{$t=$f.'.tmp.'.bin2hex(random_bytes(3));$q=json_encode($x,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);if($q===false||file_put_contents($t,$q,LOCK_EX)===false)return false;@chmod($t,0640);return rename($t,$f);}finally{flock($l,LOCK_UN);fclose($l);}}"
+          new_fin="function j($f){$c=&$GLOBALS['_WSF_CACHE'];if(!is_array($c??null))$c=[];if(array_key_exists($f,$c))return $c[$f];$x=json_decode((string)@file_get_contents($f),true);return $c[$f]=is_array($x)?$x:[];}function sj($f,$x){$l=fopen($f.'.lock','c');if(!$l||!flock($l,LOCK_EX))return false;try{$t=$f.'.tmp.'.bin2hex(random_bytes(3));$q=json_encode($x,JSON_UNESCAPED_UNICODE);if($q===false||file_put_contents($t,$q,LOCK_EX)===false)return false;@chmod($t,0640);$ok=rename($t,$f);if($ok){$c=&$GLOBALS['_WSF_CACHE'];if(!is_array($c??null))$c=[];$c[$f]=$x;}return $ok;}finally{flock($l,LOCK_UN);fclose($l);}}"
+          if old_fin not in text:
+              raise SystemExit('finance.php storage functions changed; performance patch aborted safely')
+          text=text.replace(old_fin,new_fin,1)
           p.write_text(text,encoding='utf-8')
           PY
 
@@ -60,12 +104,16 @@ jobs:
           cat WebSaza/namayandegi/polish-v6.js >> WebSaza/namayandegi/app.js
           printf '\n' >> WebSaza/namayandegi/app.js
           cat WebSaza/namayandegi/market-v8.js >> WebSaza/namayandegi/app.js
+          printf '\n' >> WebSaza/namayandegi/app.js
+          cat WebSaza/namayandegi/performance-v1.js >> WebSaza/namayandegi/app.js
 
-      - name: Validate PHP
+      - name: Validate production build
         run: |
           php -l WebSaza/namayandegi/index.php
           php -l WebSaza/namayandegi/smart-actions.php
           php -l WebSaza/namayandegi/finance.php
+          node --check WebSaza/namayandegi/app.js
+          grep -F 'PERFORMANCE_V1' WebSaza/namayandegi/app.js >/dev/null
 
       - name: Ensure remote folder
         shell: bash
@@ -125,7 +173,10 @@ jobs:
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'SIMPLE_DIVAR_V2' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'POLISH_V6' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'MARKET_V8' >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'PERFORMANCE_V1' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'simple-more-btn' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'interested_transfer' >/dev/null
           curl -fsSI --max-time 30 https://websaza.ir/namayandegi/smart-actions.php | head -n 8
           curl -fsSI --max-time 30 https://websaza.ir/namayandegi/finance.php | head -n 8
+          echo 'Compression headers:'
+          curl -fsSI --max-time 30 -H 'Accept-Encoding: br,gzip' "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -Ei 'content-encoding|cache-control|expires|vary' || true
