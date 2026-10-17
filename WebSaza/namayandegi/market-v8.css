@@ -2,16 +2,25 @@
 .market-v8{--m-bg:#fbfaf7;--m-card:#fff;--m-line:#ece9e3;--m-text:#25272a;--m-muted:#85898e;--m-accent:#a7353b;background:var(--m-bg)!important;color:var(--m-text)!important}
 .market-v8 .main{padding-bottom:92px!important}
 
-/* top shortcut rail — compact and app-like */
-.market-v8 .market-shortcuts{margin:6px 0 10px!important;padding:2px 0 8px!important;display:flex!important;align-items:flex-start!important;gap:8px!important;overflow-x:auto!important;scrollbar-width:none!important;border:0!important;background:transparent!important}
-.market-v8 .market-shortcuts::-webkit-scrollbar{display:none}
+/* top shortcut rail — only secondary utilities, no duplicate primary nav */
+.market-v8 .market-shortcuts{margin:7px 0 12px!important;padding:2px 0 8px!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;align-items:start!important;gap:8px!important;overflow:visible!important;border:0!important;background:transparent!important}
 .market-v8 .market-shortcuts .simple-start-title{display:none!important}
-.market-v8 .market-shortcuts .simple-row{flex:0 0 68px!important;min-height:auto!important;padding:4px 1px!important;border:0!important;background:transparent!important;display:flex!important;flex-direction:column!important;gap:5px!important;align-items:center!important;justify-content:flex-start!important;text-align:center!important}
-.market-v8 .market-shortcuts .simple-row-icon{width:46px!important;height:46px!important;border-radius:16px!important;box-shadow:none!important}
-.market-v8 .market-shortcuts .simple-row-icon svg{width:23px!important;height:23px!important}
-.market-v8 .market-shortcuts .simple-row-text{width:100%!important}
-.market-v8 .market-shortcuts .simple-row-text b{font-size:10px!important;line-height:1.35!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.market-v8 .market-shortcuts .simple-row{min-width:0!important;min-height:auto!important;padding:4px 2px!important;border:0!important;background:transparent!important;display:flex!important;flex-direction:column!important;gap:6px!important;align-items:center!important;justify-content:flex-start!important;text-align:center!important}
+.market-v8 .market-shortcuts .simple-row-icon{width:48px!important;height:48px!important;border-radius:16px!important;box-shadow:none!important}
+.market-v8 .market-shortcuts .simple-row-icon svg{width:24px!important;height:24px!important}
+.market-v8 .market-shortcuts .simple-row:nth-child(1) .simple-row-icon{background:#eef2f8!important;color:#5d6f8b!important;border-color:#e1e7f1!important}
+.market-v8 .market-shortcuts .simple-row:nth-child(2) .simple-row-icon{background:#f8eeee!important;color:#8b6060!important;border-color:#f0dfdf!important}
+.market-v8 .market-shortcuts .simple-row:nth-child(3) .simple-row-icon{background:#edf6f4!important;color:#557b73!important;border-color:#dfefeb!important}
+.market-v8 .market-shortcuts .simple-row:nth-child(4) .simple-row-icon{background:#f7f2e8!important;color:#8a744d!important;border-color:#efe6d5!important}
+.market-v8 .market-shortcuts .simple-row-text{width:100%!important;min-width:0!important}
+.market-v8 .market-shortcuts .simple-row-text b{display:block!important;font-size:10px!important;line-height:1.4!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;color:#303337!important}
 .market-v8 .market-shortcuts .simple-row-text small,.market-v8 .market-shortcuts .simple-chevron{display:none!important}
+
+/* bottom nav: exactly 4 primary actions */
+.mobile.market-bottom-four{grid-template-columns:repeat(4,minmax(0,1fr))!important;grid-auto-flow:column!important;gap:0!important;padding-left:8px!important;padding-right:8px!important}
+.mobile.market-bottom-four a{width:100%!important;min-width:0!important}
+.mobile.market-bottom-four a svg{width:34px!important;height:31px!important}
+.mobile.market-bottom-four a span{font-size:9.5px!important}
 
 /* search / controls */
 .market-v8 .market-search{margin:6px 0 10px!important;background:transparent!important}
@@ -61,9 +70,10 @@
 
 @media(max-width:620px){
   .market-v8 .main{padding-left:14px!important;padding-right:14px!important}
-  .market-v8 .market-shortcuts{margin-top:3px!important;gap:6px!important}
-  .market-v8 .market-shortcuts .simple-row{flex-basis:64px!important}
-  .market-v8 .market-shortcuts .simple-row-icon{width:43px!important;height:43px!important;border-radius:15px!important}
+  .market-v8 .market-shortcuts{margin-top:4px!important;gap:5px!important}
+  .market-v8 .market-shortcuts .simple-row{padding:3px 1px!important}
+  .market-v8 .market-shortcuts .simple-row-icon{width:44px!important;height:44px!important;border-radius:14px!important}
+  .market-v8 .market-shortcuts .simple-row-text b{font-size:9.5px!important}
   .market-v8 .market-searchbox{height:46px;border-radius:13px}
   .market-v8 .market-searchmeta{padding-top:8px}
   .market-v8 .market-searchmeta b{font-size:14px}
