@@ -1,4 +1,4 @@
-# iconic-ui-deploy-20261017
+# simple-divar-v2-deploy-20261017
 name: Deploy Namayandegi Portal
 
 on:
@@ -48,6 +48,10 @@ jobs:
 
           printf '\n' >> WebSaza/namayandegi/style.css
           cat WebSaza/namayandegi/ux.css >> WebSaza/namayandegi/style.css
+          printf '\n' >> WebSaza/namayandegi/style.css
+          cat WebSaza/namayandegi/simple-v2.css >> WebSaza/namayandegi/style.css
+          printf '\n' >> WebSaza/namayandegi/app.js
+          cat WebSaza/namayandegi/simple-v2.js >> WebSaza/namayandegi/app.js
 
       - name: Validate PHP
         run: |
@@ -107,8 +111,9 @@ jobs:
           v="${GITHUB_SHA::8}"
           curl -fsSI --max-time 30 https://websaza.ir/namayandegi/ | head -n 12
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=${v}" | grep -F "style.css?v=${v}" >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${v}" | grep -F 'UX_ICONIC_V1' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'quick-actions' >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${v}" | grep -F 'SIMPLE_DIVAR_V2' >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'SIMPLE_DIVAR_V2' >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'simple-more-btn' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'interested_transfer' >/dev/null
           curl -fsSI --max-time 30 https://websaza.ir/namayandegi/smart-actions.php | head -n 8
           curl -fsSI --max-time 30 https://websaza.ir/namayandegi/finance.php | head -n 8
