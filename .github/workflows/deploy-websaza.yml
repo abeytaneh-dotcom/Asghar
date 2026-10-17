@@ -15,24 +15,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build local premium image assets
+      - name: Build local image assets
         shell: bash
         run: |
           set -euo pipefail
-
-          # Rebuild the approved custom WebSaza hero from repository text chunks.
-          cat WebSaza/hero-v9.b64.01 WebSaza/hero-v9.b64.02 WebSaza/hero-v9.b64.03 WebSaza/hero-v9.b64.04 \
-            | tr -d '\n\r ' \
-            | base64 --decode > WebSaza/hero-custom-v9.jpg
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('WebSaza/hero-custom-v9.jpg')
-          data = p.read_bytes()
-          assert len(data) > 20000, f'hero too small: {len(data)} bytes'
-          assert data[:2] == b'\xff\xd8', 'hero is not a JPEG'
-          print(f'Custom hero rebuilt: {len(data)} bytes')
-          PY
-
           download() {
             url="$1"
             out="$2"
@@ -40,21 +26,21 @@ jobs:
             curl -fL --retry 4 --retry-delay 2 --connect-timeout 20 --max-time 120 "$url" -o "WebSaza/$out"
             test -s "WebSaza/$out"
             bytes=$(wc -c < "WebSaza/$out")
-            if [ "$bytes" -lt 20000 ]; then
+            if [ "$bytes" -lt 15000 ]; then
               echo "Downloaded asset is unexpectedly small: $out ($bytes bytes)"
               exit 1
             fi
           }
 
-          # Supporting real photographic assets, downloaded at deploy time and served locally.
+          download "https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=1400&q=86" "hero-real-v10.jpg"
           download "https://images.pexels.com/photos/6804581/pexels-photo-6804581.jpeg?auto=compress&cs=tinysrgb&w=1400" "service-web-v8.jpg"
           download "https://images.pexels.com/photos/12123390/pexels-photo-12123390.jpeg?auto=compress&cs=tinysrgb&w=1400" "service-app-v8.jpg"
           download "https://images.pexels.com/photos/12969403/pexels-photo-12969403.jpeg?auto=compress&cs=tinysrgb&w=1400" "service-seo-v8.jpg"
-
-          # Real project previews, cached locally so visitors never depend on a third-party screenshot request.
-          download "https://image.thum.io/get/width/1600/crop/1000/noanimate/https://htaelec.ir/" "project-htaelec-v7.png"
-          download "https://image.thum.io/get/width/1400/crop/875/noanimate/https://achinu.ir/" "project-achinu-v7.png"
-          download "https://image.thum.io/get/width/1400/crop/875/noanimate/https://goldartmis.ir/" "project-goldartmis-v7.png"
+          download "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1400&q=82" "studio-real-v10.jpg"
+          download "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1200&q=82" "meeting-real-v10.jpg"
+          download "https://image.thum.io/get/width/1400/crop/875/noanimate/https://htaelec.ir/" "project-htaelec-v10.png"
+          download "https://image.thum.io/get/width/1400/crop/875/noanimate/https://achinu.ir/" "project-achinu-v10.png"
+          download "https://image.thum.io/get/width/1400/crop/875/noanimate/https://goldartmis.ir/" "project-goldartmis-v10.png"
 
       - name: Prepare production HTML
         shell: bash
@@ -68,28 +54,21 @@ jobs:
           html = path.read_text(encoding='utf-8')
 
           html = re.sub(r'<link rel="preconnect" href="https://images\.unsplash\.com" crossorigin>\n?', '', html)
-          html = re.sub(r'<link rel="preload" as="image" href="https://images\.unsplash\.com[^>]+>\n?', '', html)
-          html = re.sub(r'<link rel="preload" as="image" href="/hero-[^"]+\.jpg"[^>]*>\n?', '', html)
-          html = html.replace(
-              '<link rel="preload" href="/YekanBakhMedium.woff" as="font" type="font/woff" crossorigin>',
-              '<link rel="preload" href="/YekanBakhMedium.woff" as="font" type="font/woff" crossorigin>\n<link rel="preload" as="image" href="/hero-custom-v9.jpg?v=20261017-6" fetchpriority="high">'
-          )
-
-          html = re.sub(r'<meta property="og:image" content="[^"]+">', '<meta property="og:image" content="https://websaza.ir/hero-custom-v9.jpg?v=20261017-6">', html)
-          html = re.sub(r'<meta name="twitter:image" content="[^"]+">', '<meta name="twitter:image" content="https://websaza.ir/hero-custom-v9.jpg?v=20261017-6">', html)
-
-          if '/premium-v7.css' not in html:
-              html = html.replace('<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">', '<link rel="stylesheet" href="/wow-v6.css?v=20261016-2">\n<link rel="stylesheet" href="/premium-v7.css?v=20261017-6">')
-          else:
-              html = re.sub(r'/premium-v7\.css\?v=[^\"]+', '/premium-v7.css?v=20261017-6', html)
-
-          hero = '<div class="hero-photo-layer"><img src="/hero-custom-v9.jpg?v=20261017-6" width="800" height="600" fetchpriority="high" loading="eager" decoding="async" alt="نمای حرفه‌ای طراحی سایت و اپلیکیشن وب ساز با تم تیره و سبز"></div>'
-          html = re.sub(r'<div class="hero-photo-layer"><img[^>]*></div>', hero, html, count=1)
+          html = re.sub(r'<link rel="preconnect" href="https://image\.thum\.io" crossorigin>\n?', '', html)
+          html = re.sub(r'<link rel="preload" as="image" href="https://images\.unsplash\.com[^>]+>\n?', '<link rel="preload" as="image" href="/hero-real-v10.jpg?v=20261017-1" fetchpriority="high">\n', html)
+          html = re.sub(r'<meta property="og:image" content="[^"]+">', '<meta property="og:image" content="https://websaza.ir/hero-real-v10.jpg?v=20261017-1">', html)
+          html = re.sub(r'<meta name="twitter:image" content="[^"]+">', '<meta name="twitter:image" content="https://websaza.ir/hero-real-v10.jpg?v=20261017-1">', html)
 
           replacements = {
-              'https://image.thum.io/get/width/1600/crop/1000/noanimate/https://htaelec.ir/': '/project-htaelec-v7.png',
-              'https://image.thum.io/get/width/1200/crop/750/noanimate/https://achinu.ir/': '/project-achinu-v7.png',
-              'https://image.thum.io/get/width/1200/crop/750/noanimate/https://goldartmis.ir/': '/project-goldartmis-v7.png',
+              'https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=1200&q=86': '/hero-real-v10.jpg?v=20261017-1',
+              'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1000&q=80': '/service-web-v8.jpg?v=20261017-1',
+              'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=1000&q=80': '/service-app-v8.jpg?v=20261017-1',
+              'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1000&q=80': '/service-seo-v8.jpg?v=20261017-1',
+              'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=82': '/studio-real-v10.jpg?v=20261017-1',
+              'https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1000&q=82': '/meeting-real-v10.jpg?v=20261017-1',
+              'https://image.thum.io/get/width/1200/crop/750/noanimate/https://htaelec.ir/': '/project-htaelec-v10.png?v=20261017-1',
+              'https://image.thum.io/get/width/1200/crop/750/noanimate/https://achinu.ir/': '/project-achinu-v10.png?v=20261017-1',
+              'https://image.thum.io/get/width/1200/crop/750/noanimate/https://goldartmis.ir/': '/project-goldartmis-v10.png?v=20261017-1',
           }
           for old, new in replacements.items():
               html = html.replace(old, new)
@@ -119,18 +98,13 @@ jobs:
             echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
           done
 
-      - name: Upload premium binary images via cPanel UAPI
+      - name: Upload image assets via cPanel UAPI
         shell: bash
         run: |
           set -euo pipefail
           upload_binary() {
             file="$1"
-            force="${2:-0}"
             name=$(basename "$file")
-            if [ "$force" != "1" ] && curl -fsSI --max-time 15 "https://websaza.ir/$name" >/dev/null 2>&1; then
-              echo "Image already present on live site, keeping it: $name"
-              return 0
-            fi
             echo "Uploading image: $name"
             RESPONSE=$(curl --fail-with-body --silent --show-error \
               -H "Authorization: cpanel vt6qdx8:${{ secrets.WEBSAZA_CPANEL_TOKEN }}" \
@@ -140,26 +114,29 @@ jobs:
               "https://mch4444.dnsuserver.com:2083/execute/Fileman/upload_files")
             echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
           }
-          upload_binary WebSaza/hero-custom-v9.jpg 1
+          upload_binary WebSaza/hero-real-v10.jpg
           upload_binary WebSaza/service-web-v8.jpg
           upload_binary WebSaza/service-app-v8.jpg
           upload_binary WebSaza/service-seo-v8.jpg
-          upload_binary WebSaza/project-htaelec-v7.png
-          upload_binary WebSaza/project-achinu-v7.png
-          upload_binary WebSaza/project-goldartmis-v7.png
+          upload_binary WebSaza/studio-real-v10.jpg
+          upload_binary WebSaza/meeting-real-v10.jpg
+          upload_binary WebSaza/project-htaelec-v10.png
+          upload_binary WebSaza/project-achinu-v10.png
+          upload_binary WebSaza/project-goldartmis-v10.png
 
-      - name: Verify live domain and local assets
+      - name: Verify live domain
         shell: bash
         run: |
           set -euo pipefail
           sleep 8
           echo "Root response"
           curl -fsSI --max-time 20 https://websaza.ir/ | head -n 12
-          echo "HTML build markers"
-          curl -fsS --max-time 20 https://websaza.ir/ | grep -E 'premium-v7\.css\?v=20261017-6|hero-custom-v9\.jpg\?v=20261017-6' >/dev/null
+          echo "Homepage markers"
+          curl -fsS --max-time 20 https://websaza.ir/ | grep -F '/home-v7.css?v=20261017-1' >/dev/null
+          curl -fsS --max-time 20 https://websaza.ir/ | grep -F 'طراحی سایت حرفه‌ای' >/dev/null
           echo "WWW response"
           curl -sS -I --max-time 20 https://www.websaza.ir/ | head -n 10
-          for asset in hero-custom-v9.jpg service-web-v8.jpg service-app-v8.jpg service-seo-v8.jpg project-htaelec-v7.png project-achinu-v7.png project-goldartmis-v7.png premium-v7.css; do
+          for asset in hero-real-v10.jpg service-web-v8.jpg service-app-v8.jpg service-seo-v8.jpg studio-real-v10.jpg meeting-real-v10.jpg project-htaelec-v10.png project-achinu-v10.png project-goldartmis-v10.png home-v7.css; do
             echo "Checking $asset"
             curl -fsSI --max-time 20 "https://websaza.ir/$asset" | head -n 4
           done
