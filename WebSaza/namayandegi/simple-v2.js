@@ -1,6 +1,6 @@
-/* SIMPLE_DIVAR_V2 SIMPLE_DIVAR_V3 SIMPLE_HOME_V4 */
+/* SIMPLE_DIVAR_V2 SIMPLE_DIVAR_V3 SIMPLE_HOME_V4 SIMPLE_HOME_V5 */
 (()=>{
-  const body=document.body;if(!body)return;body.classList.add('simple-v2','simple-v3','simple-v4');
+  const body=document.body;if(!body)return;body.classList.add('simple-v2','simple-v3','simple-v4','simple-v5');
   const qs=new URLSearchParams(location.search);const current=qs.get('view')||'dashboard';
   const isAdmin=!!document.querySelector('.side a[href*="admin=1"],.mobile a[href*="admin=1"]') || qs.has('admin');
   const isFinance=location.pathname.endsWith('/finance.php');
@@ -41,12 +41,27 @@
     box.innerHTML='<div class="simple-start-title"><b>'+(isAdmin?'کارهای اصلی':'کارهای امروز')+'</b></div>'+rows.map(r=>`<a href="${r[0]}" class="simple-row"><span class="simple-row-icon">${ico(r[1])}</span><span class="simple-row-text"><b>${r[2]}</b><small>${r[3]}</small></span><span class="simple-chevron">‹</span></a>`).join('');
     const title=main.querySelector('.title');if(title)title.insertAdjacentElement('afterend',box);else main.prepend(box);
 
-    // Keep real sales opportunities, but remove the dashboard-like "today priorities" wrapper.
+    // Keep real sales opportunities, but remove the dashboard-like wrapper.
     [...main.querySelectorAll('.panel')].forEach(panel=>{
-      if(!panel.textContent.includes('اولویت‌های امروز'))return;
+      if(!panel.textContent.includes('اولویت‌های امروز')&&!panel.classList.contains('simple-opportunities'))return;
       panel.classList.add('simple-opportunities');
       const h=[...panel.querySelectorAll('h1,h2,h3')].find(el=>el.textContent.includes('اولویت‌های امروز'));
       if(h)h.textContent='فرصت‌های جدید';
+
+      // Home only: convert each large lead card to one calm marketplace-style row.
+      [...panel.querySelectorAll('.lead')].forEach((lead,idx)=>{
+        if(lead.classList.contains('home-compact-ready'))return;
+        const name=lead.querySelector('.leadname h3')?.textContent?.trim()||'مشتری';
+        const meta=lead.querySelector('.leadname span')?.textContent?.trim()||'';
+        const phone=lead.querySelector('.phone')?.textContent?.trim()||'';
+        const status=lead.querySelector('.pill')?.textContent?.trim()||'';
+        const detail=document.createElement('div');detail.className='home-lead-detail';
+        while(lead.firstChild)detail.appendChild(lead.firstChild);
+        const row=document.createElement('button');row.type='button';row.className='home-lead-row';row.setAttribute('aria-expanded','false');
+        row.innerHTML=`<span class="home-lead-main"><b>${name}</b><small>${[phone,meta].filter(Boolean).join(' · ')}</small></span><span class="home-lead-side">${status?`<em>${status}</em>`:''}<i>‹</i></span>`;
+        row.addEventListener('click',()=>{const open=lead.classList.toggle('home-lead-open');row.setAttribute('aria-expanded',open?'true':'false');});
+        lead.append(row,detail);lead.classList.add('home-compact-ready');
+      });
     });
     if(title)title.closest('.title')?.classList.add('simple-dashboard-title');
   }
