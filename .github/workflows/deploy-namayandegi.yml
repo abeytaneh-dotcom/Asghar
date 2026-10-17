@@ -16,7 +16,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate PHP
-        run: php -l WebSaza/namayandegi/index.php
+        run: |
+          php -l WebSaza/namayandegi/index.php
+          php -l WebSaza/namayandegi/seed-test.php
 
       - name: Ensure remote folder
         shell: bash
@@ -62,12 +64,22 @@ jobs:
           upload_text WebSaza/namayandegi/style.css style.css
           upload_text WebSaza/namayandegi/app.js app.js
           upload_text WebSaza/namayandegi/.htaccess .htaccess
+          upload_text WebSaza/namayandegi/seed-test.php seed-test.php
+
+      - name: Seed researched test leads
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 3
+          result=$(curl -fsS --max-time 30 'https://websaza.ir/namayandegi/seed-test.php?run=websaza-5-test-leads-20261017')
+          echo "$result" | jq '{ok,branch_id,leads_added,assignments_added,seed_count}'
+          echo "$result" | jq -e '.ok == true and .seed_count == 5' >/dev/null
 
       - name: Verify live portal
         shell: bash
         run: |
           set -euo pipefail
-          sleep 5
+          sleep 3
           curl -fsSI --max-time 30 https://websaza.ir/namayandegi/ | head -n 12
           curl -fsS --max-time 30 https://websaza.ir/namayandegi/ | grep -F 'فرصت فروش آماده' >/dev/null
           curl -fsSI --max-time 30 https://websaza.ir/namayandegi/style.css | head -n 8
