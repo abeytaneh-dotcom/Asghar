@@ -35,7 +35,7 @@ document.querySelectorAll('.copy[data-copy^="http"]').forEach(copyBtn=>{
   const links=[...nav.querySelectorAll('a')];
   const isAdmin=links.some(a=>{try{return new URL(a.href,location.href).searchParams.has('admin')}catch(e){return false}});
   const branchLabels={dashboard:'خانه',leads:'امروز',followups:'پیگیری',history:'سوابق',referrals:'معرفی',profile:'حساب',help:'راهنما'};
-  const adminLabels={dashboard:'خانه',branches:'نماینده',leads:'فرصت',activity:'فعالیت',referrals:'پاداش',settings:'تنظیمات'};
+  const adminLabels={dashboard:'خانه',intake:'ثبت',distribution:'توزیع',branches:'نماینده',leads:'فرصت',activity:'فعالیت',referrals:'پاداش',settings:'تنظیمات'};
   const labels=isAdmin?adminLabels:branchLabels;
   links.forEach(a=>{
     try{
@@ -65,7 +65,7 @@ document.querySelectorAll('.copy[data-copy^="http"]').forEach(copyBtn=>{
           box-shadow:0 -8px 24px rgba(0,0,0,.18)!important;
         }
         .mobile.branch-mobile-v3{grid-template-columns:repeat(7,minmax(0,1fr))!important}
-        .mobile.admin-mobile-v3{grid-template-columns:repeat(6,minmax(0,1fr))!important}
+        .mobile.admin-mobile-v3{grid-template-columns:repeat(8,minmax(0,1fr))!important}
         .mobile a{
           grid-column:auto!important;
           min-width:0!important;
@@ -101,10 +101,56 @@ document.querySelectorAll('.copy[data-copy^="http"]').forEach(copyBtn=>{
         .mobile{gap:3px!important;padding:5px 3px calc(5px + env(safe-area-inset-bottom))!important}
         .mobile a{min-height:46px!important;font-size:8px!important;border-radius:9px!important;padding:4px 0!important}
       }
+      .rescue-note{margin:10px 0;padding:10px 12px;border:1px solid rgba(201,243,91,.35);border-radius:12px;background:rgba(201,243,91,.08);font-size:12px;font-weight:800;line-height:1.8}
+      .reason-help{display:block;margin-top:5px;font-size:11px;opacity:.72;line-height:1.7}
     `;
     document.head.appendChild(style);
   }
 })();
+
+// Mandatory call reason + rescue handoff for interested customers.
+document.querySelectorAll('form.result').forEach(form=>{
+  form.action='./smart-actions.php';
+  const statuses=form.querySelector('.statuses');
+  const note=form.querySelector('[name="note"]');
+  if(note){
+    note.placeholder='دلیل / توضیح تماس را دقیق بنویس';
+    const help=document.createElement('small');
+    help.className='reason-help';
+    help.textContent='برای هر نتیجه به‌جز «جدید»، ثبت دلیل اجباری است و بدون آن پرونده بسته نمی‌شود.';
+    note.insertAdjacentElement('afterend',help);
+    if((note.value||'').includes('ارجاع ویژه مشتری راغب')){
+      const badge=document.createElement('div');
+      badge.className='rescue-note';
+      badge.textContent='⭐ این پرونده یک مشتری راغب ارجاعی است؛ سابقه تماس قبلی داخل توضیحات آمده و پورسانت ویژه ۴۰٪ برای این سفارش ثبت شده است.';
+      form.insertAdjacentElement('beforebegin',badge);
+    }
+  }
+  if(statuses&&!statuses.querySelector('input[value="interested_transfer"]')){
+    const label=document.createElement('label');
+    label.innerHTML='<input type="radio" name="status" value="interested_transfer"><span>راغب؛ ارجاع به قوی‌تر ⭐</span>';
+    statuses.appendChild(label);
+  }
+  const sync=()=>{
+    const chosen=form.querySelector('input[name="status"]:checked')?.value||'new';
+    if(note)note.required=chosen!=='new';
+  };
+  form.querySelectorAll('input[name="status"]').forEach(r=>r.addEventListener('change',sync));
+  sync();
+  form.addEventListener('submit',e=>{
+    const chosen=form.querySelector('input[name="status"]:checked')?.value||'new';
+    const reason=(note?.value||'').trim();
+    if(chosen!=='new'&&reason.length<3){
+      e.preventDefault();e.stopImmediatePropagation();
+      if(note){note.focus();note.setCustomValidity('ثبت دلیل یا توضیح تماس الزامی است.');note.reportValidity();setTimeout(()=>note.setCustomValidity(''),1200)}
+      return;
+    }
+    if(chosen==='interested_transfer'){
+      const ok=confirm('مشتری راغب از پنل شما خارج و برای قوی‌ترین نماینده واجد شرایط ارسال می‌شود. دلیل شما همراه پرونده منتقل خواهد شد. ادامه می‌دهید؟');
+      if(!ok){e.preventDefault();e.stopImmediatePropagation();}
+    }
+  },true);
+});
 
 document.querySelectorAll('input[inputmode="numeric"]').forEach(i=>i.addEventListener('input',()=>{i.value=i.value.replace(/[^0-9]/g,'')}));
 document.querySelectorAll('form').forEach(f=>f.addEventListener('submit',()=>{const b=f.querySelector('button[type="submit"],button:not([type])');if(b){b.dataset.old=b.textContent;b.textContent='در حال ثبت...';b.disabled=true;setTimeout(()=>{b.disabled=false;b.textContent=b.dataset.old||'ثبت'},5000)}}));
