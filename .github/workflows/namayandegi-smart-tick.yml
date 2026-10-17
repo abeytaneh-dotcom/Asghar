@@ -1,0 +1,14 @@
+name: Namayandegi Smart Distribution Tick
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger smart redistribution
+        run: |
+          curl --fail --silent --show-error --max-time 30 "https://websaza.ir/namayandegi/?system_tick=1"
