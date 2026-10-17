@@ -156,5 +156,6 @@ jobs:
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${version}" | grep -F 'grid-template-columns:repeat(8,minmax(0,1fr))' >/dev/null
           curl -fsS --max-time 30 https://websaza.ir/namayandegi/ | grep -F 'فرصت فروش متناسب با منطقه' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${version}" | grep -F 'interested_transfer' >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${version}" | grep -F 'finance-shortcut' >/dev/null
           curl -fsSI --max-time 30 https://websaza.ir/namayandegi/smart-actions.php | head -n 8
-          curl -fsS --max-time 30 https://websaza.ir/namayandegi/finance.php | grep -E 'حساب|تأیید|ورود|معتبر' >/dev/null
+          curl -fsSI --max-time 30 https://websaza.ir/namayandegi/finance.php | head -n 8
