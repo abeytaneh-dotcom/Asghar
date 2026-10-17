@@ -16,6 +16,81 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare mobile navigation and version assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ASSET_VERSION="${GITHUB_SHA::8}"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os, re
+
+          path = Path('WebSaza/namayandegi/index.php')
+          text = path.read_text(encoding='utf-8')
+          version = os.environ['ASSET_VERSION']
+          text = re.sub(r'style\.css\?v=[^"\']+', f'style.css?v={version}', text)
+          text = re.sub(r'app\.js\?v=[^"\']+', f'app.js?v={version}', text)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          if ! grep -Fq 'MOBILE_NAV_GRID_V2' WebSaza/namayandegi/style.css; then
+            cat >> WebSaza/namayandegi/style.css <<'CSS'
+
+          /* MOBILE_NAV_GRID_V2 */
+          @media(max-width:980px){
+            .layout{padding-bottom:150px}
+            .mobile{
+              display:grid;
+              grid-auto-flow:row;
+              grid-template-columns:repeat(8,minmax(0,1fr));
+              grid-auto-columns:auto;
+              gap:6px;
+              width:100%;
+              max-width:100vw;
+              overflow:hidden;
+              padding:7px 8px calc(7px + env(safe-area-inset-bottom));
+            }
+            .mobile a{
+              grid-column:span 2;
+              min-width:0;
+              width:100%;
+              min-height:48px;
+              padding:6px 4px;
+              border:1px solid #303844;
+              border-radius:11px;
+              background:#171c24;
+              color:#d7dde5;
+              font-size:10px;
+              font-weight:900;
+              line-height:1.25;
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              text-align:center;
+              white-space:normal;
+              overflow-wrap:anywhere;
+              box-shadow:inset 0 1px 0 rgba(255,255,255,.025);
+            }
+            .mobile a.on{
+              color:#11151c;
+              background:var(--brand);
+              border-color:var(--brand);
+              box-shadow:0 5px 16px rgba(201,243,91,.22);
+            }
+            .mobile a:nth-child(5):nth-last-child(3){grid-column:2/span 2}
+            .mobile a:nth-child(6):nth-last-child(2){grid-column:4/span 2}
+            .mobile a:nth-child(7):last-child{grid-column:6/span 2}
+            .mobile a:nth-child(5):nth-last-child(2){grid-column:3/span 2}
+            .mobile a:nth-child(6):last-child{grid-column:5/span 2}
+          }
+          @media(max-width:420px){
+            .layout{padding-bottom:142px}
+            .mobile{gap:4px;padding:6px 5px calc(6px + env(safe-area-inset-bottom))}
+            .mobile a{min-height:46px;font-size:9px;padding:5px 2px;border-radius:10px}
+          }
+          CSS
+          fi
+
       - name: Validate PHP
         run: php -l WebSaza/namayandegi/index.php
 
@@ -69,7 +144,11 @@ jobs:
         run: |
           set -euo pipefail
           sleep 5
+          version="${GITHUB_SHA::8}"
           curl -fsSI --max-time 30 https://websaza.ir/namayandegi/ | head -n 12
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=${version}" | grep -F "style.css?v=${version}" >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${version}" | grep -F 'MOBILE_NAV_GRID_V2' >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${version}" | grep -F 'grid-template-columns:repeat(8,minmax(0,1fr))' >/dev/null
           curl -fsS --max-time 30 https://websaza.ir/namayandegi/ | grep -F 'فرصت فروش آماده' >/dev/null
-          curl -fsSI --max-time 30 https://websaza.ir/namayandegi/style.css | head -n 8
-          curl -fsSI --max-time 30 https://websaza.ir/namayandegi/app.js | head -n 8
+          curl -fsSI --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${version}" | head -n 8
+          curl -fsSI --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${version}" | head -n 8
