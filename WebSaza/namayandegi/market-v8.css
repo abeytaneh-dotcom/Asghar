@@ -65,47 +65,50 @@
 .market-v8 .market-card-row .home-lead-main small{font-size:11px!important;line-height:1.7!important;white-space:normal!important;display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden!important}
 .market-v8 .market-card-row .home-lead-side{grid-column:3;align-self:center}
 .market-v8 .market-card-row .home-lead-side i{font-size:24px!important;color:#c0c3c6!important;transform:rotate(180deg)!important}
-
 .market-v8 [hidden]{display:none!important}
 
-@media(max-width:980px){
-  .simple-v2 .mobile.simple-mobile.market-bottom-four,
-  .polish-v6 .mobile.simple-mobile.market-bottom-four{
-    display:grid!important;
-    grid-template-columns:repeat(4,minmax(0,1fr))!important;
-    grid-auto-flow:row!important;
-    grid-auto-columns:auto!important;
-    gap:2px!important;
-    width:100%!important;
-    padding:4px 8px calc(4px + env(safe-area-inset-bottom))!important;
-  }
-  .simple-v2 .mobile.simple-mobile.market-bottom-four a,
-  .polish-v6 .mobile.simple-mobile.market-bottom-four a{
-    grid-column:auto!important;
-    width:100%!important;
-    min-width:0!important;
-    min-height:58px!important;
-    padding:5px 2px!important;
-    display:flex!important;
-    flex-direction:column!important;
-    align-items:center!important;
-    justify-content:center!important;
-    gap:3px!important;
-  }
-  .simple-v2 .mobile.simple-mobile.market-bottom-four a svg,
-  .polish-v6 .mobile.simple-mobile.market-bottom-four a svg{
-    width:32px!important;
-    height:30px!important;
-    padding:5px!important;
-  }
-  .simple-v2 .mobile.simple-mobile.market-bottom-four a span,
-  .polish-v6 .mobile.simple-mobile.market-bottom-four a span{
-    font-size:10px!important;
-    line-height:1.2!important;
-    white-space:nowrap!important;
-  }
-}
+/* timed order groups */
+.market-v8 .market-group{margin:7px 0 14px;border-radius:16px;overflow:hidden;background:rgba(255,255,255,.38)}
+.market-v8 .market-group-title{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 2px 7px;border-bottom:1px solid var(--m-line)}
+.market-v8 .market-group-title b{font-size:13px;color:#303337}
+.market-v8 .market-group-title span{font-size:9.5px;color:#90949a}
+.market-v8 .market-group-urgent .market-group-title b{color:#9b343a}
+.order-timer-box{margin-top:7px;min-width:0}
+.market-card-body .order-timer-box{margin-top:5px}
+.order-timebar{display:flex;align-items:center;justify-content:space-between;gap:7px;direction:rtl}
+.order-kind{display:inline-flex;align-items:center;width:max-content;max-width:100%;padding:3px 7px;border-radius:8px;font-size:8.8px;font-weight:900;line-height:1.3;white-space:nowrap}
+.order-timebar.normal .order-kind{background:#edf3f8;color:#526b83}
+.order-timebar.urgent .order-kind{background:#fff0f0;color:#a6353d}
+.order-countdown{font-variant-numeric:tabular-nums;direction:ltr;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:900;font-size:11px;color:#4d555d;letter-spacing:.2px}
+.order-timebar.urgent .order-countdown{color:#a6353d}
+.order-countdown.expired{color:#a6353d;font-family:inherit;direction:rtl;font-size:9px}
+.order-countdown.stopped{font-family:inherit;direction:rtl;color:#8a8f94;font-size:9px}
+.order-dates{display:flex;flex-direction:column;gap:2px;margin-top:4px;color:#969a9e;font-size:8.2px;line-height:1.5}
+.lead>.order-timer-box{margin:8px 0 10px;padding:9px 11px;border:1px solid #ece9e3;border-radius:12px;background:#fbfaf7}
+.lead>.order-timer-box .order-kind{font-size:10px}
+.lead>.order-timer-box .order-countdown{font-size:13px}
+.lead>.order-timer-box .order-dates{font-size:9.5px;margin-top:6px}
 
+/* Persian event history */
+.order-events-panel{margin-top:14px!important}
+.order-events-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:8px}
+.order-events-head h2{margin:0!important;font-size:16px!important}
+.order-events-head p{margin:3px 0 0;color:#8b9095;font-size:10px}
+.order-event-list{display:flex;flex-direction:column}
+.order-event{display:grid;grid-template-columns:12px minmax(0,1fr);gap:10px;padding:11px 0;border-bottom:1px solid #ece9e3}
+.order-event:last-child{border-bottom:0}
+.order-event-dot{width:9px;height:9px;margin-top:5px;border-radius:999px;background:#a7353b;box-shadow:0 0 0 4px #f7e9ea}
+.order-event b{display:block;font-size:12.5px;color:#2e3134}
+.order-event small{display:block;margin-top:3px;font-size:9.5px;color:#8c9196}
+.order-event p{margin:5px 0 0;font-size:10.5px;line-height:1.7;color:#60666c}
+.order-priority-field select{width:100%;min-height:44px;border:1px solid #dfe2e5;border-radius:10px;background:#fff;padding:8px 10px;font-family:inherit}
+
+@media(max-width:980px){
+  .simple-v2 .mobile.simple-mobile.market-bottom-four,.polish-v6 .mobile.simple-mobile.market-bottom-four{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;grid-auto-flow:row!important;grid-auto-columns:auto!important;gap:2px!important;width:100%!important;padding:4px 8px calc(4px + env(safe-area-inset-bottom))!important}
+  .simple-v2 .mobile.simple-mobile.market-bottom-four a,.polish-v6 .mobile.simple-mobile.market-bottom-four a{grid-column:auto!important;width:100%!important;min-width:0!important;min-height:58px!important;padding:5px 2px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important}
+  .simple-v2 .mobile.simple-mobile.market-bottom-four a svg,.polish-v6 .mobile.simple-mobile.market-bottom-four a svg{width:32px!important;height:30px!important;padding:5px!important}
+  .simple-v2 .mobile.simple-mobile.market-bottom-four a span,.polish-v6 .mobile.simple-mobile.market-bottom-four a span{font-size:10px!important;line-height:1.2!important;white-space:nowrap!important}
+}
 @media(max-width:620px){
   .market-v8 .main{padding-left:14px!important;padding-right:14px!important}
   .market-v8 .market-shortcuts{margin-top:4px!important;gap:5px!important}
@@ -121,4 +124,7 @@
   .market-v8 .market-thumb svg{width:38px;height:38px}
   .market-v8 .market-card-body>b,.market-v8 .market-card-row .home-lead-main b{font-size:14px!important}
   .market-v8 .market-card-body>small,.market-v8 .market-card-row .home-lead-main small{font-size:10px!important}
+  .order-kind{font-size:8px;padding:2px 5px}
+  .order-countdown{font-size:10px}
+  .order-dates{font-size:7.6px}
 }
