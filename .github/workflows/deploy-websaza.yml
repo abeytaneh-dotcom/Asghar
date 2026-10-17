@@ -69,6 +69,10 @@ jobs:
               'https://image.thum.io/get/width/1200/crop/750/noanimate/https://htaelec.ir/': '/project-htaelec-v10.png?v=20261017-1',
               'https://image.thum.io/get/width/1200/crop/750/noanimate/https://achinu.ir/': '/project-achinu-v10.png?v=20261017-1',
               'https://image.thum.io/get/width/1200/crop/750/noanimate/https://goldartmis.ir/': '/project-goldartmis-v10.png?v=20261017-1',
+              '<div class="project-domain">htaelec.ir</div>': '<div class="project-domain">سایت خانه ریمپ</div>',
+              '<div class="project-domain">achinu.ir</div>': '<div class="project-domain">سایت آچینو</div>',
+              '<div class="project-domain">goldartmis.ir</div>': '<div class="project-domain">سایت Gold Artmis</div>',
+              'بله. htaelec.ir، achinu.ir و goldartmis.ir از نمونه‌های واقعی معرفی‌شده در وب‌سایت هستند.': 'بله. خانه ریمپ، آچینو و Gold Artmis از نمونه‌های واقعی معرفی‌شده در وب‌سایت هستند.',
           }
           for old, new in replacements.items():
               html = html.replace(old, new)
@@ -134,6 +138,7 @@ jobs:
           echo "Homepage markers"
           curl -fsS --max-time 20 https://websaza.ir/ | grep -F '/home-v7.css?v=20261017-1' >/dev/null
           curl -fsS --max-time 20 https://websaza.ir/ | grep -F 'طراحی سایت حرفه‌ای' >/dev/null
+          curl -fsS --max-time 20 https://websaza.ir/ | grep -F 'سایت خانه ریمپ' >/dev/null
           echo "WWW response"
           curl -sS -I --max-time 20 https://www.websaza.ir/ | head -n 10
           for asset in hero-real-v10.jpg service-web-v8.jpg service-app-v8.jpg service-seo-v8.jpg studio-real-v10.jpg meeting-real-v10.jpg project-htaelec-v10.png project-achinu-v10.png project-goldartmis-v10.png home-v7.css; do
