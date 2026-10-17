@@ -26,12 +26,16 @@ jobs:
           set -euo pipefail
           auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
           response=$(curl --silent --show-error -H "$auth" --request POST \
+            --data-urlencode "cpanel_jsonapi_user=vt6qdx8" \
+            --data-urlencode "cpanel_jsonapi_apiversion=2" \
+            --data-urlencode "cpanel_jsonapi_module=Fileman" \
+            --data-urlencode "cpanel_jsonapi_func=mkdir" \
             --data-urlencode "path=/home/vt6qdx8/public_html" \
             --data-urlencode "name=namayandegi" \
             --data-urlencode "permissions=0755" \
-            "https://mch4444.dnsuserver.com:2083/execute/Fileman/mkdir")
+            "https://mch4444.dnsuserver.com:2083/json-api/cpanel")
           echo "$response" | jq .
-          if [ "$(echo "$response" | jq -r '.status // 0')" != "1" ]; then
+          if [ "$(echo "$response" | jq -r '.cpanelresult.event.result // 0')" != "1" ]; then
             check=$(curl --fail-with-body --silent --show-error -H "$auth" \
               "https://mch4444.dnsuserver.com:2083/execute/Fileman/list_files?dir=public_html&showdotfiles=1")
             echo "$check" | jq -e 'any(.data[]?; .file=="namayandegi" and .type=="dir")' >/dev/null
