@@ -23,6 +23,7 @@ jobs:
           export ASSET_VERSION="${GITHUB_SHA::8}"
           python3 WebSaza/namayandegi/build-patch.py
           python3 WebSaza/namayandegi/security-v2.py
+          python3 WebSaza/namayandegi/customer-retention-v1.py
           if ! grep -Fq 'MOBILE_NAV_GRID_V2' WebSaza/namayandegi/style.css; then
             cat >> WebSaza/namayandegi/style.css <<'CSS'
           /* MOBILE_NAV_GRID_V2 */
@@ -57,6 +58,7 @@ jobs:
           set -euo pipefail
           python3 -m py_compile WebSaza/namayandegi/build-patch.py
           python3 -m py_compile WebSaza/namayandegi/security-v2.py
+          python3 -m py_compile WebSaza/namayandegi/customer-retention-v1.py
           php -l WebSaza/namayandegi/index.php
           php -l WebSaza/namayandegi/_security.php
           php -l WebSaza/namayandegi/smart-actions.php
@@ -66,7 +68,8 @@ jobs:
           grep -F 'recover_request' WebSaza/namayandegi/index.php >/dev/null
           grep -F "'active'=>false,'mobile_verified'=>false" WebSaza/namayandegi/index.php >/dev/null
           grep -F "register_verify" WebSaza/namayandegi/index.php >/dev/null
-          grep -F "approval_status'='pending" WebSaza/namayandegi/index.php >/dev/null || true
+          grep -F "sendRetentionSms" WebSaza/namayandegi/index.php >/dev/null
+          grep -F "retention_sms" WebSaza/namayandegi/index.php >/dev/null
           ! grep -Fq 'ورود مدیر سیستم' WebSaza/namayandegi/index.php
 
       - name: Ensure remote folder
