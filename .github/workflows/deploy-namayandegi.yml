@@ -59,6 +59,8 @@ jobs:
             echo "$response" | jq -e '.status == 1' >/dev/null
           }
           upload_text WebSaza/namayandegi/index.php index.php
+          upload_text WebSaza/namayandegi/style.css style.css
+          upload_text WebSaza/namayandegi/app.js app.js
           upload_text WebSaza/namayandegi/.htaccess .htaccess
 
       - name: Verify live portal
@@ -67,4 +69,6 @@ jobs:
           set -euo pipefail
           sleep 5
           curl -fsSI --max-time 30 https://websaza.ir/namayandegi/ | head -n 12
-          curl -fsS --max-time 30 https://websaza.ir/namayandegi/ | grep -F 'سامانه فعالیت نمایندگی' >/dev/null
+          curl -fsS --max-time 30 https://websaza.ir/namayandegi/ | grep -F 'فرصت فروش آماده' >/dev/null
+          curl -fsSI --max-time 30 https://websaza.ir/namayandegi/style.css | head -n 8
+          curl -fsSI --max-time 30 https://websaza.ir/namayandegi/app.js | head -n 8
