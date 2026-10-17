@@ -34,28 +34,32 @@ jobs:
             --data-urlencode "name=namayandegi" \
             --data-urlencode "permissions=0755" \
             "https://mch4444.dnsuserver.com:2083/json-api/cpanel")
-          echo "$response" | jq .
           if [ "$(echo "$response" | jq -r '.cpanelresult.event.result // 0')" != "1" ]; then
             check=$(curl --fail-with-body --silent --show-error -H "$auth" \
               "https://mch4444.dnsuserver.com:2083/execute/Fileman/list_files?dir=public_html&showdotfiles=1")
             echo "$check" | jq -e 'any(.data[]?; .file=="namayandegi" and .type=="dir")' >/dev/null
           fi
 
-      - name: Upload portal
+      - name: Upload portal files
         shell: bash
         env:
           CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
         run: |
           set -euo pipefail
           auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
-          response=$(curl --fail-with-body --silent --show-error \
-            -H "$auth" \
-            --request POST \
-            --data-urlencode "dir=public_html/namayandegi" \
-            --data-urlencode "file=index.php" \
-            --data-urlencode "content@WebSaza/namayandegi/index.php" \
-            "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
-          echo "$response" | jq -e '.status == 1' >/dev/null
+          upload_text() {
+            src="$1"; name="$2"
+            response=$(curl --fail-with-body --silent --show-error \
+              -H "$auth" \
+              --request POST \
+              --data-urlencode "dir=public_html/namayandegi" \
+              --data-urlencode "file=$name" \
+              --data-urlencode "content@$src" \
+              "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
+            echo "$response" | jq -e '.status == 1' >/dev/null
+          }
+          upload_text WebSaza/namayandegi/index.php index.php
+          upload_text WebSaza/namayandegi/.htaccess .htaccess
 
       - name: Verify live portal
         shell: bash
