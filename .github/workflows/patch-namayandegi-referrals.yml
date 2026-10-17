@@ -17,79 +17,11 @@ jobs:
         with:
           ref: websaza-hosting
       - name: Patch referral system
-        shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('WebSaza/namayandegi/index.php')
-          s=p.read_text()
-          if 'REFERRAL_REWARD_V1' in s:
-              print('already patched')
-              raise SystemExit(0)
-
-          def must(old,new,count=1):
-              global s
-              n=s.count(old)
-              if n < count:
-                  raise SystemExit(f'missing pattern: {old[:120]!r} count={n}')
-              s=s.replace(old,new,count)
-
-          must("const D=__DIR__.'/_data'; const B=D.'/branches.json'; const L=D.'/leads.json'; const A=D.'/assignments.json'; const AD=D.'/admin.json'; const S=D.'/settings.json'; const EV=D.'/events.json';",
-               "const D=__DIR__.'/_data'; const B=D.'/branches.json'; const L=D.'/leads.json'; const A=D.'/assignments.json'; const AD=D.'/admin.json'; const S=D.'/settings.json'; const EV=D.'/events.json'; const R=D.'/referral_rewards.json'; // REFERRAL_REWARD_V1")
-          must("foreach([B,L,A,EV] as $f)","foreach([B,L,A,EV,R] as $f)")
-          s=s.replace("['daily_quota'=>20,'commission_percent'=>30,'company_name'=>'وب ساز'","['daily_quota'=>20,'commission_percent'=>30,'referral_reward_default'=>200000,'company_name'=>'وب ساز'")
-
-          marker="function post(string $a):bool{return $_SERVER['REQUEST_METHOD']==='POST'&&($_POST['action']??'')===$a;} function money(string $x):string{return preg_replace('/\\D/','',$x)??'';}"
-          helpers=marker+"\n"+r'''function referrerFor(array $child):?array{$rid=(string)($child['referrer_id']??'');$rcode=(string)($child['referrer_code']??'');foreach(j(B) as $x){if($rid!==''&&($x['id']??'')===$rid)return $x;if($rcode!==''&&($x['code']??'')===$rcode)return $x;}return null;}
-function rewardAmount(array $referrer):int{$v=array_key_exists('referral_reward_amount',$referrer)?(int)$referrer['referral_reward_amount']:(int)(cfg()['referral_reward_default']??200000);return max(0,$v);}
-function rewardRowsFor(string $bid):array{$x=array_values(array_filter(j(R),fn($r)=>($r['referrer_branch_id']??'')===$bid&&($r['status']??'credited')==='credited'));usort($x,fn($a,$b)=>strcmp((string)($b['created_at']??''),(string)($a['created_at']??'')));return $x;}
-function rewardTotal(string $bid):int{$n=0;foreach(rewardRowsFor($bid) as $r)$n+=(int)($r['amount']??0);return $n;}
-function awardReferral(string $childId,string $aid,string $lid,string $deal=''):int{$child=branchBy($childId);if(!$child)return 0;$ref=referrerFor($child);if(!$ref||($ref['id']??'')===$childId)return 0;$rows=j(R);foreach($rows as $r)if(($r['assignment_id']??'')===$aid&&($r['type']??'referral_order')==='referral_order')return 0;$amount=rewardAmount($ref);if($amount<=0)return 0;$rows[]=['id'=>'R'.bin2hex(random_bytes(6)),'type'=>'referral_order','referrer_branch_id'=>$ref['id'],'referred_branch_id'=>$childId,'assignment_id'=>$aid,'lead_id'=>$lid,'amount'=>$amount,'deal_value'=>$deal,'status'=>'credited','created_at'=>now()];sj(R,$rows);return $amount;}
-function referredBranches(string $bid):array{$me=branchBy($bid);if(!$me)return [];$code=(string)($me['code']??'');return array_values(array_filter(j(B),fn($x)=>(string)($x['referrer_id']??'')===$bid||($code!==''&&(string)($x['referrer_code']??'')===$code)));}'''
-          must(marker,helpers)
-
-          old="if(post('update_assignment')&&($b=br())){if(!okc())exit('درخواست نامعتبر');$aid=(string)($_POST['assignment_id']??'');$st=(string)($_POST['status']??'new');if(!in_array($st,['new','won','interested','followup','no_answer','cancelled','bad_info'],true))$st='new';$note=trim((string)($_POST['note']??''));$fu=trim((string)($_POST['followup_at']??''));$pt=trim((string)($_POST['project_type']??''));$dv=money((string)($_POST['deal_value']??''));$rows=j(A);$lid='';foreach($rows as &$r)if(($r['id']??'')===$aid&&($r['branch_id']??'')===$b['id']){$lid=(string)$r['lead_id'];$r['status']=$st;$r['note']=$note;$r['followup_at']=$fu;$r['project_type']=$pt;$r['deal_value']=$dv;$r['updated_at']=now();break;}unset($r);sj(A,$rows);event((string)$b['id'],$aid,$lid,$st,$note);fl('نتیجه تماس ذخیره شد.');go('./?view=leads#lead-'.$aid);}"
-          new="if(post('update_assignment')&&($b=br())){if(!okc())exit('درخواست نامعتبر');$aid=(string)($_POST['assignment_id']??'');$st=(string)($_POST['status']??'new');if(!in_array($st,['new','won','interested','followup','no_answer','cancelled','bad_info'],true))$st='new';$note=trim((string)($_POST['note']??''));$fu=trim((string)($_POST['followup_at']??''));$pt=trim((string)($_POST['project_type']??''));$dv=money((string)($_POST['deal_value']??''));$rows=j(A);$lid='';$old='';foreach($rows as &$r)if(($r['id']??'')===$aid&&($r['branch_id']??'')===$b['id']){$lid=(string)$r['lead_id'];$old=(string)($r['status']??'new');$r['status']=$st;$r['note']=$note;$r['followup_at']=$fu;$r['project_type']=$pt;$r['deal_value']=$dv;$r['updated_at']=now();break;}unset($r);sj(A,$rows);event((string)$b['id'],$aid,$lid,$st,$note);$rw=0;if($st==='won')$rw=awardReferral((string)$b['id'],$aid,$lid,$dv);fl($rw>0?'نتیجه تماس ذخیره شد و پاداش معرفی به حساب معرف اضافه شد.':'نتیجه تماس ذخیره شد.');go('./?view=leads#lead-'.$aid);}"
-          must(old,new)
-
-          toggle="if(post('toggle_branch')&&admin()){if(!okc())exit('درخواست نامعتبر');$id=(string)($_POST['id']??'');$rows=j(B);foreach($rows as &$r)if(($r['id']??'')===$id){$r['active']=empty($r['active']);break;}unset($r);sj(B,$rows);fl('وضعیت نمایندگی تغییر کرد.');go('./?admin=1&view=branches');}"
-          must(toggle,toggle+"\n"+"if(post('save_referral_amount')&&admin()){if(!okc())exit('درخواست نامعتبر');$id=(string)($_POST['id']??'');$amount=max(0,(int)money((string)($_POST['amount']??'0')));$rows=j(B);foreach($rows as &$r)if(($r['id']??'')===$id){$r['referral_reward_amount']=$amount;break;}unset($r);sj(B,$rows);fl('مبلغ پاداش معرفی این نمایندگی ذخیره شد.');go('./?admin=1&view=branches');}")
-
-          settings="if(post('save_settings')&&admin()){if(!okc())exit('درخواست نامعتبر');$c=cfg();$c['daily_quota']=max(1,min(100,(int)($_POST['daily_quota']??20)));$c['commission_percent']=max(0,min(100,(int)($_POST['commission_percent']??30)));$c['company_name']=trim((string)($_POST['company_name']??'وب ساز'));$c['support_phone']=trim((string)($_POST['support_phone']??''));$c['welcome_text']=trim((string)($_POST['welcome_text']??''));sj(S,$c);fl('تنظیمات ذخیره شد.');go('./?admin=1&view=settings');}"
-          settings2="if(post('save_settings')&&admin()){if(!okc())exit('درخواست نامعتبر');$c=cfg();$c['daily_quota']=max(1,min(100,(int)($_POST['daily_quota']??20)));$c['commission_percent']=max(0,min(100,(int)($_POST['commission_percent']??30)));$c['referral_reward_default']=max(0,(int)money((string)($_POST['referral_reward_default']??'200000')));$c['company_name']=trim((string)($_POST['company_name']??'وب ساز'));$c['support_phone']=trim((string)($_POST['support_phone']??''));$c['welcome_text']=trim((string)($_POST['welcome_text']??''));sj(S,$c);fl('تنظیمات ذخیره شد.');go('./?admin=1&view=settings');}"
-          must(settings,settings2)
-
-          nav_old="function nav(string $v,array $b=null,bool $adm=false):void{$it=$adm?['dashboard'=>'نمای کلی','branches'=>'نمایندگی‌ها','leads'=>'بانک فرصت‌ها','activity'=>'فعالیت و نتایج','settings'=>'تنظیمات']:['dashboard'=>'داشبورد','leads'=>'فرصت‌های امروز','followups'=>'پیگیری‌ها','history'=>'سوابق','profile'=>'حساب من','help'=>'راهنمای فروش'];"
-          nav_new="function nav(string $v,array $b=null,bool $adm=false):void{$it=$adm?['dashboard'=>'نمای کلی','branches'=>'نمایندگی‌ها','leads'=>'بانک فرصت‌ها','activity'=>'فعالیت و نتایج','referrals'=>'پاداش معرفی','settings'=>'تنظیمات']:['dashboard'=>'داشبورد','leads'=>'فرصت‌های امروز','followups'=>'پیگیری‌ها','history'=>'سوابق','referrals'=>'معرفی و پاداش','profile'=>'حساب من','help'=>'راهنمای فروش'];"
-          must(nav_old,nav_new)
-
-          must("<th>کد</th><th>عضویت</th>","<th>کد</th><th>پاداش معرفی هر سفارش</th><th>عضویت</th>")
-          row_old="<td>'.e((string)$x['code']).'</td><td>'.e((string)($x['created_at']??'')).'</td>"
-          row_new="<td>'.e((string)$x['code']).'</td><td><form method=\"post\" class=\"rowform\">'.cf().'<input type=\"hidden\" name=\"action\" value=\"save_referral_amount\"><input type=\"hidden\" name=\"id\" value=\"'.e((string)$x['id']).'\"><input style=\"max-width:130px\" inputmode=\"numeric\" name=\"amount\" value=\"'.e((string)rewardAmount($x)).'\"><button class=\"btn light sm\">ذخیره</button></form></td><td>'.e((string)($x['created_at']??'')).'</td>"
-          must(row_old,row_new)
-
-          activity="elseif($view==='activity'){"
-          admin_ref=r'''elseif($view==='referrals'){$rr=j(R);usort($rr,fn($a,$b)=>strcmp((string)($b['created_at']??''),(string)($a['created_at']??'')));$sum=0;foreach($rr as $x)if(($x['status']??'credited')==='credited')$sum+=(int)($x['amount']??0);echo '<div class="title"><div><h1>پاداش معرفی</h1><p>هر بار نماینده معرفی‌شده سفارش را قطعی کند، یک پاداش دائمی و فقط یک‌بار برای همان سفارش ثبت می‌شود.</p></div><span class="kpi">کل اعتبار ثبت‌شده: '.number_format($sum).' تومان</span></div><section class="panel"><div class="table"><table><tr><th>معرف</th><th>نماینده معرفی‌شده</th><th>مشتری/سفارش</th><th>مبلغ پاداش</th><th>ارزش قرارداد</th><th>زمان</th></tr>';foreach(array_slice($rr,0,500) as $x){$ref=branchBy((string)($x['referrer_branch_id']??''));$child=branchBy((string)($x['referred_branch_id']??''));$ld=lead((string)($x['lead_id']??''));echo '<tr><td><b>'.e((string)($ref['name']??'-')).'</b></td><td>'.e((string)($child['name']??'-')).'</td><td>'.e((string)($ld['business']??$ld['name']??'-')).'</td><td>'.number_format((int)($x['amount']??0)).' تومان</td><td>'.(!empty($x['deal_value'])?number_format((int)$x['deal_value']).' تومان':'-').'</td><td>'.e((string)($x['created_at']??'')).'</td></tr>';}echo '</table></div></section>';}'''
-          must(activity,admin_ref+"\n"+activity)
-
-          settings_field="<label>پورسانت نمایندگی (%)<input type=\"number\" min=\"0\" max=\"100\" name=\"commission_percent\" value=\"'.(int)$c['commission_percent'].'\"></label><label>شماره پشتیبانی"
-          settings_field2="<label>پورسانت نمایندگی (%)<input type=\"number\" min=\"0\" max=\"100\" name=\"commission_percent\" value=\"'.(int)$c['commission_percent'].'\"></label><label>پاداش پیش‌فرض معرفی (تومان)<input inputmode=\"numeric\" name=\"referral_reward_default\" value=\"'.(int)($c['referral_reward_default']??200000).'\"></label><label>شماره پشتیبانی"
-          must(settings_field,settings_field2)
-
-          profile="elseif($view==='profile'){"
-          branch_ref=r'''elseif($view==='referrals'){$kids=referredBranches((string)$b['id']);$rewards=rewardRowsFor((string)$b['id']);$total=rewardTotal((string)$b['id']);$won=0;foreach($rewards as $x)$won++;$link='https://websaza.ir/namayandegi/?mode=register&ref='.(string)$b['code'];echo '<div class="title"><div><h1>معرفی و پاداش</h1><p>کد و لینک اختصاصی خودت را برای ثبت‌نام نمایندگی جدید بفرست. هر سفارش قطعی آن نماینده، برای همیشه پاداش معرفی ایجاد می‌کند.</p></div></div><div class="stats"><div><span>کد معرفی</span><b>'.e((string)$b['code']).'</b></div><div><span>نماینده معرفی‌شده</span><b>'.count($kids).'</b></div><div><span>سفارش‌های پاداش‌دار</span><b>'.$won.'</b></div><div><span>موجودی پاداش معرفی</span><b>'.number_format($total).' <small>تومان</small></b></div></div><div class="grid"><section class="panel wide"><h2>لینک اختصاصی معرفی</h2><label>این لینک را برای نماینده جدید بفرست<input id="refLink" readonly value="'.e($link).'"></label><div class="actions"><button class="btn lime copy" type="button" data-copy="'.e($link).'">کپی لینک معرفی</button><button class="btn light copy" type="button" data-copy="'.e((string)$b['code']).'">کپی کد '.e((string)$b['code']).'</button></div><p class="muted">پاداش فعلی هر سفارش قطعی نماینده معرفی‌شده: '.number_format(rewardAmount($b)).' تومان. این مبلغ را مدیر می‌تواند مخصوص حساب شما تغییر دهد.</p></section><section class="panel"><h2>نحوه محاسبه</h2><p>۱. نماینده جدید با لینک یا کد شما ثبت‌نام می‌کند.</p><p>۲. هر زمان یکی از سفارش‌های خودش را «سفارش قطعی» ثبت کند، پاداش برای شما ثبت می‌شود.</p><p>۳. برای هر سفارش فقط یک‌بار پاداش داده می‌شود؛ تغییر وضعیت و ثبت دوباره پاداش تکراری نمی‌سازد.</p><p>۴. این ارتباط دائمی است و سفارش‌های قطعی آینده همان نماینده هم پاداش دارند.</p></section></div><section class="panel"><h2>نماینده‌های معرفی‌شده</h2><div class="table"><table><tr><th>نام</th><th>شهر</th><th>کد</th><th>تاریخ عضویت</th><th>سفارش قطعی</th></tr>';if(!$kids)echo '<tr><td colspan="5">هنوز نماینده‌ای با کد شما ثبت نشده است.</td></tr>';foreach($kids as $x){$ba=bas((string)$x['id']);$bc=counts($ba);echo '<tr><td><b>'.e((string)$x['name']).'</b></td><td>'.e((string)($x['city']??'')).'</td><td>'.e((string)($x['code']??'')).'</td><td>'.e((string)($x['created_at']??'')).'</td><td>'.$bc['won'].'</td></tr>';}echo '</table></div></section><section class="panel"><h2>گردش پاداش‌ها</h2><div class="table"><table><tr><th>نماینده</th><th>سفارش</th><th>پاداش</th><th>زمان</th></tr>';if(!$rewards)echo '<tr><td colspan="4">هنوز پاداشی ثبت نشده است.</td></tr>';foreach($rewards as $x){$child=branchBy((string)($x['referred_branch_id']??''));$ld=lead((string)($x['lead_id']??''));echo '<tr><td>'.e((string)($child['name']??'-')).'</td><td>'.e((string)($ld['business']??$ld['name']??'-')).'</td><td><b>'.number_format((int)($x['amount']??0)).' تومان</b></td><td>'.e((string)($x['created_at']??'')).'</td></tr>';}echo '</table></div></section>';}'''
-          must(profile,branch_ref+"\n"+profile)
-
-          old_profile_note="<p class=\"muted\">پورسانت فعلی: '.(int)$c['commission_percent'].'٪ طبق شرایط همکاری.</p>"
-          new_profile_note="<p class=\"muted\">پاداش معرفی فعلی شما: '.number_format(rewardAmount($b)).' تومان برای هر سفارش قطعی نماینده‌ای که معرفی کرده‌اید.</p><a class=\"btn lime\" href=\"?view=referrals\">مشاهده پاداش‌ها</a>"
-          must(old_profile_note,new_profile_note)
-
-          p.write_text(s)
-          PY
+          python3 WebSaza/namayandegi/patch_referrals.py
           php -l WebSaza/namayandegi/index.php
       - name: Commit referral system
-        shell: bash
         run: |
           set -euo pipefail
           git config user.name "websaza-bot"
