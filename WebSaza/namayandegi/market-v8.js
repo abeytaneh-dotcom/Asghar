@@ -1,9 +1,39 @@
-/* MARKET_V8 — marketplace-style home for representative portal */
+/* MARKET_V8 — marketplace-style representative portal */
 (()=>{
   const qs=new URLSearchParams(location.search);
   const view=qs.get('view')||'dashboard';
+  const isFinance=location.pathname.endsWith('/finance.php');
   const isAdmin=!!document.querySelector('.side a[href*="admin=1"],.mobile a[href*="admin=1"]')||qs.has('admin');
-  if(isAdmin||view!=='dashboard')return;
+  if(isAdmin)return;
+
+  const S={
+    home:'<path d="M3.5 11.2 12 4l8.5 7.2"/><path d="M5.5 10.2V20h5v-5.5h3V20h5v-9.8"/>',
+    list:'<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+    clock:'<circle cx="12" cy="12" r="8.7"/><path d="M12 7.5v4.8l3.2 1.9"/>',
+    wallet:'<path d="M4.5 6.5h13a2 2 0 0 1 2 2V19h-14a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2h10.5"/><path d="M15 11h6v4.5h-6a2.25 2.25 0 0 1 0-4.5Z"/>',
+    history:'<path d="M4 7.5V4m0 3.5h3.5"/><path d="M4.5 7.2A8.7 8.7 0 1 1 3.4 12"/><path d="M12 7.4v4.8l3.2 1.9"/>',
+    gift:'<path d="M4.5 10h15v10h-15zM3.5 7h17v3h-17zM12 7v13"/><path d="M12 7c-1.4-2.8-4.8-3.2-4.8-.8 0 1.5 1.7 2.1 4.8.8Zm0 0c1.4-2.8 4.8-3.2 4.8-.8 0 1.5-1.7 2.1-4.8.8Z"/>',
+    user:'<circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c.8-3.8 3.3-5.8 7.5-5.8s6.7 2 7.5 5.8"/>',
+    help:'<circle cx="12" cy="12" r="8.7"/><path d="M9.6 9.2a2.7 2.7 0 1 1 4.1 2.3c-1 .7-1.7 1.3-1.7 2.7M12 17.4h.01"/>'
+  };
+  const svg=(n)=>`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${S[n]}</svg>`;
+
+  /* Bottom navigation: exactly four primary destinations, no More button. */
+  const mobile=document.querySelector('.mobile');
+  if(mobile){
+    const active=isFinance?'finance':view;
+    const bottom=[
+      ['./?view=dashboard','home','خانه','dashboard'],
+      ['./?view=leads','list','فرصت‌ها','leads'],
+      ['./?view=followups','clock','پیگیری','followups'],
+      ['./finance.php','wallet','مالی','finance']
+    ];
+    mobile.innerHTML=bottom.map(([href,ic,label,key])=>`<a href="${href}" class="${active===key?'on':''}">${svg(ic)}<span>${label}</span></a>`).join('');
+    mobile.classList.add('simple-mobile','market-bottom-four');
+  }
+  document.querySelectorAll('.simple-sheet').forEach(el=>el.remove());
+
+  if(isFinance||view!=='dashboard')return;
   const main=document.querySelector('.main');
   if(!main)return;
   document.body.classList.add('market-v8');
@@ -14,7 +44,16 @@
 
   const opp=[...main.querySelectorAll('.panel')].find(p=>p.classList.contains('simple-opportunities')||/فرصت‌های جدید|اولویت‌های امروز/.test(p.textContent||''));
   const start=main.querySelector('.simple-start');
-  if(start)start.classList.add('market-shortcuts');
+  if(start){
+    start.classList.add('market-shortcuts');
+    const top=[
+      ['./?view=history','history','سوابق'],
+      ['./?view=referrals','gift','معرفی و پاداش'],
+      ['./?view=profile','user','حساب من'],
+      ['./?view=help','help','راهنما']
+    ];
+    start.innerHTML=top.map(([href,ic,label],i)=>`<a href="${href}" class="simple-row market-top-item"><span class="simple-row-icon tone-${i+1}">${svg(ic)}</span><span class="simple-row-text"><b>${label}</b></span></a>`).join('');
+  }
   if(!opp)return;
   opp.classList.add('market-opportunities');
   const heading=[...opp.querySelectorAll('h1,h2,h3')].find(h=>/فرصت‌های جدید|اولویت‌های امروز/.test(h.textContent||''));
