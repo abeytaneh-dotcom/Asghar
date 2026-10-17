@@ -53,6 +53,21 @@ jobs:
           path = Path('WebSaza/index.html')
           html = path.read_text(encoding='utf-8')
 
+          seo_title = 'طراحی سایت حرفه‌ای، فروشگاه اینترنتی، اپلیکیشن و سئو | وب ساز'
+          seo_description = 'وب ساز؛ طراحی سایت حرفه‌ای، فروشگاه اینترنتی، اپلیکیشن و خدمات سئو با رابط کاربری مدرن، سرعت بالا، ساختار فنی استاندارد و تمرکز بر جذب مشتری و رشد کسب‌وکار.'
+          social_description = 'طراحی سایت، فروشگاه اینترنتی، اپلیکیشن و سئو با تمرکز بر تجربه کاربری، سرعت، ساختار فنی و رشد واقعی کسب‌وکار.'
+
+          html = re.sub(r'<title>.*?</title>', f'<title>{seo_title}</title>', html, count=1, flags=re.S)
+          html = re.sub(r'<meta name="description" content="[^"]*">', f'<meta name="description" content="{seo_description}">', html, count=1)
+          html = re.sub(r'<meta property="og:title" content="[^"]*">', f'<meta property="og:title" content="{seo_title}">', html, count=1)
+          html = re.sub(r'<meta property="og:description" content="[^"]*">', f'<meta property="og:description" content="{social_description}">', html, count=1)
+          html = re.sub(r'<meta name="twitter:title" content="[^"]*">', f'<meta name="twitter:title" content="{seo_title}">', html, count=1)
+          html = re.sub(r'<meta name="twitter:description" content="[^"]*">', f'<meta name="twitter:description" content="{social_description}">', html, count=1)
+          html = html.replace('"name":"طراحی سایت حرفه‌ای، اپلیکیشن و سئو | وب ساز"', f'"name":"{seo_title}"')
+
+          if '<meta name="author"' not in html:
+              html = html.replace('<meta name="theme-color" content="#ffffff">', '<meta name="theme-color" content="#ffffff">\n<meta name="author" content="وب ساز">\n<meta name="publisher" content="وب ساز">')
+
           html = re.sub(r'<link rel="preconnect" href="https://images\.unsplash\.com" crossorigin>\n?', '', html)
           html = re.sub(r'<link rel="preconnect" href="https://image\.thum\.io" crossorigin>\n?', '', html)
           html = re.sub(r'<link rel="preload" as="image" href="https://images\.unsplash\.com[^>]+>\n?', '<link rel="preload" as="image" href="/hero-real-v10.jpg?v=20261017-1" fetchpriority="high">\n', html)
@@ -137,8 +152,9 @@ jobs:
           curl -fsSI --max-time 20 https://websaza.ir/ | head -n 12
           echo "Homepage markers"
           curl -fsS --max-time 20 https://websaza.ir/ | grep -F '/home-v7.css?v=20261017-1' >/dev/null
-          curl -fsS --max-time 20 https://websaza.ir/ | grep -F 'طراحی سایت حرفه‌ای' >/dev/null
+          curl -fsS --max-time 20 https://websaza.ir/ | grep -F 'فروشگاه اینترنتی، اپلیکیشن و سئو' >/dev/null
           curl -fsS --max-time 20 https://websaza.ir/ | grep -F 'سایت خانه ریمپ' >/dev/null
+          curl -fsS --max-time 20 https://websaza.ir/ | grep -F '<meta name="author" content="وب ساز">' >/dev/null
           echo "WWW response"
           curl -sS -I --max-time 20 https://www.websaza.ir/ | head -n 10
           for asset in hero-real-v10.jpg service-web-v8.jpg service-app-v8.jpg service-seo-v8.jpg studio-real-v10.jpg meeting-real-v10.jpg project-htaelec-v10.png project-achinu-v10.png project-goldartmis-v10.png home-v7.css; do
