@@ -1,0 +1,25 @@
+name: Discover cPanel domains
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/discover-cpanel-domains.yml'
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: List domains and public root
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          echo '=== DOMAINS ==='
+          curl --fail-with-body --silent --show-error -H "$auth" \
+            'https://mch4444.dnsuserver.com:2083/execute/DomainInfo/list_domains' | jq '{status,data}'
+          echo '=== PUBLIC_HTML ==='
+          curl --fail-with-body --silent --show-error -H "$auth" \
+            'https://mch4444.dnsuserver.com:2083/execute/Fileman/list_files?dir=public_html&showdotfiles=1' | jq '{status,data:[.data[]|{file,fullpath,type,size}]}'
