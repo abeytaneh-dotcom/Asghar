@@ -1,4 +1,4 @@
-# scalable-orders-v1-deploy-20261017
+# security-v1-deploy-20261017
 name: Deploy Namayandegi Portal
 
 on:
@@ -28,14 +28,11 @@ jobs:
           root=Path('WebSaza/namayandegi')
           v=os.environ['ASSET_VERSION']
 
-          # Cache-busted assets.
           p=root/'index.php'
           text=p.read_text(encoding='utf-8')
           text=re.sub(r'style\.css\?v=[^"\']+',f'style.css?v={v}',text)
           text=re.sub(r'app\.js\?v=[^"\']+',f'app.js?v={v}',text)
 
-          # Request-local JSON cache: eliminates repeated disk reads/decodes while
-          # preserving the existing storage format and updating cache after writes.
           old_j="function j(string $f):array{$x=json_decode((string)@file_get_contents($f),true);return is_array($x)?$x:[];}"
           new_j="function j(string $f):array{$c=&$GLOBALS['_WSJ_CACHE'];if(!is_array($c??null))$c=[];if(array_key_exists($f,$c))return $c[$f];$x=json_decode((string)@file_get_contents($f),true);return $c[$f]=is_array($x)?$x:[];}"
           old_sj="function sj(string $f,array $x):bool{$l=fopen($f.'.lock','c');if(!$l||!flock($l,LOCK_EX))return false;try{$t=$f.'.tmp.'.bin2hex(random_bytes(3));$q=json_encode($x,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);if($q===false||file_put_contents($t,$q,LOCK_EX)===false)return false;@chmod($t,0640);return rename($t,$f);}finally{flock($l,LOCK_UN);fclose($l);}}"
@@ -44,34 +41,86 @@ jobs:
               raise SystemExit('index.php storage functions changed; performance patch aborted safely')
           text=text.replace(old_j,new_j,1).replace(old_sj,new_sj,1)
 
-          # Daily compaction of larger live JSON stores. This converts legacy
-          # pretty-printed data to compact JSON without changing any records.
           old_tick="function systemTick(bool $force=false):array{if(!$force&&is_file(T)){ $last=(int)@file_get_contents(T); if($last>time()-300)return ['expired'=>0,'assigned'=>0]; }$x=recycleExpired();$a=fillQuotas();@file_put_contents(T,(string)time(),LOCK_EX);return ['expired'=>$x,'assigned'=>$a];}"
           new_tick="function compactStore():void{$stamp=D.'/last_compact.txt';$last=is_file($stamp)?(int)@file_get_contents($stamp):0;if($last>time()-86400)return;foreach([B,L,A,EV,R] as $f){clearstatcache(true,$f);if(is_file($f)&&(int)@filesize($f)>262144){$rows=j($f);sj($f,$rows);}}@file_put_contents($stamp,(string)time(),LOCK_EX);} function systemTick(bool $force=false):array{if(!$force&&is_file(T)){ $last=(int)@file_get_contents(T); if($last>time()-300)return ['expired'=>0,'assigned'=>0]; }compactStore();$x=recycleExpired();$a=fillQuotas();@file_put_contents(T,(string)time(),LOCK_EX);return ['expired'=>$x,'assigned'=>$a];}"
           if old_tick not in text:
               raise SystemExit('index.php systemTick changed; compaction patch aborted safely')
           text=text.replace(old_tick,new_tick,1)
+
+          admin_init="if(!is_file(AD))@file_put_contents(AD,json_encode(['username'=>'admin','password_hash'=>password_hash('123456',PASSWORD_DEFAULT),'must_change'=>true],JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT));"
+          security_boot=admin_init+"\nrequire_once __DIR__.'/_security.php'; authSecurityHeaders(); sec_headers(); sec_harden_admin(AD,S,D);"
+          if admin_init not in text:
+              raise SystemExit('admin bootstrap marker missing')
+          text=text.replace(admin_init,security_boot,1)
+
+          old_login="if(post('login')){if(!okc())exit('درخواست نامعتبر');$u=trim((string)($_POST['username']??''));$p=(string)($_POST['password']??'');$rows=j(B);foreach($rows as &$r)if((($r['mobile']??'')===$u||($r['code']??'')===$u)&&!empty($r['active'])&&password_verify($p,(string)($r['password_hash']??''))){$r['last_login_at']=now();sj(B,$rows);session_regenerate_id(true);$_SESSION['bid']=$r['id'];systemTick(true);go('./');}unset($r);fl('شماره/کد یا رمز عبور صحیح نیست.','err');go('./?mode=login');}"
+          new_login="if(post('login')){if(!okc())exit('درخواست نامعتبر');$u=trim((string)($_POST['username']??''));$p=(string)($_POST['password']??'');$rows=j(B);$idx=null;foreach($rows as $i=>$r)if((($r['mobile']??'')===$u||($r['code']??'')===$u)&&!empty($r['active'])){$idx=$i;break;}$sid=$idx!==null?(string)($rows[$idx]['id']??''):('unknown:'.hash('sha256',$u));if(!sec_can_login(D,'branch',$sid)){fl('اطلاعات ورود صحیح نیست یا دسترسی غیرفعال است.','err');go('./?mode=login');}if($idx!==null&&password_verify($p,(string)($rows[$idx]['password_hash']??''))){sec_success(D,'branch',$sid);$rows[$idx]['last_login_at']=now();sj(B,$rows);session_regenerate_id(true);$_SESSION['bid']=$rows[$idx]['id'];systemTick(true);go(!empty($rows[$idx]['must_change_password'])?'./?view=profile&security=1':'./');}sec_fail(D,'branch',$sid);fl('اطلاعات ورود صحیح نیست یا دسترسی غیرفعال است.','err');go('./?mode=login');}"
+          if old_login not in text:
+              raise SystemExit('branch login handler missing')
+          text=text.replace(old_login,new_login,1)
+
+          old_admin="if(post('admin_login')){if(!okc())exit('درخواست نامعتبر');$a=j(AD);if(hash_equals((string)($a['username']??''),trim((string)($_POST['username']??'')))&&password_verify((string)($_POST['password']??''),(string)($a['password_hash']??''))){session_regenerate_id(true);$_SESSION['adm']=1;go('./?admin=1');}fl('ورود مدیر ناموفق بود.','err');go('./?admin=1');}"
+          new_admin="if(post('admin_login')){if(!okc())exit('درخواست نامعتبر');$a=j(AD);if(!sec_can_login(D,'admin','root')){fl('اطلاعات ورود صحیح نیست یا دسترسی غیرفعال است.','err');go('./?admin=1');}$ok=hash_equals((string)($a['username']??''),trim((string)($_POST['username']??'')))&&password_verify((string)($_POST['password']??''),(string)($a['password_hash']??''));if($ok){sec_success(D,'admin','root');session_regenerate_id(true);$_SESSION['adm']=1;go(!empty($a['must_change'])?'./?admin=1&view=settings&security=1':'./?admin=1');}sec_fail(D,'admin','root');fl('اطلاعات ورود صحیح نیست یا دسترسی غیرفعال است.','err');go('./?admin=1');}"
+          if old_admin not in text:
+              raise SystemExit('admin login handler missing')
+          text=text.replace(old_admin,new_admin,1)
+
+          recover_handlers="""
+if(post('recover_request')){if(!okc())exit('درخواست نامعتبر');$m=sec_mobile((string)($_POST['mobile']??''));$rows=j(B);$found=null;foreach($rows as $r)if(sec_mobile((string)($r['mobile']??''))===$m&&!empty($r['active'])){$found=$r;break;}if($found&&sec_reset_allowed(D,'branch',(string)$found['id']))sec_issue_code(D,'branch',(string)$found['id'],$m,S);fl('اگر شماره در سیستم ثبت شده باشد، کد بازیابی ارسال می‌شود.');go('./?mode=reset');}
+if(post('recover_finish')){if(!okc())exit('درخواست نامعتبر');$m=sec_mobile((string)($_POST['mobile']??''));$code=trim((string)($_POST['code']??''));$new=(string)($_POST['new_password']??'');$rows=j(B);$idx=null;foreach($rows as $i=>$r)if(sec_mobile((string)($r['mobile']??''))===$m&&!empty($r['active'])){$idx=$i;break;}if($idx===null||strlen($new)<10||!sec_verify_code(D,'branch',(string)$rows[$idx]['id'],$code)){fl('اطلاعات بازیابی معتبر نیست.','err');go('./?mode=reset');}$rows[$idx]['password_hash']=password_hash($new,PASSWORD_DEFAULT);$rows[$idx]['must_change_password']=false;sj(B,$rows);sec_unlock(D,'branch',(string)$rows[$idx]['id']);fl('رمز جدید ثبت شد.');go('./?mode=login');}
+if(post('admin_recover_request')){if(!okc())exit('درخواست نامعتبر');$m=sec_mobile((string)($_POST['mobile']??''));$a=j(AD);$registered=sec_mobile((string)($a['mobile']??''));if($registered!==''&&hash_equals($registered,$m)&&sec_reset_allowed(D,'admin','root'))sec_issue_code(D,'admin','root',$m,S);fl('اگر شماره معتبر باشد، کد بازیابی ارسال می‌شود.');go('./?admin=1&recover=1&step=2');}
+if(post('admin_recover_finish')){if(!okc())exit('درخواست نامعتبر');$m=sec_mobile((string)($_POST['mobile']??''));$code=trim((string)($_POST['code']??''));$new=(string)($_POST['new_password']??'');$a=j(AD);$registered=sec_mobile((string)($a['mobile']??''));if($registered===''||!hash_equals($registered,$m)||strlen($new)<12||!sec_verify_code(D,'admin','root',$code)){fl('اطلاعات بازیابی معتبر نیست.','err');go('./?admin=1&recover=1&step=2');}$a['password_hash']=password_hash($new,PASSWORD_DEFAULT);$a['must_change']=false;sj(AD,$a);sec_unlock(D,'admin','root');fl('رمز جدید ثبت شد.');go('./?admin=1');}
+"""
+          text=text.replace(new_login,recover_handlers+new_login,1)
+
+          old_branch_pw="if(post('branch_password')&&($b=br())){if(!okc())exit('درخواست نامعتبر');$old=(string)($_POST['old']??'');$new=(string)($_POST['new']??'');if(!password_verify($old,(string)$b['password_hash'])||strlen($new)<8){fl('رمز فعلی اشتباه است یا رمز جدید کوتاه است.','err');go('./?view=profile');}$rows=j(B);foreach($rows as &$r)if(($r['id']??'')===$b['id']){$r['password_hash']=password_hash($new,PASSWORD_DEFAULT);break;}unset($r);sj(B,$rows);fl('رمز عبور تغییر کرد.');go('./?view=profile');}"
+          new_branch_pw="if(post('branch_password')&&($b=br())){if(!okc())exit('درخواست نامعتبر');$old=(string)($_POST['old']??'');$new=(string)($_POST['new']??'');if(!password_verify($old,(string)$b['password_hash'])||strlen($new)<10){fl('رمز فعلی اشتباه است یا رمز جدید کوتاه است.','err');go('./?view=profile');}$rows=j(B);foreach($rows as &$r)if(($r['id']??'')===$b['id']){$r['password_hash']=password_hash($new,PASSWORD_DEFAULT);$r['must_change_password']=false;break;}unset($r);sj(B,$rows);sec_unlock(D,'branch',(string)$b['id']);fl('رمز عبور تغییر کرد.');go('./?view=profile');}"
+          if old_branch_pw not in text:
+              raise SystemExit('branch password handler missing')
+          text=text.replace(old_branch_pw,new_branch_pw,1)
+
+          old_admin_pw="if(post('admin_password')&&admin()){if(!okc())exit('درخواست نامعتبر');$p=(string)($_POST['password']??'');if(strlen($p)<10){fl('رمز مدیر حداقل ۱۰ کاراکتر باشد.','err');go('./?admin=1&view=settings');}$a=j(AD);$a['password_hash']=password_hash($p,PASSWORD_DEFAULT);$a['must_change']=false;sj(AD,$a);fl('رمز مدیر تغییر کرد.');go('./?admin=1&view=settings');}"
+          new_admin_pw="if(post('admin_password')&&admin()){if(!okc())exit('درخواست نامعتبر');$p=(string)($_POST['password']??'');if(strlen($p)<12){fl('رمز جدید باید حداقل ۱۲ کاراکتر باشد.','err');go('./?admin=1&view=settings');}$a=j(AD);$a['password_hash']=password_hash($p,PASSWORD_DEFAULT);$a['must_change']=false;sj(AD,$a);sec_unlock(D,'admin','root');fl('رمز مدیر تغییر کرد.');go('./?admin=1&view=settings');}"
+          if old_admin_pw not in text:
+              raise SystemExit('admin password handler missing')
+          text=text.replace(old_admin_pw,new_admin_pw,1)
+
+          public_anchor="echo '<a class=\"adminlink\" href=\"?admin=1\">ورود مدیر سیستم</a></div></section></main></body></html>';"
+          if public_anchor in text:text=text.replace(public_anchor,"echo '</div></section></main></body></html>';",1)
+          text=text.replace("<button class=\"btn dark\">ورود به پنل</button></form>'","<button class=\"btn dark\">ورود به پنل</button></form><a class=\"adminlink\" href=\"?mode=recover\">بازیابی رمز عبور</a>'",1)
+
+          recover_page="""
+if(!$b&&!$isAdmin&&in_array($mode,['recover','reset'],true)){headx('بازیابی ورود');echo '<main class="auth"><section class="authbox"><div class="authcard">';flash($flash);if($mode==='recover')echo '<h2>بازیابی رمز عبور</h2><form method="post" class="form">'.cf().'<input type="hidden" name="action" value="recover_request"><label>شماره موبایل<input name="mobile" inputmode="numeric" required></label><button class="btn dark">ارسال کد بازیابی</button></form>';else echo '<h2>ثبت رمز جدید</h2><form method="post" class="form">'.cf().'<input type="hidden" name="action" value="recover_finish"><label>شماره موبایل<input name="mobile" inputmode="numeric" required></label><label>کد بازیابی<input name="code" inputmode="numeric" maxlength="6" required></label><label>رمز جدید<input type="password" name="new_password" minlength="10" required></label><button class="btn dark">ثبت رمز جدید</button></form>';echo '<a class="adminlink" href="./?mode=login">بازگشت</a></div></section></main></body></html>';exit;}
+"""
+          marker="if(!$b&&!$isAdmin){headx('ورود و ثبت‌نام نمایندگی');"
+          if marker not in text: raise SystemExit('public login render marker missing')
+          text=text.replace(marker,recover_page+marker,1)
+
+          admin_recover="""
+if($isAdmin&&!admin()&&($_GET['recover']??'')==='1'){headx('بازیابی دسترسی');echo '<main class="auth"><section class="authbox"><div class="authcard">';flash($flash);if(($_GET['step']??'')==='2')echo '<h2>ثبت رمز جدید</h2><form method="post" class="form">'.cf().'<input type="hidden" name="action" value="admin_recover_finish"><label>شماره موبایل<input name="mobile" inputmode="numeric" required></label><label>کد بازیابی<input name="code" inputmode="numeric" maxlength="6" required></label><label>رمز جدید<input type="password" name="new_password" minlength="12" required></label><button class="btn dark">ثبت رمز جدید</button></form>';else echo '<h2>بازیابی دسترسی</h2><form method="post" class="form">'.cf().'<input type="hidden" name="action" value="admin_recover_request"><label>شماره موبایل<input name="mobile" inputmode="numeric" required></label><button class="btn dark">ارسال کد بازیابی</button></form>';echo '<a class="adminlink" href="./?admin=1">بازگشت</a></div></section></main></body></html>';exit;}
+"""
+          admin_marker="if($isAdmin&&!admin()){headx('ورود مدیر');"
+          if admin_marker not in text: raise SystemExit('admin render marker missing')
+          text=text.replace(admin_marker,admin_recover+admin_marker,1)
+          text=text.replace('مدیریت مرکزی<br>نمایندگی‌ها و توزیع هوشمند سفارش','ورود امن',1)
+          text=text.replace("<button class=\"btn dark\">ورود</button></form><a class=\"adminlink\" href=\"./\">بازگشت</a>","<button class=\"btn dark\">ورود</button></form><a class=\"adminlink\" href=\"?admin=1&recover=1\">بازیابی دسترسی</a>",1)
           p.write_text(text,encoding='utf-8')
 
-          # Apply the same request-local cache + compact writes to smart actions.
           p=root/'smart-actions.php'
           text=p.read_text(encoding='utf-8')
           old_jx="function jx(string $f):array{$x=json_decode((string)@file_get_contents($f),true);return is_array($x)?$x:[];}"
           new_jx="function jx(string $f):array{$c=&$GLOBALS['_WSJX_CACHE'];if(!is_array($c??null))$c=[];if(array_key_exists($f,$c))return $c[$f];$x=json_decode((string)@file_get_contents($f),true);return $c[$f]=is_array($x)?$x:[];}"
           old_sjx="function sjx(string $f,array $x):bool{$l=fopen($f.'.lock','c');if(!$l||!flock($l,LOCK_EX))return false;try{$t=$f.'.tmp.'.bin2hex(random_bytes(3));$q=json_encode($x,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);if($q===false||file_put_contents($t,$q,LOCK_EX)===false)return false;@chmod($t,0640);return rename($t,$f);}finally{flock($l,LOCK_UN);fclose($l);}}"
           new_sjx="function sjx(string $f,array $x):bool{$l=fopen($f.'.lock','c');if(!$l||!flock($l,LOCK_EX))return false;try{$t=$f.'.tmp.'.bin2hex(random_bytes(3));$q=json_encode($x,JSON_UNESCAPED_UNICODE);if($q===false||file_put_contents($t,$q,LOCK_EX)===false)return false;@chmod($t,0640);$ok=rename($t,$f);if($ok){$c=&$GLOBALS['_WSJX_CACHE'];if(!is_array($c??null))$c=[];$c[$f]=$x;}return $ok;}finally{flock($l,LOCK_UN);fclose($l);}}"
-          if old_jx not in text or old_sjx not in text:
-              raise SystemExit('smart-actions.php storage functions changed; performance patch aborted safely')
+          if old_jx not in text or old_sjx not in text: raise SystemExit('smart-actions storage functions changed')
           text=text.replace(old_jx,new_jx,1).replace(old_sjx,new_sjx,1)
           p.write_text(text,encoding='utf-8')
 
-          # Finance uses the same JSON backend; optimize it too.
           p=root/'finance.php'
           text=p.read_text(encoding='utf-8')
           old_fin="function j($f){$x=json_decode((string)@file_get_contents($f),true);return is_array($x)?$x:[];}function sj($f,$x){$l=fopen($f.'.lock','c');if(!$l||!flock($l,LOCK_EX))return false;try{$t=$f.'.tmp.'.bin2hex(random_bytes(3));$q=json_encode($x,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);if($q===false||file_put_contents($t,$q,LOCK_EX)===false)return false;@chmod($t,0640);return rename($t,$f);}finally{flock($l,LOCK_UN);fclose($l);}}"
           new_fin="function j($f){$c=&$GLOBALS['_WSF_CACHE'];if(!is_array($c??null))$c=[];if(array_key_exists($f,$c))return $c[$f];$x=json_decode((string)@file_get_contents($f),true);return $c[$f]=is_array($x)?$x:[];}function sj($f,$x){$l=fopen($f.'.lock','c');if(!$l||!flock($l,LOCK_EX))return false;try{$t=$f.'.tmp.'.bin2hex(random_bytes(3));$q=json_encode($x,JSON_UNESCAPED_UNICODE);if($q===false||file_put_contents($t,$q,LOCK_EX)===false)return false;@chmod($t,0640);$ok=rename($t,$f);if($ok){$c=&$GLOBALS['_WSF_CACHE'];if(!is_array($c??null))$c=[];$c[$f]=$x;}return $ok;}finally{flock($l,LOCK_UN);fclose($l);}}"
-          if old_fin not in text:
-              raise SystemExit('finance.php storage functions changed; performance patch aborted safely')
+          if old_fin not in text: raise SystemExit('finance storage functions changed')
           text=text.replace(old_fin,new_fin,1)
           p.write_text(text,encoding='utf-8')
           PY
@@ -110,10 +159,13 @@ jobs:
       - name: Validate production build
         run: |
           php -l WebSaza/namayandegi/index.php
+          php -l WebSaza/namayandegi/_security.php
           php -l WebSaza/namayandegi/smart-actions.php
           php -l WebSaza/namayandegi/finance.php
           node --check WebSaza/namayandegi/app.js
           grep -F 'PERFORMANCE_V1' WebSaza/namayandegi/app.js >/dev/null
+          grep -F 'sec_can_login' WebSaza/namayandegi/index.php >/dev/null
+          ! grep -F 'ورود مدیر سیستم' WebSaza/namayandegi/index.php
 
       - name: Ensure remote folder
         shell: bash
@@ -153,6 +205,7 @@ jobs:
             echo "$response" | jq -e '.status == 1' >/dev/null
           }
           upload_text WebSaza/namayandegi/index.php index.php
+          upload_text WebSaza/namayandegi/_security.php _security.php
           upload_text WebSaza/namayandegi/style.css style.css
           upload_text WebSaza/namayandegi/app.js app.js
           upload_text WebSaza/namayandegi/smart-actions.php smart-actions.php
@@ -165,18 +218,13 @@ jobs:
           set -euo pipefail
           sleep 5
           v="${GITHUB_SHA::8}"
-          curl -fsSI --max-time 30 https://websaza.ir/namayandegi/ | head -n 12
+          curl -fsSI --max-time 30 https://websaza.ir/namayandegi/ | head -n 16
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=${v}" | grep -F "style.css?v=${v}" >/dev/null
+          ! curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=${v}" | grep -F 'ورود مدیر سیستم'
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=recover&verify=${v}" | grep -F 'بازیابی رمز عبور' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${v}" | grep -F 'SIMPLE_DIVAR_V2' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${v}" | grep -F 'POLISH_V6' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${v}" | grep -F 'MARKET_V8' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'SIMPLE_DIVAR_V2' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'POLISH_V6' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'MARKET_V8' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'PERFORMANCE_V1' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'simple-more-btn' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'interested_transfer' >/dev/null
-          curl -fsSI --max-time 30 https://websaza.ir/namayandegi/smart-actions.php | head -n 8
-          curl -fsSI --max-time 30 https://websaza.ir/namayandegi/finance.php | head -n 8
-          echo 'Compression headers:'
-          curl -fsSI --max-time 30 -H 'Accept-Encoding: br,gzip' "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -Ei 'content-encoding|cache-control|expires|vary' || true
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 https://websaza.ir/namayandegi/_security.php)
+          test "$code" = "403"
