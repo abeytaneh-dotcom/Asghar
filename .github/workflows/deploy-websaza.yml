@@ -4,7 +4,7 @@ on:
   push:
     branches: [websaza-hosting]
     paths:
-      - 'WebSaza/.deploy-trigger'
+      - 'WebSaza/**'
       - '.github/workflows/deploy-websaza.yml'
   workflow_dispatch:
 
@@ -161,3 +161,9 @@ jobs:
             echo "Checking $asset"
             curl -fsSI --max-time 20 "https://websaza.ir/$asset" | head -n 4
           done
+          echo "SEO landing pages"
+          for page in website-design-professional.html corporate-website-design.html ecommerce-website-design.html online-store-design.html custom-website-design.html service-website-design.html business-website-design.html professional-website-development.html seo-friendly-website-design.html website-redesign.html app-design.html app-development-service.html android-app-design.html ecommerce-app-design.html custom-app-development.html ui-ux-design.html seo-services.html technical-seo.html ecommerce-seo.html website-speed-optimization.html; do
+            echo "Checking $page"
+            curl -fsSI --max-time 20 "https://websaza.ir/$page" | head -n 1
+          done
+          curl -fsS --max-time 20 https://websaza.ir/sitemap.xml | grep -F 'website-speed-optimization.html' >/dev/null
