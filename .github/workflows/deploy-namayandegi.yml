@@ -1,0 +1,62 @@
+name: Deploy Namayandegi Portal
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'WebSaza/namayandegi/**'
+      - '.github/workflows/deploy-namayandegi.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate PHP
+        run: php -l WebSaza/namayandegi/index.php
+
+      - name: Ensure remote folder
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          response=$(curl --silent --show-error -H "$auth" --request POST \
+            --data-urlencode "path=/home/vt6qdx8/public_html" \
+            --data-urlencode "name=namayandegi" \
+            --data-urlencode "permissions=0755" \
+            "https://mch4444.dnsuserver.com:2083/execute/Fileman/mkdir")
+          echo "$response" | jq .
+          if [ "$(echo "$response" | jq -r '.status // 0')" != "1" ]; then
+            check=$(curl --fail-with-body --silent --show-error -H "$auth" \
+              "https://mch4444.dnsuserver.com:2083/execute/Fileman/list_files?dir=public_html&showdotfiles=1")
+            echo "$check" | jq -e 'any(.data[]?; .file=="namayandegi" and .type=="dir")' >/dev/null
+          fi
+
+      - name: Upload portal
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          response=$(curl --fail-with-body --silent --show-error \
+            -H "$auth" \
+            --request POST \
+            --data-urlencode "dir=public_html/namayandegi" \
+            --data-urlencode "file=index.php" \
+            --data-urlencode "content@WebSaza/namayandegi/index.php" \
+            "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
+          echo "$response" | jq -e '.status == 1' >/dev/null
+
+      - name: Verify live portal
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 5
+          curl -fsSI --max-time 30 https://websaza.ir/namayandegi/ | head -n 12
+          curl -fsS --max-time 30 https://websaza.ir/namayandegi/ | grep -F 'سامانه فعالیت نمایندگی' >/dev/null
