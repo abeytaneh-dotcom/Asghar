@@ -1,4 +1,4 @@
-/* SIMPLE_DIVAR_V3 */
+/* SIMPLE_DIVAR_V2 SIMPLE_DIVAR_V3 */
 (()=>{
   const body=document.body;if(!body)return;body.classList.add('simple-v2','simple-v3');
   const qs=new URLSearchParams(location.search);const current=qs.get('view')||'dashboard';
@@ -20,12 +20,8 @@
     settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9 7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/>'
   };
   const ico=(n)=>`<svg viewBox="0 0 24 24" aria-hidden="true">${S[n]||S.more}</svg>`;
-
-  // Remove old dashboard-style shortcuts.
   document.querySelectorAll('.quick-actions,.divar-menu,.dv-home-menu,.simple-start').forEach(x=>x.remove());
   const main=document.querySelector('.main');
-
-  // Home is now one calm, obvious list. No dashboard hero or KPI wall.
   if(main&&current==='dashboard'&&!isFinance){
     document.querySelectorAll('.hero,.stats,.progressbox').forEach(x=>x.classList.add('simple-home-hidden'));
     const rows=isAdmin?[
@@ -45,20 +41,12 @@
     box.innerHTML='<div class="simple-start-title"><b>'+(isAdmin?'مدیریت':'کارهای امروز')+'</b><span>انتخاب کنید</span></div>'+rows.map(r=>`<a href="${r[0]}" class="simple-row"><span class="simple-row-icon">${ico(r[1])}</span><span class="simple-row-text"><b>${r[2]}</b><small>${r[3]}</small></span><span class="simple-chevron">‹</span></a>`).join('');
     const title=main.querySelector('.title');if(title)title.insertAdjacentElement('afterend',box);else main.prepend(box);
   }
-
-  // Exactly five mobile destinations.
   const mobile=document.querySelector('.mobile');
   if(mobile&&!isFinance){
     const primary=isAdmin?[
-      ['./?admin=1&view=dashboard','home','خانه','dashboard'],
-      ['./?admin=1&view=intake','plus','ثبت','intake'],
-      ['./?admin=1&view=distribution','target','توزیع','distribution'],
-      ['./finance.php?admin=1','wallet','مالی','finance']
+      ['./?admin=1&view=dashboard','home','خانه','dashboard'],['./?admin=1&view=intake','plus','ثبت','intake'],['./?admin=1&view=distribution','target','توزیع','distribution'],['./finance.php?admin=1','wallet','مالی','finance']
     ]:[
-      ['./?view=dashboard','home','خانه','dashboard'],
-      ['./?view=leads','list','فرصت‌ها','leads'],
-      ['./?view=followups','clock','پیگیری','followups'],
-      ['./finance.php','wallet','مالی','finance']
+      ['./?view=dashboard','home','خانه','dashboard'],['./?view=leads','list','فرصت‌ها','leads'],['./?view=followups','clock','پیگیری','followups'],['./finance.php','wallet','مالی','finance']
     ];
     mobile.innerHTML=primary.map(r=>`<a href="${r[0]}" class="${current===r[3]?'on':''}">${ico(r[1])}<span>${r[2]}</span></a>`).join('')+`<button type="button" class="simple-more-btn">${ico('more')}<span>بیشتر</span></button>`;
     mobile.classList.add('simple-mobile');
@@ -72,13 +60,9 @@
     document.body.appendChild(sheet);
     const close=()=>sheet.classList.remove('open');mobile.querySelector('.simple-more-btn')?.addEventListener('click',()=>sheet.classList.add('open'));sheet.querySelector('.simple-sheet-backdrop')?.addEventListener('click',close);
   }
-
-  // Quieter content cards.
   document.querySelectorAll('.panel').forEach(x=>x.classList.add('simple-panel'));
   document.querySelectorAll('.lead').forEach(x=>x.classList.add('simple-lead-v3'));
   document.querySelectorAll('.stats').forEach(x=>x.classList.add('simple-stats'));
   document.querySelectorAll('.hero').forEach(x=>x.classList.add('simple-hero'));
-
-  // Shorter page titles.
   const title=document.querySelector('.title h1');if(title){title.textContent=title.textContent.replace('داشبورد نمایندگی','خانه').replace('داشبورد مدیریت','خانه مدیریت');}
 })();
