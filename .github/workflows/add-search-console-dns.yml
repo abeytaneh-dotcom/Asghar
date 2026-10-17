@@ -24,7 +24,7 @@ jobs:
             --data-urlencode "cpanel_jsonapi_module=ZoneEdit" \
             --data-urlencode "cpanel_jsonapi_func=add_zone_record" \
             --data-urlencode "domain=websaza.ir" \
-            --data-urlencode "name=websaza.ir" \
+            --data-urlencode "name=websaza.ir." \
             --data-urlencode "type=TXT" \
             --data-urlencode "txtdata=google-site-verification=2BdJrPdpS0ySBc-TgvygJF9cneqt-kD8k-PbCWusJrE" \
             --data-urlencode "ttl=14400" \
@@ -37,7 +37,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          sleep 5
+          FOUND=0
           for ns in ns44.dnsuserver.com ns45.dnsuserver.com; do
             echo "Checking $ns"
-            dig +short TXT websaza.ir @$ns || true
+            OUT=$(dig +short TXT websaza.ir @$ns || true)
+            echo "$OUT"
+            if echo "$OUT" | grep -F 'google-site-verification=2BdJrPdpS0ySBc-TgvygJF9cneqt-kD8k-PbCWusJrE' >/dev/null; then
+              FOUND=1
+            fi
           done
+          test "$FOUND" = 1
