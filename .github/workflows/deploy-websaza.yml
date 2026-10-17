@@ -4,7 +4,7 @@ on:
   push:
     branches: [websaza-hosting]
     paths:
-      - 'WebSaza/**'
+      - 'WebSaza/.deploy-trigger'
       - '.github/workflows/deploy-websaza.yml'
   workflow_dispatch:
 
