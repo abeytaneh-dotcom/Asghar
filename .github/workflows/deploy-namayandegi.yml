@@ -52,10 +52,14 @@ jobs:
           cat WebSaza/namayandegi/simple-v2.css >> WebSaza/namayandegi/style.css
           printf '\n' >> WebSaza/namayandegi/style.css
           cat WebSaza/namayandegi/polish-v6.css >> WebSaza/namayandegi/style.css
+          printf '\n' >> WebSaza/namayandegi/style.css
+          cat WebSaza/namayandegi/market-v8.css >> WebSaza/namayandegi/style.css
           printf '\n' >> WebSaza/namayandegi/app.js
           cat WebSaza/namayandegi/simple-v2.js >> WebSaza/namayandegi/app.js
           printf '\n' >> WebSaza/namayandegi/app.js
           cat WebSaza/namayandegi/polish-v6.js >> WebSaza/namayandegi/app.js
+          printf '\n' >> WebSaza/namayandegi/app.js
+          cat WebSaza/namayandegi/market-v8.js >> WebSaza/namayandegi/app.js
 
       - name: Validate PHP
         run: |
@@ -117,8 +121,10 @@ jobs:
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=${v}" | grep -F "style.css?v=${v}" >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${v}" | grep -F 'SIMPLE_DIVAR_V2' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${v}" | grep -F 'POLISH_V6' >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${v}" | grep -F 'MARKET_V8' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'SIMPLE_DIVAR_V2' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'POLISH_V6' >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'MARKET_V8' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'simple-more-btn' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'interested_transfer' >/dev/null
           curl -fsSI --max-time 30 https://websaza.ir/namayandegi/smart-actions.php | head -n 8
