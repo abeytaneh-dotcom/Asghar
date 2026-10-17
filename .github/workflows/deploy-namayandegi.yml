@@ -1,4 +1,4 @@
-# referral-signup-deploy-20261017
+# smart-distribution-deploy-20261017
 name: Deploy Namayandegi Portal
 
 on:
@@ -149,6 +149,6 @@ jobs:
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=${version}" | grep -F "style.css?v=${version}" >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${version}" | grep -F 'MOBILE_NAV_GRID_V2' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${version}" | grep -F 'grid-template-columns:repeat(8,minmax(0,1fr))' >/dev/null
-          curl -fsS --max-time 30 https://websaza.ir/namayandegi/ | grep -F 'فرصت فروش آماده' >/dev/null
+          curl -fsS --max-time 30 https://websaza.ir/namayandegi/ | grep -F 'فرصت فروش متناسب با منطقه' >/dev/null
           curl -fsSI --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${version}" | head -n 8
           curl -fsSI --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${version}" | head -n 8
