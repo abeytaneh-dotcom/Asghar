@@ -92,7 +92,9 @@ jobs:
           fi
 
       - name: Validate PHP
-        run: php -l WebSaza/namayandegi/index.php
+        run: |
+          php -l WebSaza/namayandegi/index.php
+          php -l WebSaza/namayandegi/smart-actions.php
 
       - name: Ensure remote folder
         shell: bash
@@ -137,6 +139,7 @@ jobs:
           upload_text WebSaza/namayandegi/index.php index.php
           upload_text WebSaza/namayandegi/style.css style.css
           upload_text WebSaza/namayandegi/app.js app.js
+          upload_text WebSaza/namayandegi/smart-actions.php smart-actions.php
           upload_text WebSaza/namayandegi/.htaccess .htaccess
 
       - name: Verify live portal
@@ -150,5 +153,5 @@ jobs:
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${version}" | grep -F 'MOBILE_NAV_GRID_V2' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${version}" | grep -F 'grid-template-columns:repeat(8,minmax(0,1fr))' >/dev/null
           curl -fsS --max-time 30 https://websaza.ir/namayandegi/ | grep -F 'فرصت فروش متناسب با منطقه' >/dev/null
-          curl -fsSI --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${version}" | head -n 8
-          curl -fsSI --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${version}" | head -n 8
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${version}" | grep -F 'interested_transfer' >/dev/null
+          curl -fsSI --max-time 30 https://websaza.ir/namayandegi/smart-actions.php | head -n 8
