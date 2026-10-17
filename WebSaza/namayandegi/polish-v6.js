@@ -1,4 +1,4 @@
-/* POLISH_V6 */
+/* POLISH_V6 POLISH_V7 */
 (()=>{
   const body=document.body;if(!body)return;body.classList.add('polish-v6');
   const I={
@@ -18,7 +18,7 @@
     store:'<path d="M4 9.5h16l-1.2-5H5.2L4 9.5Z"/><path d="M5.5 9.5V20h13V9.5M9 20v-6h6v6"/><path d="M4 9.5c0 1.4 1 2.5 2.3 2.5s2.3-1.1 2.3-2.5c0 1.4 1 2.5 2.3 2.5s2.3-1.1 2.3-2.5c0 1.4 1 2.5 2.3 2.5s2.3-1.1 2.3-2.5c0 1.4 1 2.5 2.3 2.5"/>',
     report:'<path d="M5 3.5h14v17H5z"/><path d="M8.5 8h7M8.5 12h7M8.5 16H13"/>'
   };
-  const svg=(n)=>`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${I[n]||I.more}</svg>`;
+  const svg=(n)=>`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${I[n]||I.more}</svg>`;
   const iconFor=(el)=>{
     const href=(el.getAttribute?.('href')||'').toLowerCase();
     const txt=(el.textContent||'').trim();
@@ -39,13 +39,15 @@
     return 'list';
   };
 
-  document.querySelectorAll('.simple-row-icon').forEach(box=>{const a=box.closest('a');box.innerHTML=svg(iconFor(a||box));});
+  document.querySelectorAll('.simple-row-icon').forEach((box,i)=>{const a=box.closest('a');box.innerHTML=svg(iconFor(a||box));box.classList.add(`tone-${i%5+1}`);});
   document.querySelectorAll('.mobile.simple-mobile a,.mobile.simple-mobile button').forEach(el=>{const old=el.querySelector('svg');if(old)old.outerHTML=svg(iconFor(el));});
-  document.querySelectorAll('.simple-sheet a').forEach(a=>{const box=a.querySelector(':scope > span');if(box)box.innerHTML=svg(iconFor(a));});
+  document.querySelectorAll('.simple-sheet a').forEach((a,i)=>{const box=a.querySelector(':scope > span');if(box){box.innerHTML=svg(iconFor(a));box.classList.add(`tone-${i%5+1}`);}});
 
-  document.querySelectorAll('.home-lead-row').forEach(row=>{
+  document.querySelectorAll('.home-lead-row').forEach((row,i)=>{
     if(!row.querySelector('.home-lead-avatar')){
-      const av=document.createElement('span');av.className='home-lead-avatar';av.innerHTML=svg('store');row.prepend(av);
+      const av=document.createElement('span');av.className=`home-lead-avatar tone-${i%5+1}`;av.innerHTML=svg('store');row.prepend(av);
+    }else{
+      row.querySelector('.home-lead-avatar')?.classList.add(`tone-${i%5+1}`);
     }
     const em=row.querySelector('em');if(!em)return;
     const t=em.textContent.trim();
