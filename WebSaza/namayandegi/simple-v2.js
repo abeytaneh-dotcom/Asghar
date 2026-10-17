@@ -1,6 +1,6 @@
-/* SIMPLE_DIVAR_V2 SIMPLE_DIVAR_V3 */
+/* SIMPLE_DIVAR_V2 SIMPLE_DIVAR_V3 SIMPLE_HOME_V4 */
 (()=>{
-  const body=document.body;if(!body)return;body.classList.add('simple-v2','simple-v3');
+  const body=document.body;if(!body)return;body.classList.add('simple-v2','simple-v3','simple-v4');
   const qs=new URLSearchParams(location.search);const current=qs.get('view')||'dashboard';
   const isAdmin=!!document.querySelector('.side a[href*="admin=1"],.mobile a[href*="admin=1"]') || qs.has('admin');
   const isFinance=location.pathname.endsWith('/finance.php');
@@ -25,21 +25,30 @@
   if(main&&current==='dashboard'&&!isFinance){
     document.querySelectorAll('.hero,.stats,.progressbox').forEach(x=>x.classList.add('simple-home-hidden'));
     const rows=isAdmin?[
-      ['./?admin=1&view=intake','plus','ثبت سفارش جدید','مشتری جدید را وارد کنید'],
-      ['./?admin=1&view=distribution','target','توزیع سفارش‌ها','ظرفیت و امتیاز نماینده‌ها'],
-      ['./finance.php?admin=1','wallet','حساب مالی','واریزی‌ها و مغایرت‌ها'],
-      ['./?admin=1&view=branches','users','نمایندگی‌ها','مدیریت حساب و منطقه فعالیت'],
-      ['./?admin=1&view=activity','history','گزارش فعالیت','نتیجه تماس‌ها و فروش']
+      ['./?admin=1&view=intake','plus','ثبت سفارش','مشتری جدید'],
+      ['./?admin=1&view=distribution','target','توزیع','ظرفیت نماینده‌ها'],
+      ['./finance.php?admin=1','wallet','مالی','واریزی و مغایرت'],
+      ['./?admin=1&view=branches','users','نمایندگی‌ها','حساب و منطقه'],
+      ['./?admin=1&view=activity','history','گزارش‌ها','تماس و فروش']
     ]:[
-      ['./?view=leads','list','فرصت‌های امروز','مشتری‌هایی که امروز باید تماس بگیری'],
-      ['./?view=followups','clock','پیگیری‌ها','مشتری‌هایی که دوباره باید تماس بگیری'],
-      ['./finance.php','wallet','حساب مالی','دریافتی، سهم شما و تسویه'],
-      ['./?view=history','history','سوابق','نتیجه تماس‌ها و کارهای قبلی'],
-      ['./?view=referrals','gift','معرفی و پاداش','لینک معرفی و پاداش‌ها']
+      ['./?view=leads','list','فرصت‌های امروز','تماس‌های جدید'],
+      ['./?view=followups','clock','پیگیری‌ها','تماس دوباره'],
+      ['./finance.php','wallet','حساب مالی','دریافتی و تسویه'],
+      ['./?view=history','history','سوابق','تماس‌های قبلی'],
+      ['./?view=referrals','gift','معرفی و پاداش','لینک معرفی']
     ];
     const box=document.createElement('section');box.className='simple-start simple-start-v3';
-    box.innerHTML='<div class="simple-start-title"><b>'+(isAdmin?'مدیریت':'کارهای امروز')+'</b><span>انتخاب کنید</span></div>'+rows.map(r=>`<a href="${r[0]}" class="simple-row"><span class="simple-row-icon">${ico(r[1])}</span><span class="simple-row-text"><b>${r[2]}</b><small>${r[3]}</small></span><span class="simple-chevron">‹</span></a>`).join('');
+    box.innerHTML='<div class="simple-start-title"><b>'+(isAdmin?'کارهای اصلی':'کارهای امروز')+'</b></div>'+rows.map(r=>`<a href="${r[0]}" class="simple-row"><span class="simple-row-icon">${ico(r[1])}</span><span class="simple-row-text"><b>${r[2]}</b><small>${r[3]}</small></span><span class="simple-chevron">‹</span></a>`).join('');
     const title=main.querySelector('.title');if(title)title.insertAdjacentElement('afterend',box);else main.prepend(box);
+
+    // Keep real sales opportunities, but remove the dashboard-like "today priorities" wrapper.
+    [...main.querySelectorAll('.panel')].forEach(panel=>{
+      if(!panel.textContent.includes('اولویت‌های امروز'))return;
+      panel.classList.add('simple-opportunities');
+      const h=[...panel.querySelectorAll('h1,h2,h3')].find(el=>el.textContent.includes('اولویت‌های امروز'));
+      if(h)h.textContent='فرصت‌های جدید';
+    });
+    if(title)title.closest('.title')?.classList.add('simple-dashboard-title');
   }
   const mobile=document.querySelector('.mobile');
   if(mobile&&!isFinance){
