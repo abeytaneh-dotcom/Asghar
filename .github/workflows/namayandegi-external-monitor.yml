@@ -1,0 +1,35 @@
+name: Namayandegi External Monitor
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/namayandegi-external-monitor.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: namayandegi-external-monitor
+  cancel-in-progress: true
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check public health independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          h=$(curl -fsS --retry 3 --retry-delay 3 --max-time 30 'https://websaza.ir/namayandegi/health.php?external_monitor=1')
+          echo "$h" | jq -e '.ok==true and .version=="platform-v4" and .backup_ok==true and .ops_ok==true' >/dev/null
+          code=$(curl -sS -o /tmp/login.html -w '%{http_code}' --retry 2 --max-time 30 'https://websaza.ir/namayandegi/?external_monitor=1')
+          test "$code" = "200"
+          grep -F 'مرا به خاطر بسپار' /tmp/login.html >/dev/null
+          code=$(curl -sS -o /tmp/register.html -w '%{http_code}' --retry 2 --max-time 30 'https://websaza.ir/namayandegi/?mode=register&external_monitor=1')
+          test "$code" = "200"
+          grep -F 'رمز ورود ۶ رقمی' /tmp/register.html >/dev/null
+          grep -F 'شرایط همکاری' /tmp/register.html >/dev/null
