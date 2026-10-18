@@ -1,0 +1,22 @@
+{
+  "id": "/nz",
+  "name": "نیازستان",
+  "short_name": "نیازستان",
+  "description": "پلتفرم آگهی خرید، فروش و خدمات",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "/nz?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/niazestan-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
