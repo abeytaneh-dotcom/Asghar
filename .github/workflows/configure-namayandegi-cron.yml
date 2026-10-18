@@ -8,14 +8,20 @@ on:
       - 'WebSaza/namayandegi/smart-upgrade-v3.py'
       - 'WebSaza/namayandegi/single-engine-v3.py'
       - 'WebSaza/namayandegi/platform-v3.php'
+      - 'WebSaza/namayandegi/sms-worker.php'
+      - 'WebSaza/namayandegi/backup-worker.php'
+      - 'WebSaza/namayandegi/ops-worker.php'
       - '.github/workflows/configure-namayandegi-cron.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   configure:
     runs-on: ubuntu-latest
     steps:
-      - name: Ensure exactly one one-minute order automation cron
+      - name: Ensure production automation crons
         shell: bash
         env:
           CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
@@ -23,8 +29,6 @@ jobs:
           set -euo pipefail
           auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
           endpoint="https://mch4444.dnsuserver.com:2083/json-api/cpanel"
-          marker="WEBSAZA_NAMAYANDEGI_TICK"
-          command="WEBSAZA_NAMAYANDEGI_TICK=1 /usr/local/bin/php -q /home/vt6qdx8/public_html/namayandegi/smart-actions.php >/dev/null 2>&1"
 
           list_cron(){
             curl --fail-with-body --silent --show-error -H "$auth" --request POST \
@@ -35,30 +39,42 @@ jobs:
               "$endpoint"
           }
 
-          list=$(list_cron)
-          count=$(echo "$list" | jq --arg m "$marker" '[.cpanelresult.data[]? | select(((.command // "") | contains($m)))] | length')
-          if [ "$count" -eq 0 ]; then
-            add=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
+          add_cron(){
+            local minute="$1" hour="$2" day="$3" month="$4" weekday="$5" command="$6"
+            curl --fail-with-body --silent --show-error -H "$auth" --request POST \
               --data-urlencode "cpanel_jsonapi_user=vt6qdx8" \
               --data-urlencode "cpanel_jsonapi_apiversion=2" \
               --data-urlencode "cpanel_jsonapi_module=Cron" \
               --data-urlencode "cpanel_jsonapi_func=add_line" \
-              --data-urlencode "minute=*" \
-              --data-urlencode "hour=*" \
-              --data-urlencode "day=*" \
-              --data-urlencode "month=*" \
-              --data-urlencode "weekday=*" \
-              --data-urlencode "command=$command" \
-              "$endpoint")
-            echo "$add" | jq -e '(.cpanelresult.event.result // .cpanelresult.data[0].status // .cpanelresult.data[0].result // 0) | tonumber == 1' >/dev/null
-          elif [ "$count" -gt 1 ]; then
-            echo "Duplicate Namayandegi cron entries detected: $count" >&2
-            exit 1
-          fi
+              --data-urlencode "minute=$minute" \
+              --data-urlencode "hour=$hour" \
+              --data-urlencode "day=$day" \
+              --data-urlencode "month=$month" \
+              --data-urlencode "weekday=$weekday" \
+              --data-urlencode "command=$command" "$endpoint"
+          }
 
-          verify=$(list_cron)
-          echo "$verify" | jq -e --arg m "$marker" --arg cmd "$command" '
-            ([.cpanelresult.data[]? | select(((.command // "") | contains($m)))] | length) == 1 and
-            any(.cpanelresult.data[]?; (.command // "") == $cmd and (.minute // "") == "*" and (.hour // "") == "*" and (.day // "") == "*" and (.month // "") == "*" and (.weekday // "") == "*")
-          ' >/dev/null
-          echo "Exactly one Namayandegi one-minute cron verified."
+          ensure_one(){
+            local marker="$1" minute="$2" hour="$3" day="$4" month="$5" weekday="$6" command="$7"
+            local list count add
+            list=$(list_cron)
+            count=$(echo "$list" | jq --arg m "$marker" '[.cpanelresult.data[]? | select(((.command // "") | contains($m)))] | length')
+            if [ "$count" -eq 0 ]; then
+              add=$(add_cron "$minute" "$hour" "$day" "$month" "$weekday" "$command")
+              echo "$add" | jq -e '(.cpanelresult.event.result // .cpanelresult.data[0].status // .cpanelresult.data[0].result // 0) | tonumber == 1' >/dev/null
+            elif [ "$count" -gt 1 ]; then
+              echo "Duplicate cron entries detected for $marker: $count" >&2
+              exit 1
+            fi
+            list=$(list_cron)
+            echo "$list" | jq -e --arg m "$marker" --arg cmd "$command" --arg mi "$minute" --arg hr "$hour" --arg da "$day" --arg mo "$month" --arg wd "$weekday" '
+              ([.cpanelresult.data[]? | select(((.command // "") | contains($m)))] | length) == 1 and
+              any(.cpanelresult.data[]?; (.command // "") == $cmd and (.minute // "") == $mi and (.hour // "") == $hr and (.day // "") == $da and (.month // "") == $mo and (.weekday // "") == $wd)
+            ' >/dev/null
+          }
+
+          ensure_one "WEBSAZA_NAMAYANDEGI_TICK" "*" "*" "*" "*" "*" "WEBSAZA_NAMAYANDEGI_TICK=1 /usr/local/bin/php -q /home/vt6qdx8/public_html/namayandegi/smart-actions.php >/dev/null 2>&1"
+          ensure_one "WEBSAZA_SMS_TICK" "*" "*" "*" "*" "*" "WEBSAZA_SMS_TICK=1 /usr/local/bin/php -q /home/vt6qdx8/public_html/namayandegi/sms-worker.php >/dev/null 2>&1"
+          ensure_one "WEBSAZA_BACKUP_TICK" "*/5" "*" "*" "*" "*" "WEBSAZA_BACKUP_TICK=1 /usr/local/bin/php -q /home/vt6qdx8/public_html/namayandegi/backup-worker.php >/dev/null 2>&1"
+          ensure_one "WEBSAZA_OPS_TICK" "*/15" "*" "*" "*" "*" "WEBSAZA_OPS_TICK=1 /usr/local/bin/php -q /home/vt6qdx8/public_html/namayandegi/ops-worker.php >/dev/null 2>&1"
+          echo "All Namayandegi automation crons verified."
