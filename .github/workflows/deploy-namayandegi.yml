@@ -137,11 +137,11 @@ jobs:
             html=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=${v}&attempt=${attempt}")
             echo "$html" | grep -F "style.css?v=${v}" >/dev/null
             echo "$html" | grep -F 'مرا به خاطر بسپار' >/dev/null
-            echo "$html" | grep -F 'رمز ورود ۴ رقمی' >/dev/null
+            curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=register&verify=${v}&attempt=${attempt}" | grep -F 'رمز ورود ۴ رقمی' >/dev/null
             curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'SEEN_V3' >/dev/null
             health=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/health.php?v=${v}")
             echo "$health" | jq -e '.ok==true and .version=="platform-v3"' >/dev/null
-            echo "$health" | jq -e '.backend=="sqlite-wal"' >/dev/null
+            echo "$health" | jq -e '.backend=="sqlite-wal" and .pdo_sqlite==true' >/dev/null
             code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/lead-ingest.php")
             test "$code" = "401"
             code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/_security.php")
