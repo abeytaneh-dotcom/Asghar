@@ -24,6 +24,7 @@ steps = [
     'hardening-v5-fix.py',
     'registration-ui-fix-v5.py',
     'rep-pin-4-v6.py',
+    'login-minimal-4-v7.py',
 ]
 for step in steps:
     path = root / step
