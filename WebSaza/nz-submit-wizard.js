@@ -123,6 +123,7 @@
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const allCities=()=>Object.values(PROVINCES).flat();
   const provinceOf=city=>Object.keys(PROVINCES).find(p=>PROVINCES[p].includes(city))||'';
+  const normFa=s=>String(s??'').replace(/[يى]/g,'ی').replace(/ك/g,'ک').replace(/‌/g,' ').replace(/^استان\s+/,'').replace(/\s+/g,' ').trim();
 
   function enhanceGlobalSelectors(){
     const cities=allCities();
@@ -173,7 +174,7 @@
 
     const style=document.createElement('style');
     style.textContent=`
-      .nz-wizard-form{display:block!important}.nz-wizard-head{margin-bottom:18px}.nz-wizard-title{font-size:21px;font-weight:950;margin:0 0 5px}.nz-step-bars{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:14px 0 7px}.nz-step-bars span{height:5px;border-radius:99px;background:#e7e9ed}.nz-step-bars span.on{background:#b4232c}.nz-step-label{font-size:11px;color:#777}.nz-step{display:none}.nz-step.active{display:block}.nz-section-title{font-size:16px;font-weight:950;margin:14px 0 8px}.nz-action-field{width:100%;min-height:58px;border:1px solid #dfe2e6;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 14px;font:800 13px Tahoma,Arial,sans-serif;cursor:pointer;text-align:right}.nz-action-field small{display:block;color:#858b93;font-weight:400;margin-top:4px}.nz-action-value{min-width:0}.nz-chevron{font-size:25px;color:#9aa0a7}.nz-wizard-nav{display:flex;gap:8px;margin-top:20px}.nz-wizard-nav button{flex:1;min-height:48px;border:0;border-radius:13px;font:900 13px Tahoma,Arial,sans-serif;cursor:pointer}.nz-next{background:#b4232c;color:#fff}.nz-back{background:#f1f3f5;color:#343a40}.nz-hidden-fields{display:none!important}.nz-modal{position:fixed;inset:0;z-index:10050;background:rgba(10,14,20,.55);display:none;align-items:flex-end;justify-content:center}.nz-modal.show{display:flex}.nz-modal-card{width:min(100%,560px);max-height:92dvh;overflow:auto;background:#fff;border-radius:24px 24px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -18px 70px rgba(0,0,0,.22)}.nz-modal-head{display:flex;align-items:center;justify-content:space-between;position:sticky;top:-18px;background:#fff;padding:8px 0 12px;z-index:4}.nz-modal-head h3{margin:0;font-size:17px}.nz-modal-close{border:0;background:#f1f2f4;border-radius:50%;width:36px;height:36px;font-size:22px}.nz-search{width:100%;height:44px;border:1px solid #dfe2e6;border-radius:12px;padding:0 12px;font:inherit;margin-bottom:10px}.nz-list{display:grid;gap:6px}.nz-list button{min-height:50px;border:0;border-bottom:1px solid #eee;background:#fff;text-align:right;font:800 13px Tahoma,Arial,sans-serif;padding:0 5px;cursor:pointer}.nz-list button small{display:block;color:#92979e;font-weight:400;margin-top:3px}.nz-specs{display:grid;grid-template-columns:1fr 1fr;gap:12px}.nz-specs .field{margin:0}.nz-location-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.nz-location-grid .field{margin:0}.nz-map{height:310px;border-radius:16px;overflow:hidden;background:#eef1f3;margin-top:12px;border:1px solid #e2e5e9}.nz-map-tools{display:flex;gap:8px;margin-top:10px}.nz-map-tools button{flex:1;min-height:42px;border:1px solid #dedfe3;background:#fff;border-radius:11px;font:800 11px Tahoma,Arial,sans-serif}.nz-location-mode{display:flex;gap:8px;margin-top:10px}.nz-location-mode label{flex:1;border:1px solid #e2e4e8;border-radius:12px;padding:10px;text-align:center;font-size:11px;cursor:pointer}.nz-location-mode input{margin-left:5px}.nz-modal-save{width:100%;height:48px;margin-top:14px;border:0;border-radius:13px;background:#b4232c;color:#fff;font:900 13px Tahoma,Arial,sans-serif}.nz-review{background:#f8f9fa;border-radius:16px;padding:13px;margin:12px 0}.nz-review-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #e8eaed;font-size:12px}.nz-review-row:last-child{border:0}.nz-review-row span{color:#7b8188}.nz-review-row b{text-align:left}.nz-wizard-error{display:none;margin:10px 0;padding:10px 12px;border-radius:11px;background:#fff0f1;color:#a21d27;font-size:12px;border:1px solid #f0c9cd}.nz-wizard-error.show{display:block}.nz-required:after{content:' *';color:#b4232c}.nz-map-note{font-size:10.5px;color:#7d838a;line-height:1.8;margin-top:7px}.nz-clear{border:1px solid #e4e6e9;background:#fff;border-radius:10px;padding:7px 10px;font:800 11px Tahoma,Arial,sans-serif}.nz-final-submit button{height:50px!important;font-size:14px!important}
+      .nz-wizard-form{display:block!important}.nz-wizard-head{margin-bottom:18px}.nz-wizard-title{font-size:21px;font-weight:950;margin:0 0 5px}.nz-step-bars{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:14px 0 7px}.nz-step-bars span{height:5px;border-radius:99px;background:#e7e9ed}.nz-step-bars span.on{background:#b4232c}.nz-step-label{font-size:11px;color:#777}.nz-step{display:none}.nz-step.active{display:block}.nz-section-title{font-size:16px;font-weight:950;margin:14px 0 8px}.nz-action-field{width:100%;min-height:58px;border:1px solid #dfe2e6;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 14px;font:800 13px Tahoma,Arial,sans-serif;cursor:pointer;text-align:right}.nz-action-field small{display:block;color:#858b93;font-weight:400;margin-top:4px}.nz-action-value{min-width:0}.nz-chevron{font-size:25px;color:#9aa0a7}.nz-wizard-nav{display:flex;gap:8px;margin-top:20px}.nz-wizard-nav button{flex:1;min-height:48px;border:0;border-radius:13px;font:900 13px Tahoma,Arial,sans-serif;cursor:pointer}.nz-next{background:#b4232c;color:#fff}.nz-back{background:#f1f3f5;color:#343a40}.nz-hidden-fields{display:none!important}.nz-modal{position:fixed;inset:0;z-index:10050;background:rgba(10,14,20,.55);display:none;align-items:flex-end;justify-content:center}.nz-modal.show{display:flex}.nz-modal-card{width:min(100%,560px);max-height:92dvh;overflow:auto;background:#fff;border-radius:24px 24px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -18px 70px rgba(0,0,0,.22)}.nz-modal-head{display:flex;align-items:center;justify-content:space-between;position:sticky;top:-18px;background:#fff;padding:8px 0 12px;z-index:4}.nz-modal-head h3{margin:0;font-size:17px}.nz-modal-close{border:0;background:#f1f2f4;border-radius:50%;width:36px;height:36px;font-size:22px}.nz-search{width:100%;height:44px;border:1px solid #dfe2e6;border-radius:12px;padding:0 12px;font:inherit;margin-bottom:10px}.nz-list{display:grid;gap:6px}.nz-list button{min-height:50px;border:0;border-bottom:1px solid #eee;background:#fff;text-align:right;font:800 13px Tahoma,Arial,sans-serif;padding:0 5px;cursor:pointer}.nz-list button small{display:block;color:#92979e;font-weight:400;margin-top:3px}.nz-specs{display:grid;grid-template-columns:1fr 1fr;gap:12px}.nz-specs .field{margin:0}.nz-location-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.nz-location-grid .field{margin:0}.nz-map{height:310px;border-radius:16px;overflow:hidden;background:#eef1f3;margin-top:12px;border:1px solid #e2e5e9}.nz-map-tools{display:flex;gap:8px;margin-top:10px}.nz-map-tools button{flex:1;min-height:42px;border:1px solid #dedfe3;background:#fff;border-radius:11px;font:800 11px Tahoma,Arial,sans-serif}.nz-location-mode{display:flex;gap:8px;margin-top:10px}.nz-location-mode label{flex:1;border:1px solid #e2e4e8;border-radius:12px;padding:10px;text-align:center;font-size:11px;cursor:pointer}.nz-location-mode input{margin-left:5px}.nz-modal-save{width:100%;height:48px;margin-top:14px;border:0;border-radius:13px;background:#b4232c;color:#fff;font:900 13px Tahoma,Arial,sans-serif}.nz-review{background:#f8f9fa;border-radius:16px;padding:13px;margin:12px 0}.nz-review-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #e8eaed;font-size:12px}.nz-review-row:last-child{border:0}.nz-review-row span{color:#7b8188}.nz-review-row b{text-align:left}.nz-wizard-error{display:none;margin:10px 0;padding:10px 12px;border-radius:11px;background:#fff0f1;color:#a21d27;font-size:12px;border:1px solid #f0c9cd}.nz-wizard-error.show{display:block}.nz-required:after{content:' *';color:#b4232c}.nz-map-note{font-size:10.5px;color:#7d838a;line-height:1.8;margin-top:7px}.nz-geo-status{font-size:11px;margin-top:8px;padding:8px 10px;border-radius:10px;background:#f5f6f7;color:#697078;display:none}.nz-geo-status.show{display:block}.nz-geo-status.ok{background:#eef8f0;color:#397548}.nz-geo-status.error{background:#fff5f5;color:#9f3038}.nz-clear{border:1px solid #e4e6e9;background:#fff;border-radius:10px;padding:7px 10px;font:800 11px Tahoma,Arial,sans-serif}.nz-final-submit button{height:50px!important;font-size:14px!important}
       @media(max-width:760px){.page:has(.nz-wizard-form){padding-top:10px}.page:has(.nz-wizard-form) .surface{padding:3px 0}.nz-specs,.nz-location-grid{grid-template-columns:1fr}.nz-modal-card{max-height:94dvh}.nz-map{height:280px}}
     `;
     document.head.appendChild(style);
@@ -240,21 +241,118 @@
     function refreshCategorySummary(){const b=document.querySelector('#nzChooseCategory .nz-action-value');if(cat.value&&sub.value)b.innerHTML=`<b>${esc(cat.value)} · ${esc(sub.value)}</b><small>برای تغییر دوباره انتخاب کنید.</small>`;else b.innerHTML='<b>انتخاب دسته و زیر‌دسته</b><small>دسته مناسب را مشخص کنید؛ پس از ثبت قابل تغییر نیست.</small>'}
     function renderSpecs(category){const box=document.getElementById('nzSpecs');box.innerHTML='';const schema=FIELD_SCHEMAS[category]||[];if(!schema.length){box.innerHTML='<div class="subtle">برای این دسته ویژگی اضافه‌ای لازم نیست.</div>';return}schema.forEach(([label,type,options,required,suffix])=>{const w=document.createElement('div');w.className='field';const lab=document.createElement('label');lab.textContent=label+(required?' *':'');w.appendChild(lab);let input;if(type==='select'){input=document.createElement('select');input.innerHTML='<option value="">انتخاب</option>'+options.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('')}else{input=document.createElement('input');input.type=type;input.placeholder=suffix?`${label} (${suffix})`:label;if(type==='number'){input.min='0';input.inputMode='numeric'}}input.name=`attributes[${label}]`;if(required)input.required=true;w.appendChild(input);box.appendChild(w)})}
 
-    const locModal=document.createElement('div');locModal.className='nz-modal';locModal.innerHTML=`<div class="nz-modal-card"><div class="nz-modal-head"><h3>مکان آگهی</h3><button class="nz-modal-close" type="button">×</button></div><div class="nz-location-grid"><div class="field"><label>استان *</label><select id="nzProvince"><option value="">انتخاب استان</option></select></div><div class="field"><label>شهر *</label><select id="nzCity"><option value="">ابتدا استان</option></select></div><div class="field"><label>محله / منطقه</label><input id="nzDistrict" list="nzDistrictList" placeholder="محله را وارد کنید"><datalist id="nzDistrictList"></datalist></div><div class="field"><label>خیابان / نشانی کوتاه</label><input id="nzStreet" placeholder="اختیاری"></div></div><div class="nz-map-tools"><button type="button" id="nzMyLocation">موقعیت فعلی من</button><button type="button" id="nzCenterCity">مرکز شهر انتخابی</button></div><div id="nzMap" class="nz-map"></div><div class="nz-map-note">روی نقشه بزنید یا نشانگر را جابه‌جا کنید. برای حفظ حریم خصوصی می‌توانید نمایش موقعیت را حدودی انتخاب کنید.</div><div class="nz-location-mode"><label><input type="radio" name="nzLocMode" value="exact" checked>نمایش موقعیت دقیق</label><label><input type="radio" name="nzLocMode" value="approx">نمایش موقعیت حدودی</label></div><button type="button" class="nz-modal-save">تأیید مکان</button></div>`;document.body.appendChild(locModal);
-    const pSel=locModal.querySelector('#nzProvince'),cSel=locModal.querySelector('#nzCity'),dInput=locModal.querySelector('#nzDistrict'),dList=locModal.querySelector('#nzDistrictList'),sInput=locModal.querySelector('#nzStreet');
+    const locModal=document.createElement('div');locModal.className='nz-modal';locModal.innerHTML=`<div class="nz-modal-card"><div class="nz-modal-head"><h3>مکان آگهی</h3><button class="nz-modal-close" type="button">×</button></div><div class="nz-location-grid"><div class="field"><label>استان *</label><select id="nzProvince"><option value="">انتخاب استان</option></select></div><div class="field"><label>شهر *</label><select id="nzCity"><option value="">ابتدا استان</option></select></div><div class="field"><label>محله / منطقه</label><input id="nzDistrict" list="nzDistrictList" placeholder="با انتخاب روی نقشه خودکار پر می‌شود"><datalist id="nzDistrictList"></datalist></div><div class="field"><label>خیابان / نشانی کوتاه</label><input id="nzStreet" placeholder="با انتخاب روی نقشه خودکار پر می‌شود"></div></div><div class="nz-map-tools"><button type="button" id="nzMyLocation">موقعیت فعلی من</button><button type="button" id="nzCenterCity">مرکز شهر انتخابی</button></div><div id="nzMap" class="nz-map"></div><div id="nzGeoStatus" class="nz-geo-status"></div><div class="nz-map-note">هرجا روی نقشه بزنید یا نشانگر را جابه‌جا کنید، استان، شهر، محله و خیابان به‌صورت خودکار از روی موقعیت تشخیص داده می‌شود. در صورت نیاز می‌توانید متن تشخیص‌داده‌شده را دستی اصلاح کنید.</div><div class="nz-location-mode"><label><input type="radio" name="nzLocMode" value="exact" checked>نمایش موقعیت دقیق</label><label><input type="radio" name="nzLocMode" value="approx">نمایش موقعیت حدودی</label></div><button type="button" class="nz-modal-save">تأیید مکان</button></div>`;document.body.appendChild(locModal);
+    const pSel=locModal.querySelector('#nzProvince'),cSel=locModal.querySelector('#nzCity'),dInput=locModal.querySelector('#nzDistrict'),dList=locModal.querySelector('#nzDistrictList'),sInput=locModal.querySelector('#nzStreet'),geoStatus=locModal.querySelector('#nzGeoStatus');
     pSel.innerHTML='<option value="">انتخاب استان</option>'+Object.keys(PROVINCES).map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
-    let map=null,marker=null,tempLat=null,tempLng=null;
-    function setCities(province,selected=''){cSel.innerHTML='<option value="">انتخاب شهر</option>'+((PROVINCES[province]||[]).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join(''));if(selected)cSel.value=selected;updateDistricts()}
+    let map=null,marker=null,tempLat=null,tempLng=null,reverseTimer=null,reverseController=null,reverseSeq=0;
+    function setCities(province,selected=''){
+      cSel.innerHTML='<option value="">انتخاب شهر</option>'+((PROVINCES[province]||[]).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join(''));
+      if(selected){if(![...cSel.options].some(o=>normFa(o.value)===normFa(selected))){const o=document.createElement('option');o.value=o.textContent=selected;cSel.appendChild(o)}const exact=[...cSel.options].find(o=>normFa(o.value)===normFa(selected));if(exact)cSel.value=exact.value}
+      updateDistricts();
+    }
     function updateDistricts(){dList.innerHTML=(NEIGHBORHOODS[cSel.value]||[]).map(x=>`<option value="${esc(x)}"></option>`).join('')}
-    function setPoint(lat,lng,zoom=15){tempLat=Number(lat);tempLng=Number(lng);if(!map)return;if(!marker){marker=L.marker([tempLat,tempLng],{draggable:true}).addTo(map);marker.on('dragend',()=>{const p=marker.getLatLng();tempLat=p.lat;tempLng=p.lng})}else marker.setLatLng([tempLat,tempLng]);map.setView([tempLat,tempLng],zoom)}
-    async function ensureMap(){try{await loadLeaflet();if(!map){map=L.map('nzMap',{zoomControl:true}).setView([32.4279,53.6880],5);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);map.on('click',e=>setPoint(e.latlng.lat,e.latlng.lng,map.getZoom()));}setTimeout(()=>map.invalidateSize(),80);if(tempLat&&tempLng)setPoint(tempLat,tempLng,15);else if(CENTERS[cSel.value])map.setView(CENTERS[cSel.value],12)}catch(_){document.getElementById('nzMap').innerHTML='<div style="padding:35px 18px;text-align:center;color:#777">نقشه آنلاین در دسترس نیست. اتصال اینترنت را بررسی کنید.</div>'}}
-    pSel.onchange=()=>setCities(pSel.value);cSel.onchange=()=>{updateDistricts();const center=CENTERS[cSel.value];if(center&&map)map.setView(center,12)};
-    locModal.querySelector('#nzCenterCity').onclick=()=>{const center=CENTERS[cSel.value];if(center)setPoint(center[0],center[1],13);else alert('برای این شهر مرکز پیش‌فرض ثبت نشده؛ روی نقشه نقطه را انتخاب کنید.')};
-    locModal.querySelector('#nzMyLocation').onclick=()=>{if(!navigator.geolocation){alert('موقعیت‌یابی در این مرورگر پشتیبانی نمی‌شود.');return}navigator.geolocation.getCurrentPosition(p=>setPoint(p.coords.latitude,p.coords.longitude,16),()=>alert('اجازه دسترسی به موقعیت داده نشد یا موقعیت قابل دریافت نیست.'),{enableHighAccuracy:true,timeout:12000})};
-    function openLocation(){const currentProvince=provinceI.value||provinceOf(city.value);pSel.value=currentProvince;setCities(currentProvince,city.value);dInput.value=district.value||'';sInput.value=streetI.value||'';tempLat=latI.value?Number(latI.value):null;tempLng=lngI.value?Number(lngI.value):null;locModal.querySelector(`input[name="nzLocMode"][value="${modeI.value||'exact'}"]`).checked=true;locModal.classList.add('show');ensureMap()}
+    function setGeoStatus(text,type=''){
+      geoStatus.textContent=text||'';
+      geoStatus.className='nz-geo-status'+(text?' show':'')+(type?' '+type:'');
+    }
+    function matchProvince(raw){
+      const n=normFa(raw);
+      if(!n)return '';
+      return Object.keys(PROVINCES).find(p=>{const pn=normFa(p);return pn===n||n.includes(pn)||pn.includes(n)})||'';
+    }
+    function matchCity(raw,province=''){
+      const n=normFa(raw);
+      if(!n)return '';
+      const pool=province&&PROVINCES[province]?PROVINCES[province]:allCities();
+      return pool.find(c=>{const cn=normFa(c);return cn===n||n.includes(cn)||cn.includes(n)})||String(raw).trim();
+    }
+    function applyReverseAddress(data){
+      const a=data?.address||{};
+      const provinceRaw=a.state||a.province||a.region||a.state_district||'';
+      const cityRaw=a.city||a.town||a.village||a.municipality||a.city_district||a.county||'';
+      const districtRaw=a.neighbourhood||a.suburb||a.quarter||a.city_district||a.borough||a.residential||a.hamlet||'';
+      const streetRaw=a.road||a.pedestrian||a.path||a.footway||a.cycleway||'';
+      let province=matchProvince(provinceRaw);
+      let cityName=matchCity(cityRaw,province);
+      if(!province&&cityName)province=provinceOf(cityName);
+      if(province){pSel.value=province;setCities(province,cityName)}
+      else if(cityName){const guessed=provinceOf(cityName);if(guessed){pSel.value=guessed;province=guessed;setCities(guessed,cityName)}}
+      if(cityName&&!cSel.value){setCities(pSel.value,cityName)}
+      if(districtRaw)dInput.value=String(districtRaw).trim();
+      if(streetRaw)sInput.value=String(streetRaw).trim();
+      updateDistricts();
+      const pieces=[pSel.value,cSel.value,dInput.value,sInput.value].filter(Boolean);
+      if(pieces.length)setGeoStatus('آدرس تشخیص داده شد: '+pieces.join('، '),'ok');
+      else setGeoStatus('نقطه انتخاب شد؛ آدرس دقیق از سرویس نقشه دریافت نشد. می‌توانید فیلدها را دستی تکمیل کنید.','error');
+    }
+    async function reverseGeocode(lat,lng){
+      const seq=++reverseSeq;
+      if(reverseController)reverseController.abort();
+      reverseController=new AbortController();
+      setGeoStatus('در حال تشخیص استان، شهر و محله از روی نقشه…');
+      try{
+        const url=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1&accept-language=fa`;
+        const r=await fetch(url,{signal:reverseController.signal,headers:{Accept:'application/json'}});
+        if(!r.ok)throw new Error('reverse');
+        const data=await r.json();
+        if(seq!==reverseSeq)return;
+        applyReverseAddress(data);
+      }catch(err){
+        if(err?.name==='AbortError'||seq!==reverseSeq)return;
+        setGeoStatus('موقعیت انتخاب شد، اما تشخیص خودکار آدرس در این لحظه در دسترس نبود. فیلدها را دستی اصلاح کنید.','error');
+      }
+    }
+    function scheduleReverse(lat,lng){
+      clearTimeout(reverseTimer);
+      reverseTimer=setTimeout(()=>reverseGeocode(Number(lat),Number(lng)),850);
+    }
+    function setPoint(lat,lng,zoom=15,lookup=true){
+      tempLat=Number(lat);tempLng=Number(lng);
+      if(map){
+        if(!marker){
+          marker=L.marker([tempLat,tempLng],{draggable:true}).addTo(map);
+          marker.on('dragend',()=>{const p=marker.getLatLng();tempLat=p.lat;tempLng=p.lng;scheduleReverse(tempLat,tempLng)});
+        }else marker.setLatLng([tempLat,tempLng]);
+        map.setView([tempLat,tempLng],zoom);
+      }
+      if(lookup)scheduleReverse(tempLat,tempLng);
+    }
+    async function ensureMap(){
+      try{
+        await loadLeaflet();
+        if(!map){
+          map=L.map('nzMap',{zoomControl:true}).setView([32.4279,53.6880],5);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+          map.on('click',e=>setPoint(e.latlng.lat,e.latlng.lng,map.getZoom(),true));
+        }
+        setTimeout(()=>map.invalidateSize(),80);
+        if(tempLat&&tempLng)setPoint(tempLat,tempLng,15,false);else if(CENTERS[cSel.value])map.setView(CENTERS[cSel.value],12);
+      }catch(_){document.getElementById('nzMap').innerHTML='<div style="padding:35px 18px;text-align:center;color:#777">نقشه آنلاین در دسترس نیست. اتصال اینترنت را بررسی کنید.</div>'}
+    }
+    pSel.onchange=()=>setCities(pSel.value);
+    cSel.onchange=()=>{updateDistricts();const center=CENTERS[cSel.value];if(center&&map)map.setView(center,12)};
+    locModal.querySelector('#nzCenterCity').onclick=()=>{const center=CENTERS[cSel.value];if(center)setPoint(center[0],center[1],13,true);else alert('برای این شهر مرکز پیش‌فرض ثبت نشده؛ روی نقشه نقطه را انتخاب کنید.')};
+    locModal.querySelector('#nzMyLocation').onclick=()=>{
+      if(!navigator.geolocation){alert('موقعیت‌یابی در این مرورگر پشتیبانی نمی‌شود.');return}
+      setGeoStatus('در حال دریافت موقعیت فعلی…');
+      navigator.geolocation.getCurrentPosition(p=>setPoint(p.coords.latitude,p.coords.longitude,16,true),()=>{setGeoStatus('دسترسی به موقعیت داده نشد یا موقعیت قابل دریافت نیست.','error');alert('اجازه دسترسی به موقعیت داده نشد یا موقعیت قابل دریافت نیست.')},{enableHighAccuracy:true,timeout:12000});
+    };
+    function openLocation(){
+      const currentProvince=provinceI.value||provinceOf(city.value);
+      pSel.value=currentProvince;setCities(currentProvince,city.value);dInput.value=district.value||'';sInput.value=streetI.value||'';
+      tempLat=latI.value?Number(latI.value):null;tempLng=lngI.value?Number(lngI.value):null;
+      locModal.querySelector(`input[name="nzLocMode"][value="${modeI.value||'exact'}"]`).checked=true;
+      setGeoStatus('');locModal.classList.add('show');ensureMap();
+    }
     function refreshLocationSummary(){const b=document.querySelector('#nzChooseLocation .nz-action-value');if(city.value)b.innerHTML=`<b>${esc(city.value)}${district.value?'، '+esc(district.value):''}</b><small>${modeI.value==='approx'?'موقعیت حدودی':'موقعیت دقیق'}${streetI.value?' · '+esc(streetI.value):''}</small>`;else b.innerHTML='<b>انتخاب شهر، محله و موقعیت روی نقشه</b><small>برای نمایش بهتر آگهی محل را دقیق مشخص کنید.</small>'}
     document.getElementById('nzChooseLocation').onclick=openLocation;locModal.querySelector('.nz-modal-close').onclick=()=>locModal.classList.remove('show');locModal.onclick=e=>{if(e.target===locModal)locModal.classList.remove('show')};
-    locModal.querySelector('.nz-modal-save').onclick=()=>{if(!pSel.value||!cSel.value){alert('استان و شهر را انتخاب کنید.');return}if(tempLat==null||tempLng==null){alert('یک نقطه روی نقشه انتخاب کنید.');return}const mode=locModal.querySelector('input[name="nzLocMode"]:checked').value;let la=tempLat,ln=tempLng;if(mode==='approx'){la=Math.round(la*1000)/1000;ln=Math.round(ln*1000)/1000}provinceI.value=pSel.value;setSelectValue(city,cSel.value);district.value=dInput.value.trim();streetI.value=sInput.value.trim();latI.value=String(la);lngI.value=String(ln);modeI.value=mode;refreshLocationSummary();locModal.classList.remove('show')};
+    locModal.querySelector('.nz-modal-save').onclick=()=>{
+      if(tempLat==null||tempLng==null){alert('یک نقطه روی نقشه انتخاب کنید.');return}
+      if(!pSel.value||!cSel.value){alert('آدرس این نقطه خودکار تشخیص داده نشد؛ استان و شهر را دستی انتخاب کنید.');return}
+      const mode=locModal.querySelector('input[name="nzLocMode"]:checked').value;let la=tempLat,ln=tempLng;
+      if(mode==='approx'){la=Math.round(la*1000)/1000;ln=Math.round(ln*1000)/1000}
+      provinceI.value=pSel.value;setSelectValue(city,cSel.value);district.value=dInput.value.trim();streetI.value=sInput.value.trim();latI.value=String(la);lngI.value=String(ln);modeI.value=mode;refreshLocationSummary();locModal.classList.remove('show');
+    };
 
     function updateReview(){const rows=document.getElementById('nzReviewRows');rows.innerHTML=`<div class="nz-review-row"><span>عنوان</span><b>${esc(title.value||'—')}</b></div><div class="nz-review-row"><span>دسته</span><b>${esc(cat.value||'—')} · ${esc(sub.value||'—')}</b></div><div class="nz-review-row"><span>محل</span><b>${esc(city.value||'—')}${district.value?'، '+esc(district.value):''}</b></div><div class="nz-review-row"><span>قیمت</span><b>${Number(price.value||0)>0?Number(price.value).toLocaleString('fa-IR')+' تومان':'توافقی'}</b></div><div class="nz-review-row"><span>رسانه</span><b>${images?.files?.length||0} عکس${video?.files?.length?' + ویدیو':''}</b></div>`}
 
