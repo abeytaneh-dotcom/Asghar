@@ -83,7 +83,7 @@ try {
 
         $installTag = '<script src="/nz-install-direct.js?v=20261019-6"></script>';
         $mediaTag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
-        $wizardTag = '<script src="/nz-submit-wizard.js?v=20261019-1" defer></script>';
+        $wizardTag = '<script src="/nz-submit-wizard.js?v=20261019-2" defer></script>';
         $html = str_replace('</head>', $installTag."\n</head>", $html);
         $html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n</body>", $html);
         echo $html;
