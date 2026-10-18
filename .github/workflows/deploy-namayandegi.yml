@@ -24,6 +24,7 @@ jobs:
           python3 WebSaza/namayandegi/build-patch.py
           python3 WebSaza/namayandegi/security-v2.py
           python3 WebSaza/namayandegi/iranpayamak-api-v1.py
+          python3 WebSaza/namayandegi/pin-remember-v1.py
           python3 WebSaza/namayandegi/customer-retention-v1.py
           python3 WebSaza/namayandegi/customer-lifecycle-v1.py
           if ! grep -Fq 'MOBILE_NAV_GRID_V2' WebSaza/namayandegi/style.css; then
@@ -61,6 +62,7 @@ jobs:
           python3 -m py_compile WebSaza/namayandegi/build-patch.py
           python3 -m py_compile WebSaza/namayandegi/security-v2.py
           python3 -m py_compile WebSaza/namayandegi/iranpayamak-api-v1.py
+          python3 -m py_compile WebSaza/namayandegi/pin-remember-v1.py
           python3 -m py_compile WebSaza/namayandegi/customer-retention-v1.py
           python3 -m py_compile WebSaza/namayandegi/customer-lifecycle-v1.py
           php -l WebSaza/namayandegi/index.php
@@ -72,6 +74,9 @@ jobs:
           grep -F 'recover_request' WebSaza/namayandegi/index.php >/dev/null
           grep -F "'active'=>false,'mobile_verified'=>false" WebSaza/namayandegi/index.php >/dev/null
           grep -F "register_verify" WebSaza/namayandegi/index.php >/dev/null
+          grep -F "ws_remember_try" WebSaza/namayandegi/index.php >/dev/null
+          grep -F "مرا به خاطر بسپار" WebSaza/namayandegi/index.php >/dev/null
+          grep -F "pattern=\"[0-9]{4}\"" WebSaza/namayandegi/index.php >/dev/null
           grep -F "sendRetentionSms" WebSaza/namayandegi/index.php >/dev/null
           grep -F "retention_sms" WebSaza/namayandegi/index.php >/dev/null
           grep -F "sendWonCustomerSms" WebSaza/namayandegi/index.php >/dev/null
@@ -140,9 +145,10 @@ jobs:
           html=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=${v}")
           echo "$html" | grep -F "style.css?v=${v}" >/dev/null
           if echo "$html" | grep -Fq 'ورود مدیر سیستم'; then exit 1; fi
+          echo "$html" | grep -F 'مرا به خاطر بسپار' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=recover&verify=${v}" | grep -F 'بازیابی رمز عبور' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=verify&verify=${v}" | grep -F 'تأیید شماره موبایل' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=register&verify=${v}" | grep -F 'ثبت و تأیید شماره' >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=register&verify=${v}" | grep -F 'رمز ورود ۴ رقمی' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'PERFORMANCE_V1' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/finance.php?verify_build=${v}" >/dev/null
           code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 https://websaza.ir/namayandegi/_security.php)
