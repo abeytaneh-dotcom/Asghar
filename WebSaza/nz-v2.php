@@ -85,7 +85,7 @@ try {
         $mediaTag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
         $wizardTag = '<script src="/nz-submit-wizard.js?v=20261019-3" defer></script>';
         $specTag = '<script src="/nz-spec-lite.js?v=20261019-1" defer></script>';
-        $brandModelTag = '<script src="/nz-brand-model.js?v=20261019-1" defer></script>';
+        $brandModelTag = '<script src="/nz-brand-model.js?v=20261019-2" defer></script>';
         $html = str_replace('</head>', $installTag."\n</head>", $html);
         $html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n".$specTag."\n".$brandModelTag."\n</body>", $html);
         echo $html;
