@@ -43,6 +43,15 @@ if($code<200||$code>=300)return false;$j=json_decode($body,true);if(is_array($j)
 '''
 text = pat_re.sub(lambda _m:new_pat, text, count=1)
 
+# Use the newly approved WebSaza OTP pattern. If the old Achinu pattern is still
+# present in server settings, transparently migrate it at runtime.
+old_pattern = "$pattern=trim((string)($c['sms_recovery_pattern']??'xa2lAXeEHs'));"
+new_pattern = "$pattern=trim((string)($c['sms_recovery_pattern']??'4RXte6aAmq'));if($pattern===''||$pattern==='xa2lAXeEHs')$pattern='4RXte6aAmq';"
+if old_pattern in text:
+    text=text.replace(old_pattern,new_pattern,1)
+elif "4RXte6aAmq" not in text:
+    raise SystemExit('recovery pattern marker missing')
+
 # OTP/recovery must use an approved API pattern only. Do not fall back to free-text SMS,
 # because IranPayamak rejects those messages for this use case and sends rejection notices.
 old_fallback = "$sent=sec_sms_pattern($settingsFile,$mobile,$pattern,['code'=>$code]);if(!$sent){$sent=sec_sms($settingsFile,$mobile,'کد بازیابی وب ساز: '.$code.' | اعتبار: ۵ دقیقه');}if(!$sent){unset($s['otp'][$k]);sec_save($d,$s);return false;}return true;"
