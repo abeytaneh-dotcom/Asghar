@@ -1,8 +1,12 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/nz-community.php';
+require_once __DIR__ . '/nz-create-pending.php';
 
 try {
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (($_POST['action'] ?? '') === 'create_post')) {
+        nzcp_handle_create();
+    }
     nzc_prepare_request();
 } catch (Throwable $e) {
     nzc_flash($e->getMessage(), 'error');
@@ -18,7 +22,7 @@ try {
     $html = ob_get_clean();
     if ($html !== false) {
         $html = nzc_transform($html);
-        $tag = '<script src="/nz-media-client.js?v=20261019-1" defer></script>';
+        $tag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
         $html = str_replace('</body>', $tag."\n</body>", $html);
         echo $html;
     }
