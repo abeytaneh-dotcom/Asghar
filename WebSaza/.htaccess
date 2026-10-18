@@ -9,11 +9,14 @@ RewriteCond %{HTTP_HOST} !^websaza\.ir$ [NC]
 RewriteRule ^ https://websaza.ir%{REQUEST_URI} [R=301,L,NE]
 
 # Niyazestan canonical public URL.
-# Redirect only real browser requests for the old PHP URLs so internal includes do not loop.
+# Redirect only real browser requests for the old PHP URLs so internal rewrites/includes do not loop.
 RewriteCond %{THE_REQUEST} \s/+marketplace\.php(?:[?\s]) [NC]
 RewriteRule ^marketplace\.php$ /nz [R=301,L,NE]
 RewriteCond %{THE_REQUEST} \s/+niyazestan\.php(?:[?\s]) [NC]
 RewriteRule ^niyazestan\.php$ /nz [R=301,L,NE]
+
+# Serve the short app URL without exposing the PHP filename.
+RewriteRule ^nz/?$ niyazestan.php [L,QSA]
 
 ErrorDocument 404 /404.html
 
