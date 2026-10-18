@@ -62,53 +62,59 @@ for marker in ["if(post('recover_reset'))", "if(post('branch_password'))"]:
 # A valid 4-digit PIN is the final policy, not a legacy password that needs upgrading.
 def fix_login(z: str) -> str:
     z = z.replace("$rows[$idx]['last_login_at']=now();if(preg_match('/^\\d{4}$/',$p))$rows[$idx]['must_change_password']=true;", "$rows[$idx]['last_login_at']=now();unset($rows[$idx]['must_change_password']);")
-    # Also clear any stale flag created by the previous temporary 6-digit policy.
     if "$rows[$idx]['last_login_at']=now();" in z and "unset($rows[$idx]['must_change_password']);" not in z:
         z = z.replace("$rows[$idx]['last_login_at']=now();", "$rows[$idx]['last_login_at']=now();unset($rows[$idx]['must_change_password']);", 1)
     return z
 
 text = replace_block(text, "if(post('login')){", fix_login)
 
-# Public registration UI.
+# Public registration UI labels.
 text = text.replace('رمز ورود ۶ رقمی', 'رمز ورود ۴ رقمی')
 text = text.replace('تکرار رمز ۶ رقمی', 'تکرار رمز ۴ رقمی')
-
-# Representative recovery labels only; admin fields have their own 8+ character policy.
 text = text.replace('رمز جدید ۶ رقمی', 'رمز جدید ۴ رقمی')
 
-# Normalize numeric representative password inputs from 6 to 4 digits.
-def four_digit_input(m: re.Match) -> str:
-    tag = m.group(0)
-    tag = re.sub(r'pattern="\[0-9\]\{6\}"', 'pattern="[0-9]{4}"', tag)
-    tag = re.sub(r'minlength="6"', 'minlength="4"', tag)
-    tag = re.sub(r'maxlength="6"', 'maxlength="4"', tag)
-    return tag
-
-# Registration + confirmation.
-for name in ('password', 'password_confirm'):
-    pat = rf'<input(?=[^>]*\bname="{name}")(?=[^>]*inputmode="numeric")[^>]*>'
-    text = re.sub(pat, four_digit_input, text, count=1)
-
-# Representative recovery field(s) explicitly labelled as four digits.
-text = re.sub(r'(<label>رمز جدید ۴ رقمی)(<input[^>]*name="new_password"[^>]*>)', lambda m: m.group(1) + four_digit_input(re.match(r'.*', m.group(2))) , text)
-
-# Profile PIN change uses name="new" and numeric input mode.
-text = re.sub(r'<input(?=[^>]*\bname="new")(?=[^>]*inputmode="numeric")[^>]*>', four_digit_input, text)
-
-# Final invariants for registration: browser and server must agree on exactly 4 digits.
+# Force exact native browser constraints on the public registration fields.
 reg_start = text.find("if($mode==='register')")
 reg_end = text.find("else echo '<h2>ورود نمایندگی", reg_start)
 if reg_start < 0 or reg_end < 0:
     raise SystemExit('registration markup boundaries missing')
 reg_html = text[reg_start:reg_end]
+reg_password = '<input type="password" name="password" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" autocomplete="new-password" required>'
+reg_confirm = '<input type="password" name="password_confirm" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" autocomplete="new-password" required>'
+reg_html, n1 = re.subn(r'<input(?=[^>]*\bname="password")[^>]*>', reg_password, reg_html, count=1)
+reg_html, n2 = re.subn(r'<input(?=[^>]*\bname="password_confirm")[^>]*>', reg_confirm, reg_html, count=1)
+if n1 != 1 or n2 != 1:
+    raise SystemExit('registration password fields missing')
+text = text[:reg_start] + reg_html + text[reg_end:]
+
+# Representative recovery/profile numeric inputs stay exactly four digits.
+def force_four(tag: str) -> str:
+    tag = re.sub(r'\s+(?:pattern|minlength|maxlength|inputmode|autocomplete)="[^"]*"', '', tag)
+    return tag[:-1] + ' inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" autocomplete="new-password">'
+
+text = re.sub(
+    r'(<label>رمز جدید ۴ رقمی)(<input[^>]*name="new_password"[^>]*>)',
+    lambda m: m.group(1) + force_four(m.group(2)),
+    text,
+)
+text = re.sub(
+    r'<input(?=[^>]*\bname="new")(?=[^>]*type="password")[^>]*>',
+    lambda m: force_four(m.group(0)),
+    text,
+    count=1,
+)
+
+# Final registration invariants: browser and server agree on exactly 4 digits.
+reg_start = text.find("if($mode==='register')")
+reg_end = text.find("else echo '<h2>ورود نمایندگی", reg_start)
+reg_html = text[reg_start:reg_end]
 if 'رمز ورود ۴ رقمی' not in reg_html or 'تکرار رمز ۴ رقمی' not in reg_html:
     raise SystemExit('4-digit registration labels missing')
-if reg_html.count('minlength="4"') < 2 or reg_html.count('maxlength="4"') < 2 or reg_html.count('pattern="[0-9]{4}"') < 2:
-    raise SystemExit('4-digit registration constraints missing')
+if reg_password not in reg_html or reg_confirm not in reg_html:
+    raise SystemExit('exact 4-digit registration inputs missing')
 if 'رمز ورود ۶ رقمی' in reg_html or 'تکرار رمز ۶ رقمی' in reg_html:
     raise SystemExit('stale 6-digit registration UI remains')
 
-# Server-side registration must also be exactly four digits.
 reg_handler_start = text.find("if(post('register')){")
 reg_handler_end = text.find("if(post('register_verify'))", reg_handler_start)
 reg_handler = text[reg_handler_start:reg_handler_end]
