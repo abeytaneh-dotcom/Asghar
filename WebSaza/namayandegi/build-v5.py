@@ -22,6 +22,7 @@ steps = [
     'queue-upgrade-v4.py',
     'hardening-v5.py',
     'hardening-v5-fix.py',
+    'registration-ui-fix-v5.py',
 ]
 for step in steps:
     path = root / step
