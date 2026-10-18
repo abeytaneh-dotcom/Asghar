@@ -8,6 +8,13 @@ name: Deploy Namayandegi Portal
       - ".github/workflows/deploy-namayandegi.yml"
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
+concurrency:
+  group: namayandegi-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -33,6 +40,8 @@ jobs:
           python3 WebSaza/namayandegi/lifecycle-sms-v3.py
           python3 WebSaza/namayandegi/security-upgrade-v3.py
           python3 WebSaza/namayandegi/single-engine-v3.py
+          python3 WebSaza/namayandegi/transaction-upgrade-v4.py
+          python3 WebSaza/namayandegi/queue-upgrade-v4.py
           printf '\n' >> WebSaza/namayandegi/style.css
           cat WebSaza/namayandegi/ux.css WebSaza/namayandegi/simple-v2.css WebSaza/namayandegi/polish-v6.css WebSaza/namayandegi/market-v8.css WebSaza/namayandegi/remember-fix-v1.css >> WebSaza/namayandegi/style.css
           printf '\n' >> WebSaza/namayandegi/app.js
@@ -43,33 +52,73 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile WebSaza/namayandegi/*.py
-          php -l WebSaza/namayandegi/index.php
-          php -l WebSaza/namayandegi/_security.php
-          php -l WebSaza/namayandegi/platform-v3.php
-          php -l WebSaza/namayandegi/smart-actions.php
-          php -l WebSaza/namayandegi/finance.php
-          php -l WebSaza/namayandegi/admin-control.php
-          php -l WebSaza/namayandegi/lead-ingest.php
-          php -l WebSaza/namayandegi/health.php
+          for f in index.php _security.php platform-v3.php smart-actions.php finance.php admin-control.php lead-ingest.php health.php backup-worker.php restore-backup.php sms-worker.php ops-worker.php; do
+            php -l "WebSaza/namayandegi/$f"
+          done
           node --check WebSaza/namayandegi/app.js
-          php WebSaza/namayandegi/self-test-v3.php
-          grep -F 'WEBSAZA_PLATFORM_V3' WebSaza/namayandegi/platform-v3.php >/dev/null
-          grep -F 'ws_contact_seen' WebSaza/namayandegi/index.php >/dev/null
+          php WebSaza/namayandegi/self-test-v3.php | tee /tmp/self-test.log
+          grep -F 'SELF_TEST_V4_PASS' /tmp/self-test.log >/dev/null
+          grep -F 'WEBSAZA_PLATFORM_V4' WebSaza/namayandegi/platform-v3.php >/dev/null
+          grep -F 'ws_ingest_commit' WebSaza/namayandegi/lead-ingest.php >/dev/null
+          grep -F 'ws_sms_process_queue' WebSaza/namayandegi/platform-v3.php >/dev/null
+          grep -F 'finance_ledger' WebSaza/namayandegi/platform-v3.php >/dev/null
           grep -F 'CRM اختصاصی این مشتری' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'mark_seen' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'SINGLE_ENGINE_V3' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'SEEN_V3' WebSaza/namayandegi/app.js >/dev/null
           grep -F 'ws_location_bonus' WebSaza/namayandegi/smart-actions.php >/dev/null
-          grep -F 'pattern_missing' WebSaza/namayandegi/smart-actions.php >/dev/null
           grep -F 'تأیید دستگاه جدید' WebSaza/namayandegi/index.php >/dev/null
-          grep -F 'sqlite-wal' WebSaza/namayandegi/platform-v3.php >/dev/null
           grep -F 'sms_payment_safety_pattern' WebSaza/namayandegi/admin-control.php >/dev/null
           grep -F 'sms_retention_pattern' WebSaza/namayandegi/admin-control.php >/dev/null
           grep -F "action']??'')==='status'" WebSaza/namayandegi/lead-ingest.php >/dev/null
+          grep -F 'Content-Security-Policy-Report-Only' WebSaza/namayandegi/.htaccess >/dev/null
           ! grep -Fq 'system_tick' WebSaza/namayandegi/index.php
           ! grep -Fq '$ok=dispatchLead' WebSaza/namayandegi/index.php
           ! grep -Fq 'https://edge.ippanel.com/v1/api/send' WebSaza/namayandegi/smart-actions.php
+          ! grep -Fq 'https://edge.ippanel.com/v1/api/send' WebSaza/namayandegi/finance.php
           ! grep -Fq "\$_GET['key']" WebSaza/namayandegi/lead-ingest.php
+
+      - name: Stage release candidate
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          endpoint="https://mch4444.dnsuserver.com:2083/json-api/cpanel"
+          v="${GITHUB_SHA::8}"
+          rc="namayandegi-rc-${v}"
+          response=$(curl --silent --show-error -H "$auth" --request POST \
+            --data-urlencode "cpanel_jsonapi_user=vt6qdx8" \
+            --data-urlencode "cpanel_jsonapi_apiversion=2" \
+            --data-urlencode "cpanel_jsonapi_module=Fileman" \
+            --data-urlencode "cpanel_jsonapi_func=mkdir" \
+            --data-urlencode "path=/home/vt6qdx8/public_html" \
+            --data-urlencode "name=$rc" \
+            --data-urlencode "permissions=0755" "$endpoint")
+          upload_text(){
+            src="$1"; name="$2"
+            r=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
+              --data-urlencode "dir=public_html/$rc" \
+              --data-urlencode "file=$name" \
+              --data-urlencode "content@$src" \
+              "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
+            echo "$r" | jq -e '.status == 1' >/dev/null
+          }
+          for pair in \
+            "index.php:index.php" "_security.php:_security.php" "platform-v3.php:platform-v3.php" \
+            "style.css:style.css" "app.js:app.js" "smart-actions.php:smart-actions.php" \
+            "finance.php:finance.php" "admin-control.php:admin-control.php" "lead-ingest.php:lead-ingest.php" \
+            "health.php:health.php" ".htaccess:.htaccess"; do
+            src="${pair%%:*}"; dst="${pair##*:}"; upload_text "WebSaza/namayandegi/$src" "$dst"
+          done
+          sleep 4
+          html=$(curl -fsS --max-time 30 "https://websaza.ir/${rc}/?verify=${v}")
+          echo "$html" | grep -F "style.css?v=${v}" >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/${rc}/?mode=register&verify=${v}" | grep -F 'رمز ورود ۴ رقمی' >/dev/null
+          health=$(curl -fsS --max-time 30 "https://websaza.ir/${rc}/health.php?v=${v}")
+          echo "$health" | jq -e '.ok==true and .version=="platform-v4"' >/dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' "https://websaza.ir/${rc}/_data/settings.json")" = "403"
 
       - name: Ensure remote folder
         shell: bash
@@ -108,17 +157,14 @@ jobs:
               "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
             echo "$response" | jq -e '.status == 1' >/dev/null
           }
-          upload_text WebSaza/namayandegi/index.php index.php
-          upload_text WebSaza/namayandegi/_security.php _security.php
-          upload_text WebSaza/namayandegi/platform-v3.php platform-v3.php
-          upload_text WebSaza/namayandegi/style.css style.css
-          upload_text WebSaza/namayandegi/app.js app.js
-          upload_text WebSaza/namayandegi/smart-actions.php smart-actions.php
-          upload_text WebSaza/namayandegi/finance.php finance.php
-          upload_text WebSaza/namayandegi/admin-control.php admin-control.php
-          upload_text WebSaza/namayandegi/lead-ingest.php lead-ingest.php
-          upload_text WebSaza/namayandegi/health.php health.php
-          upload_text WebSaza/namayandegi/.htaccess .htaccess
+          for pair in \
+            "index.php:index.php" "_security.php:_security.php" "platform-v3.php:platform-v3.php" \
+            "style.css:style.css" "app.js:app.js" "smart-actions.php:smart-actions.php" \
+            "finance.php:finance.php" "admin-control.php:admin-control.php" "lead-ingest.php:lead-ingest.php" \
+            "health.php:health.php" "backup-worker.php:backup-worker.php" "restore-backup.php:restore-backup.php" \
+            "sms-worker.php:sms-worker.php" "ops-worker.php:ops-worker.php" ".htaccess:.htaccess"; do
+            src="${pair%%:*}"; dst="${pair##*:}"; upload_text "WebSaza/namayandegi/$src" "$dst"
+          done
 
       - name: Remove obsolete live diagnostics
         shell: bash
@@ -147,10 +193,23 @@ jobs:
             curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=register&verify=${v}&attempt=${attempt}" | grep -F 'رمز ورود ۴ رقمی' >/dev/null
             curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'SEEN_V3' >/dev/null
             health=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/health.php?v=${v}")
-            echo "$health" | jq -e '.ok==true and .version=="platform-v3"' >/dev/null
-            echo "$health" | jq -e '.backend=="sqlite-wal" and .pdo_sqlite==true' >/dev/null
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/lead-ingest.php")
-            test "$code" = "401"
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/_security.php")
-            test "$code" = "403"
+            echo "$health" | jq -e '.ok==true and .version=="platform-v4" and (has("php")|not) and (has("details")|not)' >/dev/null
+            test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/lead-ingest.php")" = "401"
+            test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/_security.php")" = "403"
+            test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/_data/settings.json")" = "403"
+            test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/backup-worker.php")" = "403"
           done
+
+      - name: Clean release candidate
+        if: always()
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set +e
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          rc="namayandegi-rc-${GITHUB_SHA::8}"
+          curl --silent --show-error -H "$auth" --request POST \
+            --data-urlencode "dir=public_html" \
+            --data-urlencode "files=$rc" \
+            "https://mch4444.dnsuserver.com:2083/execute/Fileman/delete_files" >/dev/null
