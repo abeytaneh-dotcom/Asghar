@@ -22,7 +22,7 @@ if ($html !== false) {
 
     $installCss = <<<'HTML'
 <style id="niazestan-install-style">
-.install-mini{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:25;border:1px solid rgba(0,0,0,.08);background:rgba(255,255,255,.96);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 4px 14px rgba(0,0,0,.08);border-radius:999px;height:32px;padding:0 12px;color:#333;font:700 12px Tahoma,Arial,sans-serif;display:none;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}.install-mini.ready{display:inline-flex}.install-mini svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2}.install-mini:active{transform:translate(-50%,-50%) scale(.96)}
+.mobile-row,.topbar{position:relative}.install-mini{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:25;border:1px solid rgba(0,0,0,.08);background:rgba(255,255,255,.96);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 4px 14px rgba(0,0,0,.08);border-radius:999px;height:32px;padding:0 12px;color:#333;font:700 12px Tahoma,Arial,sans-serif;display:none;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}.install-mini.ready{display:inline-flex}.install-mini svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2}.install-mini:active{transform:translate(-50%,-50%) scale(.96)}
 .install-sheet{position:fixed;inset:0;z-index:200;background:rgba(15,18,22,.42);display:none;align-items:flex-end;justify-content:center;padding:16px}.install-sheet.show{display:flex}.install-sheet-card{width:min(100%,440px);background:#fff;border-radius:22px;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 20px 60px rgba(0,0,0,.2);direction:rtl}.install-sheet-card h3{margin:0 0 8px;font-size:17px}.install-sheet-card p{margin:0;color:#626970;line-height:1.9;font-size:13px}.install-sheet-card .install-ok{width:100%;margin-top:14px;min-height:44px;border:0;border-radius:13px;background:#b4232c;color:#fff;font:800 13px Tahoma,Arial,sans-serif;cursor:pointer}
 @media (max-width:760px){.install-mini{height:30px;padding:0 10px;font-size:11.5px;gap:4px}.install-mini svg{width:14px;height:14px}}
 @media (display-mode:standalone){.install-mini{display:none!important}.install-sheet{display:none!important}}
@@ -53,14 +53,15 @@ HTML;
   if(standalone)return;
 
   const placeInHeader=()=>{
-    const header=document.querySelector('header');
-    if(!header)return false;
-    if(getComputedStyle(header).position==='static')header.style.position='relative';
-    if(btn.parentElement!==header)header.appendChild(btn);
+    const mobile=window.matchMedia('(max-width:760px)').matches;
+    const host=mobile?document.querySelector('.mobile-row'):document.querySelector('.topbar');
+    if(!host)return false;
+    if(btn.parentElement!==host)host.appendChild(btn);
     return true;
   };
   placeInHeader();
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',placeInHeader,{once:true});
+  window.addEventListener('resize',placeInHeader);
 
   let deferredPrompt=null;
   const isIos=/iphone|ipad|ipod/i.test(navigator.userAgent);
