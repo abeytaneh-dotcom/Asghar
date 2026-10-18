@@ -22,7 +22,7 @@ try {
     $html = ob_get_clean();
     if ($html !== false) {
         $html = nzc_transform($html);
-        $installTag = '<script src="/nz-install-direct.js?v=20261019-4"></script>';
+        $installTag = '<script src="/nz-install-direct.js?v=20261019-5"></script>';
         $mediaTag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
         $html = str_replace('</head>', $installTag."\n</head>", $html);
         $html = str_replace('</body>', $mediaTag."\n</body>", $html);
