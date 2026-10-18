@@ -1,45 +1,52 @@
 (()=>{
   let installPrompt=null;
-  const GUIDE='/niazestan-install-guide.svg?v=20261019-1';
   const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
   const isIos=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  const GUIDE_SVG=`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="852" viewBox="0 0 480 852" role="img" aria-label="راهنمای نصب نیازستان" style="display:block;width:100%;height:auto;border-radius:14px;background:#f7f8fb">
+  <rect width="480" height="852" rx="28" fill="#f7f8fb"/>
+  <rect x="18" y="18" width="444" height="92" rx="24" fill="#fff" stroke="#e8eaf0"/>
+  <rect x="32" y="31" width="66" height="66" rx="18" fill="#e51d2a"/>
+  <path d="M52 55h26l4 30H48l4-30Z" fill="#fff"/><path d="M58 57c0-8 4-13 7-13s7 5 7 13" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+  <text x="280" y="55" text-anchor="middle" direction="rtl" font-family="Tahoma,Arial,sans-serif" font-size="24" font-weight="900" fill="#111827">راهنمای نصب نیازستان</text>
+  <text x="280" y="84" text-anchor="middle" direction="rtl" font-family="Tahoma,Arial,sans-serif" font-size="13" font-weight="700" fill="#6b7280">اگر نصب مستقیم باز نشد، طبق مراحل زیر پیش بروید</text>
+  <rect x="18" y="126" width="444" height="350" rx="24" fill="#fff" stroke="#e7e9ef"/>
+  <rect x="32" y="140" width="416" height="50" rx="18" fill="#fff0f2"/>
+  <text x="240" y="172" text-anchor="middle" direction="rtl" font-family="Tahoma,Arial,sans-serif" font-size="19" font-weight="900" fill="#d71928">آیفون و آیپد (Safari)</text>
+  <g font-family="Tahoma,Arial,sans-serif" text-anchor="middle" direction="rtl">
+    <g transform="translate(35 210)"><rect width="94" height="232" rx="18" fill="#fafafa" stroke="#eceef3"/><circle cx="47" cy="28" r="17" fill="#e51d2a"/><text x="47" y="34" font-size="16" font-weight="900" fill="#fff">۱</text><rect x="16" y="58" width="62" height="116" rx="14" fill="#eef1f6" stroke="#cfd5df"/><rect x="22" y="70" width="50" height="72" rx="8" fill="#fff"/><circle cx="47" cy="92" r="13" fill="#e51d2a"/><text x="47" y="97" font-size="12" font-weight="900" fill="#fff">ن</text><path d="M25 155h44" stroke="#9ca3af" stroke-width="3"/><text x="47" y="195" font-size="11" font-weight="900" fill="#111827">نیازستان را در</text><text x="47" y="212" font-size="11" font-weight="900" fill="#111827">Safari باز کنید</text></g>
+    <g transform="translate(140 210)"><rect width="94" height="232" rx="18" fill="#fafafa" stroke="#eceef3"/><circle cx="47" cy="28" r="17" fill="#e51d2a"/><text x="47" y="34" font-size="16" font-weight="900" fill="#fff">۲</text><rect x="16" y="58" width="62" height="116" rx="14" fill="#eef1f6" stroke="#cfd5df"/><path d="M47 83v42M33 96l14-14 14 14" fill="none" stroke="#1677ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><rect x="30" y="124" width="34" height="23" rx="5" fill="none" stroke="#1677ff" stroke-width="4"/><text x="47" y="195" font-size="11" font-weight="900" fill="#111827">روی دکمه</text><text x="47" y="212" font-size="11" font-weight="900" fill="#d71928">اشتراک‌گذاری</text></g>
+    <g transform="translate(245 210)"><rect width="94" height="232" rx="18" fill="#fafafa" stroke="#eceef3"/><circle cx="47" cy="28" r="17" fill="#e51d2a"/><text x="47" y="34" font-size="16" font-weight="900" fill="#fff">۳</text><rect x="12" y="58" width="70" height="116" rx="12" fill="#fff" stroke="#d8dde6"/><path d="M22 83h50M22 105h50M22 127h50M22 149h50" stroke="#d1d5db" stroke-width="4" stroke-linecap="round"/><rect x="18" y="116" width="58" height="31" rx="8" fill="#fff3b8" stroke="#e51d2a" stroke-width="2"/><text x="47" y="132" font-size="8.5" font-weight="900" fill="#111827">Add to Home</text><text x="47" y="143" font-size="8.5" font-weight="900" fill="#111827">Screen</text><text x="47" y="195" font-size="11" font-weight="900" fill="#111827">گزینه افزودن به</text><text x="47" y="212" font-size="11" font-weight="900" fill="#111827">صفحه اصلی را بزنید</text></g>
+    <g transform="translate(350 210)"><rect width="94" height="232" rx="18" fill="#fafafa" stroke="#eceef3"/><circle cx="47" cy="28" r="17" fill="#e51d2a"/><text x="47" y="34" font-size="16" font-weight="900" fill="#fff">۴</text><rect x="13" y="58" width="68" height="116" rx="12" fill="#fff" stroke="#d8dde6"/><text x="47" y="81" font-size="8.5" font-weight="800" fill="#374151">Add to Home Screen</text><rect x="56" y="91" width="20" height="16" rx="5" fill="#1677ff"/><text x="66" y="102" font-size="7.5" font-weight="900" fill="#fff">Add</text><rect x="22" y="111" width="28" height="28" rx="7" fill="#e51d2a"/><text x="36" y="130" font-size="14" font-weight="900" fill="#fff">ن</text><text x="47" y="195" font-size="11" font-weight="900" fill="#111827">در پایان روی</text><text x="47" y="212" font-size="11" font-weight="900" fill="#d71928">Add بزنید</text></g>
+  </g>
+  <rect x="18" y="492" width="444" height="290" rx="24" fill="#fff" stroke="#e7e9ef"/>
+  <rect x="32" y="506" width="416" height="50" rx="18" fill="#eefcf3"/>
+  <text x="240" y="538" text-anchor="middle" direction="rtl" font-family="Tahoma,Arial,sans-serif" font-size="19" font-weight="900" fill="#0a8f42">اندروید (Chrome)</text>
+  <g font-family="Tahoma,Arial,sans-serif" text-anchor="middle" direction="rtl">
+    <g transform="translate(48 575)"><rect width="112" height="178" rx="18" fill="#fafafa" stroke="#eceef3"/><circle cx="56" cy="27" r="17" fill="#e51d2a"/><text x="56" y="33" font-size="16" font-weight="900" fill="#fff">۱</text><rect x="23" y="55" width="66" height="76" rx="12" fill="#fff" stroke="#d8dde6"/><circle cx="74" cy="70" r="3" fill="#111827"/><circle cx="74" cy="81" r="3" fill="#111827"/><circle cx="74" cy="92" r="3" fill="#111827"/><path d="M27 68h37" stroke="#9ca3af" stroke-width="4" stroke-linecap="round"/><text x="56" y="151" font-size="11" font-weight="900" fill="#111827">منوی سه‌نقطه</text><text x="56" y="168" font-size="11" font-weight="900" fill="#111827">را باز کنید</text></g>
+    <g transform="translate(184 575)"><rect width="112" height="178" rx="18" fill="#fafafa" stroke="#eceef3"/><circle cx="56" cy="27" r="17" fill="#e51d2a"/><text x="56" y="33" font-size="16" font-weight="900" fill="#fff">۲</text><rect x="16" y="55" width="80" height="76" rx="12" fill="#fff" stroke="#d8dde6"/><rect x="22" y="76" width="68" height="32" rx="8" fill="#fff0f2" stroke="#e51d2a" stroke-width="2"/><text x="56" y="90" font-size="9" font-weight="900" fill="#111827">Install app</text><text x="56" y="102" font-size="8.5" font-weight="900" fill="#d71928">نصب برنامه</text><text x="56" y="151" font-size="11" font-weight="900" fill="#111827">روی Install app</text><text x="56" y="168" font-size="11" font-weight="900" fill="#111827">یا افزودن بزنید</text></g>
+    <g transform="translate(320 575)"><rect width="112" height="178" rx="18" fill="#fafafa" stroke="#eceef3"/><circle cx="56" cy="27" r="17" fill="#e51d2a"/><text x="56" y="33" font-size="16" font-weight="900" fill="#fff">۳</text><rect x="16" y="55" width="80" height="76" rx="12" fill="#fff" stroke="#d8dde6"/><rect x="28" y="70" width="56" height="24" rx="7" fill="#1677ff"/><text x="56" y="86" font-size="9" font-weight="900" fill="#fff">Install</text><rect x="41" y="102" width="30" height="30" rx="8" fill="#e51d2a"/><text x="56" y="122" font-size="15" font-weight="900" fill="#fff">ن</text><text x="56" y="151" font-size="11" font-weight="900" fill="#111827">تأیید کنید تا</text><text x="56" y="168" font-size="11" font-weight="900" fill="#111827">آیکون اضافه شود</text></g>
+  </g>
+  <rect x="32" y="798" width="416" height="38" rx="15" fill="#fff5c8"/>
+  <text x="240" y="822" text-anchor="middle" direction="rtl" font-family="Tahoma,Arial,sans-serif" font-size="12" font-weight="900" fill="#7a5200">بعد از نصب، نیازستان مثل یک برنامه جداگانه روی گوشی باز می‌شود.</text>
+</svg>`;
 
-  window.addEventListener('beforeinstallprompt',e=>{
-    e.preventDefault();
-    installPrompt=e;
-  });
-
-  window.addEventListener('appinstalled',()=>{
-    installPrompt=null;
-    const btn=document.getElementById('installMini');
-    if(btn) btn.style.display='none';
-    const modal=document.getElementById('nzInstallGuideModal');
-    if(modal) modal.remove();
-  });
+  window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;});
+  window.addEventListener('appinstalled',()=>{installPrompt=null;const btn=document.getElementById('installMini');if(btn)btn.style.display='none';const modal=document.getElementById('nzInstallGuideModal');if(modal)modal.remove();});
 
   const showGuide=()=>{
     let modal=document.getElementById('nzInstallGuideModal');
     if(modal){modal.style.display='flex';return;}
-
     modal=document.createElement('div');
     modal.id='nzInstallGuideModal';
     modal.setAttribute('role','dialog');
     modal.setAttribute('aria-modal','true');
-    modal.innerHTML=`<div class="nz-install-guide-card"><button type="button" class="nz-install-guide-close" aria-label="بستن">×</button><div class="nz-install-guide-loading">در حال باز کردن راهنمای نصب…</div><img src="${GUIDE}" alt="راهنمای تصویری نصب برنامه نیازستان" class="nz-install-guide-image"></div>`;
+    modal.innerHTML=`<div class="nz-install-guide-card"><button type="button" class="nz-install-guide-close" aria-label="بستن">×</button>${GUIDE_SVG}</div>`;
     Object.assign(modal.style,{position:'fixed',inset:'0',zIndex:'10000',background:'rgba(7,12,20,.72)',display:'flex',alignItems:'center',justifyContent:'center',padding:'12px',direction:'rtl'});
     document.body.appendChild(modal);
-
     const card=modal.querySelector('.nz-install-guide-card');
     Object.assign(card.style,{position:'relative',width:'min(94vw,620px)',maxHeight:'94vh',overflow:'auto',background:'#fff',borderRadius:'20px',boxShadow:'0 24px 80px rgba(0,0,0,.35)',padding:'8px'});
     const close=modal.querySelector('.nz-install-guide-close');
-    Object.assign(close.style,{position:'sticky',top:'6px',float:'left',zIndex:'3',width:'38px',height:'38px',border:'0',borderRadius:'50%',background:'#111',color:'#fff',fontSize:'26px',lineHeight:'36px',cursor:'pointer'});
-    const loading=modal.querySelector('.nz-install-guide-loading');
-    Object.assign(loading.style,{padding:'50px 20px',textAlign:'center',font:'800 13px Tahoma,Arial,sans-serif',color:'#555'});
-    const image=modal.querySelector('.nz-install-guide-image');
-    Object.assign(image.style,{display:'none',width:'100%',height:'auto',borderRadius:'14px'});
-    image.onload=()=>{loading.style.display='none';image.style.display='block';};
-    image.onerror=()=>{loading.textContent='راهنمای نصب بارگذاری نشد. صفحه را تازه‌سازی کنید و دوباره بزنید.';};
-
+    Object.assign(close.style,{position:'sticky',top:'6px',float:'left',zIndex:'3',width:'38px',height:'38px',border:'0',borderRadius:'50%',background:'#111',color:'#fff',fontSize:'26px',lineHeight:'36px',cursor:'pointer',marginBottom:'-44px'});
     const hide=()=>{modal.style.display='none';};
     close.addEventListener('click',hide);
     modal.addEventListener('click',e=>{if(e.target===modal)hide();});
@@ -48,43 +55,18 @@
   const bind=()=>{
     const btn=document.getElementById('installMini');
     if(!btn) return;
-
     const oldSheet=document.getElementById('installSheet');
     if(oldSheet) oldSheet.remove();
-
-    if(isStandalone()){
-      btn.style.display='none';
-      return;
-    }
-
+    if(isStandalone()){btn.style.display='none';return;}
     btn.addEventListener('click',async e=>{
-      e.preventDefault();
-      e.stopImmediatePropagation();
-
-      if(isStandalone()){
-        btn.style.display='none';
-        return;
-      }
-
+      e.preventDefault();e.stopImmediatePropagation();
+      if(isStandalone()){btn.style.display='none';return;}
       if(installPrompt&&!isIos){
-        const prompt=installPrompt;
-        installPrompt=null;
-        try{
-          await prompt.prompt();
-          const choice=await prompt.userChoice;
-          if(choice&&choice.outcome==='accepted'){
-            btn.style.display='none';
-            return;
-          }
-        }catch(_){ }
-        showGuide();
-        return;
+        const prompt=installPrompt;installPrompt=null;
+        try{await prompt.prompt();const choice=await prompt.userChoice;if(choice&&choice.outcome==='accepted'){btn.style.display='none';return;}}catch(_){ }
       }
-
       showGuide();
     },true);
   };
-
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind,{once:true});
-  else bind();
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind,{once:true});else bind();
 })();
