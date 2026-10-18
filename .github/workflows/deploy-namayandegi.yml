@@ -80,7 +80,7 @@ jobs:
           grep -F "payment_notice_created_at" WebSaza/namayandegi/finance.php >/dev/null
           grep -F "فقط با شرکت وب ساز هماهنگ" WebSaza/namayandegi/finance.php >/dev/null
           grep -F "https://api.iranpayamak.com/ws/v1/sms/pattern" WebSaza/namayandegi/_security.php >/dev/null
-          grep -F "'attributes'=>(object)$params" WebSaza/namayandegi/_security.php >/dev/null
+          grep -F "'attributes'=>(object)\$params" WebSaza/namayandegi/_security.php >/dev/null
           ! grep -Fq "کد بازیابی وب ساز:" WebSaza/namayandegi/_security.php
           ! grep -Fq 'ورود مدیر سیستم' WebSaza/namayandegi/index.php
 
