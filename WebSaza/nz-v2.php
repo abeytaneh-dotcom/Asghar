@@ -22,9 +22,29 @@ try {
     $html = ob_get_clean();
     if ($html !== false) {
         $html = nzc_transform($html);
-        $html = str_replace('/nz-manifest.json', '/nz-manifest.json?v=20261019-2', $html);
-        $html = str_replace('<link rel="apple-touch-icon" href="/niazestan-icon.svg">', '<link rel="apple-touch-icon" sizes="180x180" href="/niazestan-icon-180.php?v=20261019-1">', $html);
-        $html = str_replace("navigator.serviceWorker.register('/niazestan-sw.js')", "navigator.serviceWorker.register('/niazestan-sw.js?v=20261019-4',{scope:'/',updateViaCache:'none'})", $html);
+        $html = str_replace(
+            '<link rel="manifest" href="/nz-manifest.json">',
+            '<link rel="manifest" href="/nz-manifest.json?v=20261019-3" crossorigin="use-credentials">',
+            $html
+        );
+        $html = str_replace(
+            '<link rel="apple-touch-icon" href="/niazestan-icon.svg">',
+            '<link rel="apple-touch-icon" sizes="180x180" href="/niazestan-icon-180.php?v=20261019-2">',
+            $html
+        );
+        $html = str_replace(
+            '<link rel="icon" href="/niazestan-icon.svg" type="image/svg+xml">',
+            '<link rel="icon" type="image/png" sizes="192x192" href="/niazestan-icon-192.php?v=20261019-2"><link rel="icon" href="/niazestan-icon.svg" type="image/svg+xml">',
+            $html
+        );
+        if (!str_contains($html, 'name="color-scheme"')) {
+            $html = str_replace('<meta name="theme-color" content="#ffffff">', '<meta name="theme-color" content="#ffffff"><meta name="color-scheme" content="only light">', $html);
+        }
+        $html = str_replace(
+            "navigator.serviceWorker.register('/niazestan-sw.js')",
+            "navigator.serviceWorker.register('/niazestan-sw.js?v=20261019-5',{scope:'/',updateViaCache:'none'})",
+            $html
+        );
         $installTag = '<script src="/nz-install-direct.js?v=20261019-6"></script>';
         $mediaTag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
         $html = str_replace('</head>', $installTag."\n</head>", $html);
