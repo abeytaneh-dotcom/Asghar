@@ -22,4 +22,5 @@ jobs:
             --data-urlencode "file=sms_pattern_last_provider.json" \
             "https://mch4444.dnsuserver.com:2083/execute/Fileman/get_file_content")
           c=$(echo "$r" | jq -r '.data.content // "{}"')
-          echo "$c" | jq '{at,type,http,sender,pattern,status,message,message_code,data,response}'
+          echo "$c" | jq '{at,type,http,sender,pattern,status,message,message_code,data,errors,error,response}'
+# validation-detail-rerun
