@@ -7,8 +7,8 @@ $html = ob_get_clean();
 
 if ($html !== false) {
     $html = str_replace(
-        ['بازار وب‌ساز', 'بازار وب ساز'],
-        ['نیازستان', 'نیازستان'],
+        ['بازار وب‌ساز', 'بازار وب ساز', '/marketplace.php'],
+        ['نیازستان', 'نیازستان', '/nz'],
         $html
     );
     echo $html;
