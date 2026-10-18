@@ -14,9 +14,11 @@ RewriteCond %{THE_REQUEST} \s/+marketplace\.php(?:[?\s]) [NC]
 RewriteRule ^marketplace\.php$ /nz [R=301,L,NE]
 RewriteCond %{THE_REQUEST} \s/+niyazestan\.php(?:[?\s]) [NC]
 RewriteRule ^niyazestan\.php$ /nz [R=301,L,NE]
+RewriteCond %{THE_REQUEST} \s/+nz-app\.php(?:[?\s]) [NC]
+RewriteRule ^nz-app\.php$ /nz [R=301,L,NE]
 
 # Serve the short app URL without exposing the PHP filename.
-RewriteRule ^nz/?$ niyazestan.php [L,QSA]
+RewriteRule ^nz/?$ nz-app.php [L,QSA]
 
 ErrorDocument 404 /404.html
 
