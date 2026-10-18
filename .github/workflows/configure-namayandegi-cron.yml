@@ -9,6 +9,7 @@ on:
       - 'WebSaza/namayandegi/single-engine-v3.py'
       - 'WebSaza/namayandegi/platform-v3.php'
       - 'WebSaza/namayandegi/sms-worker.php'
+      - 'WebSaza/namayandegi/sms-canary.php'
       - 'WebSaza/namayandegi/backup-worker.php'
       - 'WebSaza/namayandegi/ops-worker.php'
       - '.github/workflows/configure-namayandegi-cron.yml'
@@ -77,4 +78,5 @@ jobs:
           ensure_one "WEBSAZA_SMS_TICK" "*" "*" "*" "*" "*" "WEBSAZA_SMS_TICK=1 /usr/local/bin/php -q /home/vt6qdx8/public_html/namayandegi/sms-worker.php >/dev/null 2>&1"
           ensure_one "WEBSAZA_BACKUP_TICK" "*/5" "*" "*" "*" "*" "WEBSAZA_BACKUP_TICK=1 /usr/local/bin/php -q /home/vt6qdx8/public_html/namayandegi/backup-worker.php >/dev/null 2>&1"
           ensure_one "WEBSAZA_OPS_TICK" "*/15" "*" "*" "*" "*" "WEBSAZA_OPS_TICK=1 /usr/local/bin/php -q /home/vt6qdx8/public_html/namayandegi/ops-worker.php >/dev/null 2>&1"
+          ensure_one "WEBSAZA_SMS_CANARY" "0" "10" "1" "*" "*" "WEBSAZA_SMS_CANARY=1 /usr/local/bin/php -q /home/vt6qdx8/public_html/namayandegi/sms-canary.php >/dev/null 2>&1"
           echo "All Namayandegi automation crons verified."
