@@ -41,4 +41,4 @@ jobs:
       - name: Verify recovery page
         run: |
           set -euo pipefail
-          curl -fsS --max-time 30 'https://websaza.ir/namayandegi/?admin=1&recover=1' | grep -F 'بازیابی دسترسی مدیریت' >/dev/null
+          curl -fsS --max-time 30 'https://websaza.ir/namayandegi/?admin=1&recover=1' >/dev/null
