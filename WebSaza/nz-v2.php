@@ -5,7 +5,7 @@ try {
     require __DIR__ . '/nz-app.php';
     $html = ob_get_clean();
     if ($html !== false) {
-        $tag = '<script src="/nz-media-client.js?v=20261018-1" defer></script>';
+        $tag = '<script src="/nz-media-client.js?v=20261018-2" defer></script>';
         $html = str_replace('</body>', $tag."\n</body>", $html);
         echo $html;
     }
