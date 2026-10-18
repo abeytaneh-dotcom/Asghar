@@ -1,11 +1,14 @@
 <?php
 declare(strict_types=1);
-$dir=sys_get_temp_dir().'/websaza-v3-'.bin2hex(random_bytes(4));mkdir($dir,0700,true);define('D',$dir);require __DIR__.'/platform-v3.php';
+$dir=sys_get_temp_dir().'/websaza-v4-'.bin2hex(random_bytes(4));mkdir($dir,0700,true);define('D',$dir);require __DIR__.'/platform-v3.php';
 function t(bool $ok,string $m):void{if(!$ok){fwrite(STDERR,"FAIL: $m\n");exit(1);}echo "OK: $m\n";}
+function rr(string $p):void{if(!is_dir($p))return;foreach(scandir($p)?:[] as $n){if($n==='.'||$n==='..')continue;$x=$p.'/'.$n;if(is_dir($x))rr($x);else @unlink($x);}@rmdir($p);}
 t(ws_phone('0912 123 4567')==='09121234567','phone local normalize');
 t(ws_phone('+98 912 123 4567')==='09121234567','phone international normalize');
-$f=D.'/leads.json';file_put_contents($f,'[]');$rows=[['id'=>'L1','phone'=>'09121234567','business'=>'Test','created_at'=>ws_now()]];t(ws_store_write($f,$rows),'store write');$got=ws_store_read($f);t(count($got)===1&&($got[0]['id']??'')==='L1','store read');
-t(ws_contact_touch('09121234567',['status'=>'ingested','lead_id'=>'L1','business'=>'Test']),'contact touch');t(ws_contact_seen('+989121234567'),'permanent normalized duplicate');
-t(ws_score(['website_status'=>'ندارد','source_url'=>'https://example.com','proposal'=>'site','evidence'=>'public'])>=89,'lead scoring');
-$h=ws_health();t(!empty($h['ok'])&&in_array($h['backend'],['sqlite-wal','json-fallback'],true),'health');
-array_map('unlink',glob($dir.'/*')?:[]);@rmdir($dir);echo "SELF_TEST_V3_PASS\n";
+$f=D.'/leads.json';file_put_contents($f,'[]');$rows=[['id'=>'L1','phone'=>'09121234567','business'=>'Test','created_at'=>ws_now()]];t(ws_store_write($f,$rows),'row store write');$got=ws_store_read($f);t(count($got)===1&&($got[0]['id']??'')==='L1','row store read');$rows[0]['business']='Updated';$rows[]=['id'=>'L2','phone'=>'09123334444','business'=>'Two','created_at'=>ws_now()];t(ws_store_write($f,$rows),'row diff update');$got=ws_store_read($f);t(count($got)===2&&($got[0]['business']??'')==='Updated','row diff persisted');
+$contacts=[['phone'=>'09125556666','meta'=>['status'=>'ingested','lead_id'=>'L3','business'=>'Atomic','source'=>'test','score'=>95,'city'=>'شیراز']]];$rows[]=['id'=>'L3','phone'=>'09125556666','business'=>'Atomic','created_at'=>ws_now()];t(ws_ingest_commit($f,$rows,$contacts),'atomic ingest');t(ws_contact_seen('+989125556666'),'atomic contact registry');
+$pf=D.'/finance_payments.json';file_put_contents($pf,'[]');t(ws_store_write($pf,[['id'=>'P1','amount'=>100000,'status'=>'active']]),'finance write');$db=ws_db();$n1=(int)$db->query('SELECT COUNT(*) FROM finance_ledger')->fetchColumn();t($n1>=1,'immutable finance ledger insert');t(ws_store_write($pf,[['id'=>'P1','amount'=>120000,'status'=>'active']]),'finance update');$n2=(int)$db->query('SELECT COUNT(*) FROM finance_ledger')->fetchColumn();t($n2>$n1,'immutable finance ledger update');
+$sf=D.'/settings.json';file_put_contents($sf,json_encode(['sms_enabled'=>true,'sms_api_key'=>'test-key','sms_sender'=>'90008361'],JSON_UNESCAPED_UNICODE));$q1=ws_sms_enqueue($sf,'09127778899','pattern-test',['code'=>'123456'],'test','R1');$q2=ws_sms_enqueue($sf,'09127778899','pattern-test',['code'=>'123456'],'test','R1');t(!empty($q1['ok'])&&!empty($q2['ok']),'sms outbox accepts');$q=ws_store_read(D.'/sms_queue.json');t(count($q)===1,'sms outbox dedupe');
+t(ws_score(['website_status'=>'ندارد','source_url'=>'https://example.com','proposal'=>'site','evidence'=>'public'])>=89,'lead scoring');$cal=ws_calibrated_score(['lead_score'=>93,'category'=>'test']);t($cal===93,'calibration waits for sufficient outcomes');
+$h=ws_health();t(!empty($h['ok'])&&($h['version']??'')==='platform-v4'&&($h['integrity']??'')==='ok','health and sqlite integrity');
+unset($db);rr($dir);echo "SELF_TEST_V4_PASS\n";
