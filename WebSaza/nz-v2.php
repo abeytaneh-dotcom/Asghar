@@ -1,7 +1,16 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/nz-community.php';
-nzc_prepare_request();
+
+try {
+    nzc_prepare_request();
+} catch (Throwable $e) {
+    nzc_flash($e->getMessage(), 'error');
+    $back = (string)($_SERVER['HTTP_REFERER'] ?? '/nz');
+    if ($back === '' || !str_starts_with($back, 'https://websaza.ir/')) $back = '/nz';
+    header('Location: '.$back, true, 302);
+    exit;
+}
 
 ob_start();
 try {
