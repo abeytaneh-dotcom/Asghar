@@ -22,8 +22,9 @@ try {
     $html = ob_get_clean();
     if ($html !== false) {
         $html = nzc_transform($html);
-        $tag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
-        $html = str_replace('</body>', $tag."\n</body>", $html);
+        $tags = '<script src="/nz-media-client.js?v=20261019-2" defer></script>' . "\n"
+              . '<script src="/nz-install-direct.js?v=20261019-1" defer></script>';
+        $html = str_replace('</body>', $tags."\n</body>", $html);
         echo $html;
     }
 } catch (Throwable $e) {
