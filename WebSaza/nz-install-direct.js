@@ -1,26 +1,8 @@
 (()=>{
   let installPrompt=null;
+  let guideUrl=null;
   const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
   const isIos=/iphone|ipad|ipod/i.test(navigator.userAgent);
-
-  const showStatus=(message)=>{
-    let toast=document.getElementById('nzInstallStatus');
-    if(!toast){
-      toast=document.createElement('div');
-      toast.id='nzInstallStatus';
-      toast.setAttribute('role','status');
-      Object.assign(toast.style,{
-        position:'fixed',left:'50%',bottom:'88px',transform:'translateX(-50%)',zIndex:'9999',
-        background:'#151515',color:'#fff',padding:'10px 14px',borderRadius:'12px',font:'800 12px Tahoma,Arial,sans-serif',
-        direction:'rtl',boxShadow:'0 8px 28px rgba(0,0,0,.25)',maxWidth:'calc(100vw - 32px)',textAlign:'center'
-      });
-      document.body.appendChild(toast);
-    }
-    toast.textContent=message;
-    toast.style.display='block';
-    clearTimeout(showStatus.timer);
-    showStatus.timer=setTimeout(()=>{toast.style.display='none';},2600);
-  };
 
   window.addEventListener('beforeinstallprompt',e=>{
     e.preventDefault();
@@ -31,7 +13,55 @@
     installPrompt=null;
     const btn=document.getElementById('installMini');
     if(btn) btn.style.display='none';
+    const modal=document.getElementById('nzInstallGuideModal');
+    if(modal) modal.remove();
   });
+
+  const loadGuide=async()=>{
+    if(guideUrl) return guideUrl;
+    const r=await fetch('/niazestan-install-guide.txt?v=20261019-1',{cache:'force-cache'});
+    if(!r.ok) throw new Error('guide');
+    const b64=(await r.text()).trim();
+    const raw=atob(b64);
+    const bytes=new Uint8Array(raw.length);
+    for(let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
+    guideUrl=URL.createObjectURL(new Blob([bytes],{type:'image/webp'}));
+    return guideUrl;
+  };
+
+  const showGuide=async()=>{
+    let modal=document.getElementById('nzInstallGuideModal');
+    if(modal){modal.style.display='flex';return;}
+
+    modal=document.createElement('div');
+    modal.id='nzInstallGuideModal';
+    modal.setAttribute('role','dialog');
+    modal.setAttribute('aria-modal','true');
+    modal.innerHTML=`<div class="nz-install-guide-card"><button type="button" class="nz-install-guide-close" aria-label="بستن">×</button><div class="nz-install-guide-loading">در حال باز کردن راهنمای نصب…</div><img alt="راهنمای تصویری نصب برنامه نیازستان" class="nz-install-guide-image"></div>`;
+    Object.assign(modal.style,{position:'fixed',inset:'0',zIndex:'10000',background:'rgba(7,12,20,.72)',display:'flex',alignItems:'center',justifyContent:'center',padding:'12px',direction:'rtl'});
+    document.body.appendChild(modal);
+
+    const card=modal.querySelector('.nz-install-guide-card');
+    Object.assign(card.style,{position:'relative',width:'min(94vw,620px)',maxHeight:'94vh',overflow:'auto',background:'#fff',borderRadius:'20px',boxShadow:'0 24px 80px rgba(0,0,0,.35)',padding:'8px'});
+    const close=modal.querySelector('.nz-install-guide-close');
+    Object.assign(close.style,{position:'sticky',top:'6px',float:'left',zIndex:'3',width:'38px',height:'38px',border:'0',borderRadius:'50%',background:'#111',color:'#fff',fontSize:'26px',lineHeight:'36px',cursor:'pointer'});
+    const loading=modal.querySelector('.nz-install-guide-loading');
+    Object.assign(loading.style,{padding:'50px 20px',textAlign:'center',font:'800 13px Tahoma,Arial,sans-serif',color:'#555'});
+    const image=modal.querySelector('.nz-install-guide-image');
+    Object.assign(image.style,{display:'none',width:'100%',height:'auto',borderRadius:'14px'});
+
+    const hide=()=>{modal.style.display='none';};
+    close.addEventListener('click',hide);
+    modal.addEventListener('click',e=>{if(e.target===modal)hide();});
+
+    try{
+      image.src=await loadGuide();
+      image.onload=()=>{loading.style.display='none';image.style.display='block';};
+      image.onerror=()=>{loading.textContent='راهنمای نصب باز نشد. دوباره تلاش کنید.';};
+    }catch(_){
+      loading.textContent='راهنمای نصب باز نشد. دوباره تلاش کنید.';
+    }
+  };
 
   const bind=()=>{
     const btn=document.getElementById('installMini');
@@ -54,24 +84,22 @@
         return;
       }
 
-      if(installPrompt){
+      if(installPrompt&&!isIos){
         const prompt=installPrompt;
         installPrompt=null;
         try{
           await prompt.prompt();
           const choice=await prompt.userChoice;
-          if(choice&&choice.outcome==='accepted') btn.style.display='none';
-        }catch(_){
-          installPrompt=prompt;
-        }
+          if(choice&&choice.outcome==='accepted'){
+            btn.style.display='none';
+            return;
+          }
+        }catch(_){ }
+        await showGuide();
         return;
       }
 
-      if(isIos){
-        showStatus('iPhone نصب مستقیم خودکار را پشتیبانی نمی‌کند.');
-      }else{
-        showStatus('نصب مستقیم در این مرورگر در دسترس نیست.');
-      }
+      await showGuide();
     },true);
   };
 
