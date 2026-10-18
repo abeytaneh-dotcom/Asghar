@@ -1,0 +1,25 @@
+name: Inspect SMS Provider After Fix
+
+"on":
+  push:
+    branches:
+      - websaza-hosting
+    paths:
+      - ".github/workflows/inspect-sms-provider-after-fix.yml"
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read safe provider status
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          r=$(curl --fail-with-body --silent --show-error -G -H "$auth" \
+            --data-urlencode "dir=public_html/namayandegi/_data" \
+            --data-urlencode "file=sms_last_provider.json" \
+            "https://mch4444.dnsuserver.com:2083/execute/Fileman/get_file_content")
+          c=$(echo "$r" | jq -r '.data.content // "{}"')
+          echo "$c" | jq '{at,type,http,sender,pattern,status,message,message_code,data}'
