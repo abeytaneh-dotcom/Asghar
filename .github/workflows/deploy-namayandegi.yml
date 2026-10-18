@@ -32,6 +32,7 @@ jobs:
           python3 WebSaza/namayandegi/admin-upgrade-v3.py
           python3 WebSaza/namayandegi/lifecycle-sms-v3.py
           python3 WebSaza/namayandegi/security-upgrade-v3.py
+          python3 WebSaza/namayandegi/single-engine-v3.py
           printf '\n' >> WebSaza/namayandegi/style.css
           cat WebSaza/namayandegi/ux.css WebSaza/namayandegi/simple-v2.css WebSaza/namayandegi/polish-v6.css WebSaza/namayandegi/market-v8.css WebSaza/namayandegi/remember-fix-v1.css >> WebSaza/namayandegi/style.css
           printf '\n' >> WebSaza/namayandegi/app.js
@@ -56,13 +57,19 @@ jobs:
           grep -F 'ws_contact_seen' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'CRM اختصاصی این مشتری' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'mark_seen' WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'SINGLE_ENGINE_V3' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'SEEN_V3' WebSaza/namayandegi/app.js >/dev/null
           grep -F 'ws_location_bonus' WebSaza/namayandegi/smart-actions.php >/dev/null
           grep -F 'pattern_missing' WebSaza/namayandegi/smart-actions.php >/dev/null
           grep -F 'تأیید دستگاه جدید' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'sqlite-wal' WebSaza/namayandegi/platform-v3.php >/dev/null
+          grep -F 'sms_payment_safety_pattern' WebSaza/namayandegi/admin-control.php >/dev/null
+          grep -F 'sms_retention_pattern' WebSaza/namayandegi/admin-control.php >/dev/null
+          grep -F "action']??'')==='status'" WebSaza/namayandegi/lead-ingest.php >/dev/null
           ! grep -Fq 'system_tick' WebSaza/namayandegi/index.php
+          ! grep -Fq '$ok=dispatchLead' WebSaza/namayandegi/index.php
           ! grep -Fq 'https://edge.ippanel.com/v1/api/send' WebSaza/namayandegi/smart-actions.php
+          ! grep -Fq "\$_GET['key']" WebSaza/namayandegi/lead-ingest.php
 
       - name: Ensure remote folder
         shell: bash
