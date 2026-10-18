@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 root=Path(__file__).resolve().parent
 
@@ -13,7 +14,7 @@ elif good not in text:
     raise SystemExit('platform row index marker missing')
 p.write_text(text,encoding='utf-8')
 
-# Correct admin password UI after representative PIN hardening.
+# Correct auth UI after representative PIN hardening.
 p=root/'index.php'
 text=p.read_text(encoding='utf-8')
 branch_field='<label>رمز جدید ۶ رقمی<input type="password" name="new_password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password" required></label>'
@@ -29,6 +30,14 @@ if admin_settings in text:
 needle="$r['password_hash']=password_hash($new,PASSWORD_DEFAULT);"
 if needle in text and "unset($r['must_change_password'])" not in text:
     text=text.replace(needle,needle+"unset($r['must_change_password']);",1)
+# Robustly insert legal consent immediately before the registration submit button.
+if 'name="terms"' not in text:
+    consent='<label class="terms-consent"><input type="checkbox" name="terms" value="1" required> با <a href="?mode=terms" target="_blank" rel="noopener">شرایط همکاری</a> و <a href="?mode=privacy" target="_blank" rel="noopener">حریم خصوصی</a> موافقم.</label>'
+    text,n=re.subn(r'(<button[^>]*>ثبت و تأیید شماره</button>)',lambda m:consent+m.group(1),text,count=1)
+    if n!=1:
+        raise SystemExit('registration submit marker missing')
+# Referral code hint, independent of earlier patches.
+text=text.replace('<label>کد معرف (اختیاری)<input name="ref"','<label>کد معرف (اختیاری)<input name="ref" inputmode="numeric" maxlength="4" placeholder="کد ۴ رقمی معرف"',1)
 p.write_text(text,encoding='utf-8')
 
 # Ensure the first V5 archive is produced even if the daily snapshot is not due yet.
