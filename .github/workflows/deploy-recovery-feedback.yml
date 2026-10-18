@@ -42,3 +42,4 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS --max-time 30 'https://websaza.ir/namayandegi/?admin=1&recover=1' >/dev/null
+      # rerun after edge adapter deployment
