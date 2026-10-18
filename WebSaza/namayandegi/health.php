@@ -15,8 +15,13 @@ $ops=ws_raw_read(D.'/_ops_status.json');
 $backupTs=strtotime((string)($backup['completed_at']??''))?:0;
 $opsTs=strtotime((string)($ops['checked_at']??''))?:0;
 $backupOk=!empty($backup['ok'])&&$backupTs>time()-129600;
-$opsOk=!empty($ops['ok'])&&$opsTs>time()-3600;
-$public=['ok'=>!empty($core['ok']),'version'=>'platform-v4','backup_ok'=>$backupOk,'ops_ok'=>$opsOk];
+$free=@disk_free_space(dirname(__DIR__,2));
+$total=@disk_total_space(dirname(__DIR__,2));
+$diskOk=is_numeric($free)&&is_numeric($total)&&$total>0?($free/$total)>=0.08:true;
+$q=ws_store_read(D.'/sms_queue.json');$oldPending=0;foreach($q as $r){if(!is_array($r)||!in_array((string)($r['status']??''),['queued','retry'],true))continue;$ts=strtotime((string)($r['created_at']??''))?:time();if($ts<time()-7200)$oldPending++;}
+$opsCurrent=!empty($core['ok'])&&$backupOk&&$diskOk&&(int)($core['sms_dead']??0)<20&&$oldPending<50;
+$opsFresh=!empty($ops['ok'])&&$opsTs>time()-3600;
+$public=['ok'=>!empty($core['ok']),'version'=>'platform-v4','backup_ok'=>$backupOk,'ops_ok'=>$opsCurrent];
 $full=PHP_SAPI==='cli'||(!empty($_SESSION['adm'])&&isset($_GET['full']));
-if($full){$public['details']=$core;$public['backup']=$backup;$public['ops']=$ops;$public['php']=PHP_VERSION;$public['cron_expected']=['smart-actions.php'=>'every minute','sms-worker.php'=>'every minute','ops-worker.php'=>'every 15 minutes','backup-worker.php'=>'guarded every 5 minutes'];}
+if($full){$public['details']=$core;$public['backup']=$backup;$public['ops']=$ops;$public['ops_fresh']=$opsFresh;$public['php']=PHP_VERSION;$public['cron_expected']=['smart-actions.php'=>'every minute','sms-worker.php'=>'every minute','ops-worker.php'=>'every 15 minutes','backup-worker.php'=>'guarded every 5 minutes'];}
 echo json_encode($public,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
