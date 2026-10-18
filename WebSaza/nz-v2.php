@@ -1,11 +1,15 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/nz-community.php';
+nzc_prepare_request();
+
 ob_start();
 try {
     require __DIR__ . '/nz-app.php';
     $html = ob_get_clean();
     if ($html !== false) {
-        $tag = '<script src="/nz-media-client.js?v=20261018-2" defer></script>';
+        $html = nzc_transform($html);
+        $tag = '<script src="/nz-media-client.js?v=20261019-1" defer></script>';
         $html = str_replace('</body>', $tag."\n</body>", $html);
         echo $html;
     }
@@ -16,6 +20,7 @@ try {
         header('Location: /nz?page=new');
         exit;
     }
+    nzc_flash($e->getMessage(), 'error');
     http_response_code(400);
     header('Content-Type: text/html; charset=utf-8');
     echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:560px;margin:60px auto;padding:20px"><h2>خطا در بارگذاری</h2><p>'.htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8').'</p><a href="/nz?page=new">بازگشت به ثبت آگهی</a></div>';
