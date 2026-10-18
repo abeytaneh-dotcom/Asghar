@@ -1,5 +1,5 @@
-const CACHE='niazestan-v3';
-const CORE=['/nz','/nz-manifest.json','/niazestan-icon.svg'];
+const CACHE='niazestan-v4';
+const CORE=['/nz','/nz-manifest.json','/niazestan-icon.svg','/niazestan-icon-192.php?v=20261019-1','/niazestan-icon-512.php?v=20261019-1'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).catch(()=>{}));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});
 self.addEventListener('fetch',event=>{
