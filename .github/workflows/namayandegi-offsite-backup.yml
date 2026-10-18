@@ -1,0 +1,110 @@
+name: Namayandegi Encrypted Offsite Backup
+
+on:
+  schedule:
+    - cron: '20 1 * * *'
+  workflow_dispatch: {}
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/namayandegi-offsite-backup.yml'
+      - 'WebSaza/namayandegi/backup-download.php'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: namayandegi-offsite-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      BACKUP_KEY: ${{ secrets.WEBSAZA_BACKUP_KEY || secrets.WEBSAZA_CPANEL_TOKEN }}
+    steps:
+      - name: Wait for a fresh server archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          for attempt in $(seq 1 12); do
+            info=$(curl --fail-with-body --silent --show-error -H "$auth" \
+              'https://mch4444.dnsuserver.com:2083/execute/Fileman/get_file_information?path=/home/vt6qdx8/websaza_backups/latest-export.tar.gz') || true
+            if echo "$info" | jq -e '.status==1 and ((.data.size // 0)|tonumber)>100' >/dev/null 2>&1; then
+              echo "Backup archive is ready."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo 'Fresh server backup archive is not ready.' >&2
+          exit 1
+
+      - name: Issue one-time download token
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          token=$(openssl rand -hex 32)
+          hash=$(printf '%s' "$token" | sha256sum | awk '{print $1}')
+          expires=$(( $(date +%s) + 600 ))
+          jq -n --arg h "$hash" --argjson e "$expires" '{hash:$h,expires:$e,used:false}' > /tmp/backup-token.json
+          response=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
+            --data-urlencode 'dir=public_html/namayandegi/_data' \
+            --data-urlencode 'file=_backup_download_token.json' \
+            --data-urlencode 'content@/tmp/backup-token.json' \
+            'https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content')
+          echo "$response" | jq -e '.status==1' >/dev/null
+          echo "BACKUP_DL_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Download and validate archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 --max-time 180 \
+            -H "X-WebSaza-Backup-Token: ${BACKUP_DL_TOKEN}" \
+            'https://websaza.ir/namayandegi/backup-download.php' \
+            -o /tmp/websaza-backup.tar.gz
+          test "$(stat -c%s /tmp/websaza-backup.tar.gz)" -gt 100
+          tar -tzf /tmp/websaza-backup.tar.gz >/tmp/backup-files.txt
+          grep -F 'websaza.sqlite3' /tmp/backup-files.txt >/dev/null
+          grep -F 'manifest.json' /tmp/backup-files.txt >/dev/null
+
+      - name: Encrypt backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${BACKUP_KEY}"
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+            -in /tmp/websaza-backup.tar.gz \
+            -out /tmp/websaza-backup-${GITHUB_RUN_ID}.tar.gz.enc \
+            -pass env:BACKUP_KEY
+          sha256sum /tmp/websaza-backup-${GITHUB_RUN_ID}.tar.gz.enc > /tmp/websaza-backup-${GITHUB_RUN_ID}.sha256
+          rm -f /tmp/websaza-backup.tar.gz
+
+      - name: Store encrypted offsite artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: websaza-offsite-${{ github.run_id }}
+          path: |
+            /tmp/websaza-backup-${{ github.run_id }}.tar.gz.enc
+            /tmp/websaza-backup-${{ github.run_id }}.sha256
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Record offsite backup success on server
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          jq -n --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg r "${GITHUB_RUN_ID}" \
+            '{ok:true,completed_at:$t,provider:"github-actions-encrypted-artifact",run_id:$r,retention_days:90}' > /tmp/offsite-status.json
+          response=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
+            --data-urlencode 'dir=public_html/namayandegi/_data' \
+            --data-urlencode 'file=_offsite_backup_status.json' \
+            --data-urlencode 'content@/tmp/offsite-status.json' \
+            'https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content')
+          echo "$response" | jq -e '.status==1' >/dev/null
