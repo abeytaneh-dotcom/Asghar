@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 
 p = Path(__file__).resolve().parent / 'index.php'
 text = p.read_text(encoding='utf-8')
@@ -50,13 +49,41 @@ if marker not in text:
     raise SystemExit('remember helper insertion marker missing')
 text = text.replace(marker, helpers + "\n" + marker, 1)
 
-# Replace secured representative login handler produced by build/security patches.
-login_re = re.compile(r"if\(post\('login'\)\)\{.*?go\('\./\?mode=login'\);\}", re.S)
-m = login_re.search(text)
-if not m:
-    raise SystemExit('secured branch login handler missing')
+# Find and replace a complete PHP if-block safely, including nested braces and quoted strings.
+def replace_php_block(src: str, marker: str, replacement: str) -> str:
+    start = src.find(marker)
+    if start < 0:
+        raise SystemExit(f'block marker missing: {marker}')
+    brace = src.find('{', start)
+    if brace < 0:
+        raise SystemExit('opening brace missing')
+    depth = 0
+    quote = None
+    escaped = False
+    i = brace
+    while i < len(src):
+        ch = src[i]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif ch == '\\':
+                escaped = True
+            elif ch == quote:
+                quote = None
+        else:
+            if ch in ("'", '"'):
+                quote = ch
+            elif ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    return src[:start] + replacement + src[i+1:]
+        i += 1
+    raise SystemExit('unterminated PHP block')
+
 new_login = r'''if(post('login')){if(!okc())exit('درخواست نامعتبر');$u=trim((string)($_POST['username']??''));$p=(string)($_POST['password']??'');$remember=!empty($_POST['remember']);$rows=j(B);$idx=null;foreach($rows as $i=>$r)if((($r['mobile']??'')===$u||($r['code']??'')===$u)&&!empty($r['active'])&&(!array_key_exists('mobile_verified',$r)||!empty($r['mobile_verified']))){$idx=$i;break;}$sid=$idx!==null?(string)($rows[$idx]['id']??''):('unknown:'.hash('sha256',$u));if(!sec_can_login(D,'branch',$sid)){fl('اطلاعات ورود صحیح نیست یا دسترسی غیرفعال است.','err');go('./?mode=login');}if($idx!==null&&password_verify($p,(string)($rows[$idx]['password_hash']??''))){sec_success(D,'branch',$sid);$rows[$idx]['last_login_at']=now();sj(B,$rows);session_regenerate_id(true);$_SESSION['bid']=$rows[$idx]['id'];if($remember)ws_remember_issue((string)$rows[$idx]['id']);else ws_remember_revoke_current();systemTick(true);go(!empty($rows[$idx]['must_change_password'])?'./?view=profile&security=1':'./');}sec_fail(D,'branch',$sid);fl('اطلاعات ورود صحیح نیست یا دسترسی غیرفعال است.','err');go('./?mode=login');}'''
-text = text[:m.start()] + new_login + text[m.end():]
+text = replace_php_block(text, "if(post('login')){", new_login)
 
 # Logout explicitly revokes the current remembered browser.
 old_logout = "if($action==='logout'){unset($_SESSION['bid']);session_regenerate_id(true);go('./');}"
