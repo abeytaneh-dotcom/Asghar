@@ -5,6 +5,9 @@ on:
     branches: [websaza-hosting]
     paths:
       - 'WebSaza/namayandegi/smart-actions.php'
+      - 'WebSaza/namayandegi/smart-upgrade-v3.py'
+      - 'WebSaza/namayandegi/single-engine-v3.py'
+      - 'WebSaza/namayandegi/platform-v3.php'
       - '.github/workflows/configure-namayandegi-cron.yml'
   workflow_dispatch:
 
@@ -12,7 +15,7 @@ jobs:
   configure:
     runs-on: ubuntu-latest
     steps:
-      - name: Ensure one-minute order automation cron
+      - name: Ensure exactly one one-minute order automation cron
         shell: bash
         env:
           CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
@@ -23,38 +26,39 @@ jobs:
           marker="WEBSAZA_NAMAYANDEGI_TICK"
           command="WEBSAZA_NAMAYANDEGI_TICK=1 /usr/local/bin/php -q /home/vt6qdx8/public_html/namayandegi/smart-actions.php >/dev/null 2>&1"
 
-          list=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
-            --data-urlencode "cpanel_jsonapi_user=vt6qdx8" \
-            --data-urlencode "cpanel_jsonapi_apiversion=2" \
-            --data-urlencode "cpanel_jsonapi_module=Cron" \
-            --data-urlencode "cpanel_jsonapi_func=listcron" \
-            "$endpoint")
+          list_cron(){
+            curl --fail-with-body --silent --show-error -H "$auth" --request POST \
+              --data-urlencode "cpanel_jsonapi_user=vt6qdx8" \
+              --data-urlencode "cpanel_jsonapi_apiversion=2" \
+              --data-urlencode "cpanel_jsonapi_module=Cron" \
+              --data-urlencode "cpanel_jsonapi_func=listcron" \
+              "$endpoint"
+          }
 
-          if echo "$list" | jq -e --arg m "$marker" 'any(.cpanelresult.data[]?; ((.command // "") | contains($m)))' >/dev/null; then
-            echo "Namayandegi cron already exists."
-            exit 0
+          list=$(list_cron)
+          count=$(echo "$list" | jq --arg m "$marker" '[.cpanelresult.data[]? | select(((.command // "") | contains($m)))] | length')
+          if [ "$count" -eq 0 ]; then
+            add=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
+              --data-urlencode "cpanel_jsonapi_user=vt6qdx8" \
+              --data-urlencode "cpanel_jsonapi_apiversion=2" \
+              --data-urlencode "cpanel_jsonapi_module=Cron" \
+              --data-urlencode "cpanel_jsonapi_func=add_line" \
+              --data-urlencode "minute=*" \
+              --data-urlencode "hour=*" \
+              --data-urlencode "day=*" \
+              --data-urlencode "month=*" \
+              --data-urlencode "weekday=*" \
+              --data-urlencode "command=$command" \
+              "$endpoint")
+            echo "$add" | jq -e '(.cpanelresult.event.result // .cpanelresult.data[0].status // .cpanelresult.data[0].result // 0) | tonumber == 1' >/dev/null
+          elif [ "$count" -gt 1 ]; then
+            echo "Duplicate Namayandegi cron entries detected: $count" >&2
+            exit 1
           fi
 
-          add=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
-            --data-urlencode "cpanel_jsonapi_user=vt6qdx8" \
-            --data-urlencode "cpanel_jsonapi_apiversion=2" \
-            --data-urlencode "cpanel_jsonapi_module=Cron" \
-            --data-urlencode "cpanel_jsonapi_func=add_line" \
-            --data-urlencode "minute=*" \
-            --data-urlencode "hour=*" \
-            --data-urlencode "day=*" \
-            --data-urlencode "month=*" \
-            --data-urlencode "weekday=*" \
-            --data-urlencode "command=$command" \
-            "$endpoint")
-
-          echo "$add" | jq -e '(.cpanelresult.event.result // .cpanelresult.data[0].status // .cpanelresult.data[0].result // 0) | tonumber == 1' >/dev/null
-
-          verify=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
-            --data-urlencode "cpanel_jsonapi_user=vt6qdx8" \
-            --data-urlencode "cpanel_jsonapi_apiversion=2" \
-            --data-urlencode "cpanel_jsonapi_module=Cron" \
-            --data-urlencode "cpanel_jsonapi_func=listcron" \
-            "$endpoint")
-          echo "$verify" | jq -e --arg m "$marker" 'any(.cpanelresult.data[]?; ((.command // "") | contains($m)))' >/dev/null
-          echo "Namayandegi one-minute cron verified."
+          verify=$(list_cron)
+          echo "$verify" | jq -e --arg m "$marker" --arg cmd "$command" '
+            ([.cpanelresult.data[]? | select(((.command // "") | contains($m)))] | length) == 1 and
+            any(.cpanelresult.data[]?; (.command // "") == $cmd and (.minute // "") == "*" and (.hour // "") == "*" and (.day // "") == "*" and (.month // "") == "*" and (.weekday // "") == "*")
+          ' >/dev/null
+          echo "Exactly one Namayandegi one-minute cron verified."
