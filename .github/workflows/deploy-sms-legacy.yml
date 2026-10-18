@@ -1,0 +1,40 @@
+name: Deploy SMS Legacy Adapter
+
+"on":
+  push:
+    branches:
+      - websaza-hosting
+    paths:
+      - "WebSaza/namayandegi/legacy-sms-v1.py"
+      - ".github/workflows/deploy-sms-legacy.yml"
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build SMS adapter
+        run: |
+          set -euo pipefail
+          python3 WebSaza/namayandegi/legacy-sms-v1.py
+          python3 -m py_compile WebSaza/namayandegi/legacy-sms-v1.py
+          php -l WebSaza/namayandegi/_security.php
+          grep -F "api2.ippanel.com/api/v1/sms/pattern/normal/send" WebSaza/namayandegi/_security.php >/dev/null
+          grep -F "\$from='90008361'" WebSaza/namayandegi/_security.php >/dev/null
+      - name: Upload security adapter
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          response=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
+            --data-urlencode "dir=public_html/namayandegi" \
+            --data-urlencode "file=_security.php" \
+            --data-urlencode "content@WebSaza/namayandegi/_security.php" \
+            "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
+          echo "$response" | jq -e '.status == 1' >/dev/null
+      - name: Verify portal remains live
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=recover" | grep -F 'بازیابی رمز عبور' >/dev/null
