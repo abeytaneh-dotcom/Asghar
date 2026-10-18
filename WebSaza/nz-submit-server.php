@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/nz-controlled-validation.php';
 
 function nzss_clean_attributes(mixed $raw): array {
     if (!is_array($raw)) return [];
@@ -51,6 +52,7 @@ function nzss_handle_create(): never {
     if (!$images) throw new RuntimeException('حداقل یک عکس برای آگهی انتخاب کنید.');
     [$video, $videoDuration] = nzcp_process_video($_FILES['video'] ?? [], (float)($_POST['video_duration'] ?? 0));
     $attributes = nzss_clean_attributes($_POST['attributes'] ?? []);
+    nzcv_validate($category, $subcategory, $attributes);
 
     $post = [
         'id' => nzc_uid('p'),
