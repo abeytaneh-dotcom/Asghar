@@ -2,10 +2,11 @@
 declare(strict_types=1);
 require_once __DIR__ . '/nz-community.php';
 require_once __DIR__ . '/nz-create-pending.php';
+require_once __DIR__ . '/nz-submit-server.php';
 
 try {
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (($_POST['action'] ?? '') === 'create_post')) {
-        nzcp_handle_create();
+        nzss_handle_create();
     }
     nzc_prepare_request();
 } catch (Throwable $e) {
@@ -45,10 +46,45 @@ try {
             "navigator.serviceWorker.register('/niazestan-sw.js?v=20261019-5',{scope:'/',updateViaCache:'none'})",
             $html
         );
+
+        if (!empty($_GET['id'])) {
+            $postId = (string)$_GET['id'];
+            $detailPost = null;
+            foreach (nzc_db_read()['posts'] as $candidate) {
+                if (($candidate['id'] ?? '') === $postId) { $detailPost = $candidate; break; }
+            }
+            if (is_array($detailPost)) {
+                $extraSpecs = '';
+                if (!empty($detailPost['province'])) {
+                    $extraSpecs .= '<div class="spec"><span>استان</span><b>'.nzc_e($detailPost['province']).'</b></div>';
+                }
+                if (!empty($detailPost['district'])) {
+                    $extraSpecs .= '<div class="spec"><span>محله</span><b>'.nzc_e($detailPost['district']).'</b></div>';
+                }
+                foreach (($detailPost['attributes'] ?? []) as $label => $value) {
+                    if ((string)$value === '') continue;
+                    $extraSpecs .= '<div class="spec"><span>'.nzc_e($label).'</span><b>'.nzc_e($value).'</b></div>';
+                }
+                if ($extraSpecs !== '') {
+                    $html = str_replace('<div class="spec"><span>بازدید</span>', $extraSpecs.'<div class="spec"><span>بازدید</span>', $html);
+                }
+                if (isset($detailPost['latitude'], $detailPost['longitude']) && is_numeric($detailPost['latitude']) && is_numeric($detailPost['longitude'])) {
+                    $lat = (float)$detailPost['latitude'];
+                    $lng = (float)$detailPost['longitude'];
+                    $mode = (($detailPost['location_mode'] ?? '') === 'approx') ? 'موقعیت حدودی' : 'موقعیت دقیق';
+                    $address = trim(implode('، ', array_filter([(string)($detailPost['province'] ?? ''),(string)($detailPost['city'] ?? ''),(string)($detailPost['district'] ?? ''),(string)($detailPost['street'] ?? '')])));
+                    $mapUrl = 'https://www.openstreetmap.org/?mlat='.rawurlencode((string)$lat).'&mlon='.rawurlencode((string)$lng).'#map=16/'.rawurlencode((string)$lat).'/'.rawurlencode((string)$lng);
+                    $locationCard = '<div class="surface" style="margin-bottom:14px"><h3 style="margin-top:0">موقعیت آگهی</h3><div class="subtle" style="line-height:1.9;margin-bottom:10px">'.nzc_e($address).' · '.nzc_e($mode).'</div><a class="btn ghost" href="'.nzc_e($mapUrl).'" target="_blank" rel="noopener">مشاهده روی نقشه</a></div>';
+                    $html = str_replace('<div class="surface"><h3 style="margin-top:0">توضیحات</h3>', $locationCard.'<div class="surface"><h3 style="margin-top:0">توضیحات</h3>', $html);
+                }
+            }
+        }
+
         $installTag = '<script src="/nz-install-direct.js?v=20261019-6"></script>';
         $mediaTag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
+        $wizardTag = '<script src="/nz-submit-wizard.js?v=20261019-1" defer></script>';
         $html = str_replace('</head>', $installTag."\n</head>", $html);
-        $html = str_replace('</body>', $mediaTag."\n</body>", $html);
+        $html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n</body>", $html);
         echo $html;
     }
 } catch (Throwable $e) {
