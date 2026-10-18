@@ -1,0 +1,33 @@
+name: Deploy Pattern Diagnostic
+
+"on":
+  push:
+    branches:
+      - websaza-hosting
+    paths:
+      - "WebSaza/namayandegi/pattern-log-v1.py"
+      - ".github/workflows/deploy-pattern-log.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pattern diagnostic
+        run: |
+          set -euo pipefail
+          python3 WebSaza/namayandegi/iranpayamak-api-v1.py
+          python3 WebSaza/namayandegi/pattern-log-v1.py
+          php -l WebSaza/namayandegi/_security.php
+      - name: Upload security file
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          response=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
+            --data-urlencode "dir=public_html/namayandegi" \
+            --data-urlencode "file=_security.php" \
+            --data-urlencode "content@WebSaza/namayandegi/_security.php" \
+            "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
+          echo "$response" | jq -e '.status == 1' >/dev/null
