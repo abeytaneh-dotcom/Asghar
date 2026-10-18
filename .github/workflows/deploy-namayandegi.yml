@@ -61,8 +61,8 @@ jobs:
           grep -F 'pattern_missing' WebSaza/namayandegi/smart-actions.php >/dev/null
           grep -F 'تأیید دستگاه جدید' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'sqlite-wal' WebSaza/namayandegi/platform-v3.php >/dev/null
-          ! grep -Fq "if(($_GET['system_tick']??'')==='1')" WebSaza/namayandegi/index.php
-          ! grep -Fq "https://edge.ippanel.com/v1/api/send" WebSaza/namayandegi/smart-actions.php
+          ! grep -Fq 'system_tick' WebSaza/namayandegi/index.php
+          ! grep -Fq 'https://edge.ippanel.com/v1/api/send' WebSaza/namayandegi/smart-actions.php
 
       - name: Ensure remote folder
         shell: bash
