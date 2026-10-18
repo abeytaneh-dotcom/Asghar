@@ -37,7 +37,10 @@ jobs:
           php WebSaza/namayandegi/self-test-v3.php | tee /tmp/self-test.log
           grep -F 'SELF_TEST_V4_PASS' /tmp/self-test.log >/dev/null
           grep -F 'admin_audit' WebSaza/namayandegi/platform-v3.php >/dev/null
-          grep -F 'رمز ورود ۶ رقمی' WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'رمز ورود ۴ رقمی' WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'تکرار رمز ۴ رقمی' WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'pattern="[0-9]{4}" minlength="4" maxlength="4"' WebSaza/namayandegi/index.php >/dev/null
+          ! grep -Fq 'رمز ورود ۶ رقمی' WebSaza/namayandegi/index.php
           grep -F 'name="password_confirm"' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'name="terms"' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'terms_accepted_at' WebSaza/namayandegi/index.php >/dev/null
@@ -64,7 +67,7 @@ jobs:
           for f in index.php _security.php platform-v3.php style.css app.js smart-actions.php finance.php admin-control.php lead-ingest.php health.php .htaccess; do upload "WebSaza/namayandegi/$f" "$f"; done
           sleep 4
           html=$(curl -fsS --max-time 30 "https://websaza.ir/$rc/?verify=$v"); echo "$html"|grep -F "style.css?v=$v">/dev/null
-          reg=$(curl -fsS --max-time 30 "https://websaza.ir/$rc/?mode=register&verify=$v"); echo "$reg"|grep -F 'رمز ورود ۶ رقمی'>/dev/null; echo "$reg"|grep -F 'name="password_confirm"'>/dev/null; echo "$reg"|grep -F 'name="terms"'>/dev/null; echo "$reg"|grep -F 'حریم خصوصی'>/dev/null
+          reg=$(curl -fsS --max-time 30 "https://websaza.ir/$rc/?mode=register&verify=$v"); echo "$reg"|grep -F 'رمز ورود ۴ رقمی'>/dev/null; echo "$reg"|grep -F 'تکرار رمز ۴ رقمی'>/dev/null; echo "$reg"|grep -F 'pattern="[0-9]{4}"'>/dev/null; echo "$reg"|grep -F 'name="password_confirm"'>/dev/null; echo "$reg"|grep -F 'name="terms"'>/dev/null; echo "$reg"|grep -F 'حریم خصوصی'>/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/$rc/?mode=privacy"|grep -F 'حریم خصوصی وب ساز'>/dev/null
           h=$(curl -fsS --max-time 30 "https://websaza.ir/$rc/health.php?v=$v"); echo "$h"|jq -e '.ok==true and .version=="platform-v4"'>/dev/null
           test "$(curl -s -o /dev/null -w '%{http_code}' "https://websaza.ir/$rc/_data/settings.json")" = 403
@@ -109,7 +112,7 @@ jobs:
           for attempt in 1 2 3; do
             sleep 5
             html=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=$v&attempt=$attempt"); echo "$html"|grep -F "style.css?v=$v">/dev/null; echo "$html"|grep -F 'مرا به خاطر بسپار'>/dev/null
-            reg=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=register&verify=$v&attempt=$attempt"); echo "$reg"|grep -F 'رمز ورود ۶ رقمی'>/dev/null; echo "$reg"|grep -F 'name="password_confirm"'>/dev/null; echo "$reg"|grep -F 'name="terms"'>/dev/null
+            reg=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=register&verify=$v&attempt=$attempt"); echo "$reg"|grep -F 'رمز ورود ۴ رقمی'>/dev/null; echo "$reg"|grep -F 'تکرار رمز ۴ رقمی'>/dev/null; echo "$reg"|grep -F 'pattern="[0-9]{4}"'>/dev/null; echo "$reg"|grep -F 'name="password_confirm"'>/dev/null; echo "$reg"|grep -F 'name="terms"'>/dev/null
             h=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/health.php?v=$v"); echo "$h"|jq -e '.ok==true and .version=="platform-v4" and (has("php")|not) and (has("details")|not)'>/dev/null
             test "$(curl -s -o /dev/null -w '%{http_code}' 'https://websaza.ir/namayandegi/lead-ingest.php')" = 401
             test "$(curl -s -o /dev/null -w '%{http_code}' 'https://websaza.ir/namayandegi/_security.php')" = 403
