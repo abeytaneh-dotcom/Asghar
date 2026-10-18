@@ -1,0 +1,141 @@
+name: Deploy Namayandegi V6
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'WebSaza/namayandegi/**'
+      - '.github/workflows/deploy-namayandegi-v6.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: namayandegi-production-v6
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build production release
+        run: |
+          set -euo pipefail
+          export ASSET_VERSION="${GITHUB_SHA::8}"
+          python3 WebSaza/namayandegi/build-v5.py
+
+      - name: Validate release
+        run: |
+          set -euo pipefail
+          python3 -m py_compile WebSaza/namayandegi/*.py
+          for f in index.php _security.php platform-v3.php smart-actions.php finance.php admin-control.php lead-ingest.php health.php backup-worker.php restore-backup.php sms-worker.php ops-worker.php db-export-v5.php sms-canary.php backup-download.php; do php -l "WebSaza/namayandegi/$f"; done
+          node --check WebSaza/namayandegi/app.js
+          php WebSaza/namayandegi/self-test-v3.php | tee /tmp/self-test.log
+          grep -F 'SELF_TEST_V4_PASS' /tmp/self-test.log >/dev/null
+          grep -F 'admin_audit' WebSaza/namayandegi/platform-v3.php >/dev/null
+          grep -F 'رمز ورود ۶ رقمی' WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'name="password_confirm"' WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'name="terms"' WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'terms_accepted_at' WebSaza/namayandegi/index.php >/dev/null
+          grep -F "mode==='privacy'" WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'verify_expires_at' WebSaza/namayandegi/finance.php >/dev/null
+          grep -F '5242880' WebSaza/namayandegi/finance.php >/dev/null
+          grep -F 'latest-export.tar.gz' WebSaza/namayandegi/backup-worker.php >/dev/null
+          grep -F 'rb_copy_tree' WebSaza/namayandegi/restore-backup.php >/dev/null
+          grep -F 'WEBSAZA_SUBMIT_GUARD_V5' WebSaza/namayandegi/app.js >/dev/null
+          grep -F 'WEBSAZA_DEPLOY_LOCK_V5' WebSaza/namayandegi/.htaccess >/dev/null
+          grep -F 'Content-Security-Policy-Report-Only' WebSaza/namayandegi/.htaccess >/dev/null
+          ! grep -Fq 'system_tick' WebSaza/namayandegi/index.php
+          ! grep -Fq 'https://edge.ippanel.com/v1/api/send' WebSaza/namayandegi/smart-actions.php
+          ! grep -Fq 'https://edge.ippanel.com/v1/api/send' WebSaza/namayandegi/finance.php
+
+      - name: Stage and test release candidate
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"; endpoint='https://mch4444.dnsuserver.com:2083/json-api/cpanel'; v="${GITHUB_SHA::8}"; rc="namayandegi-rc-${v}"
+          curl -sS -H "$auth" -X POST --data-urlencode 'cpanel_jsonapi_user=vt6qdx8' --data-urlencode 'cpanel_jsonapi_apiversion=2' --data-urlencode 'cpanel_jsonapi_module=Fileman' --data-urlencode 'cpanel_jsonapi_func=mkdir' --data-urlencode 'path=/home/vt6qdx8/public_html' --data-urlencode "name=$rc" --data-urlencode 'permissions=0755' "$endpoint" >/dev/null
+          upload(){ r=$(curl --fail-with-body -sS -H "$auth" -X POST --data-urlencode "dir=public_html/$rc" --data-urlencode "file=$2" --data-urlencode "content@$1" 'https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content'); echo "$r"|jq -e '.status==1'>/dev/null; }
+          for f in index.php _security.php platform-v3.php style.css app.js smart-actions.php finance.php admin-control.php lead-ingest.php health.php .htaccess; do upload "WebSaza/namayandegi/$f" "$f"; done
+          sleep 4
+          html=$(curl -fsS --max-time 30 "https://websaza.ir/$rc/?verify=$v"); echo "$html"|grep -F "style.css?v=$v">/dev/null
+          reg=$(curl -fsS --max-time 30 "https://websaza.ir/$rc/?mode=register&verify=$v"); echo "$reg"|grep -F 'رمز ورود ۶ رقمی'>/dev/null; echo "$reg"|grep -F 'name="password_confirm"'>/dev/null; echo "$reg"|grep -F 'name="terms"'>/dev/null; echo "$reg"|grep -F 'حریم خصوصی'>/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/$rc/?mode=privacy"|grep -F 'حریم خصوصی وب ساز'>/dev/null
+          h=$(curl -fsS --max-time 30 "https://websaza.ir/$rc/health.php?v=$v"); echo "$h"|jq -e '.ok==true and .version=="platform-v4"'>/dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' "https://websaza.ir/$rc/_data/settings.json")" = 403
+
+      - name: Snapshot live release and enter maintenance
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"; endpoint='https://mch4444.dnsuserver.com:2083/json-api/cpanel'; v="${GITHUB_SHA::8}"
+          mkdir_api(){ curl -sS -H "$auth" -X POST --data-urlencode 'cpanel_jsonapi_user=vt6qdx8' --data-urlencode 'cpanel_jsonapi_apiversion=2' --data-urlencode 'cpanel_jsonapi_module=Fileman' --data-urlencode 'cpanel_jsonapi_func=mkdir' --data-urlencode "path=$1" --data-urlencode "name=$2" --data-urlencode 'permissions=0700' "$endpoint">/dev/null; }
+          mkdir_api '/home/vt6qdx8' 'websaza_deploy_rollback'; mkdir_api '/home/vt6qdx8/websaza_deploy_rollback' "$v"
+          for f in index.php _security.php platform-v3.php style.css app.js smart-actions.php finance.php admin-control.php lead-ingest.php health.php backup-worker.php restore-backup.php sms-worker.php ops-worker.php .htaccess; do
+            r=$(curl --fail-with-body -sS -H "$auth" -X POST --data-urlencode 'cpanel_jsonapi_user=vt6qdx8' --data-urlencode 'cpanel_jsonapi_apiversion=2' --data-urlencode 'cpanel_jsonapi_module=Fileman' --data-urlencode 'cpanel_jsonapi_func=fileop' --data-urlencode 'op=copy' --data-urlencode "sourcefiles=public_html/namayandegi/$f" --data-urlencode "destfiles=websaza_deploy_rollback/$v" --data-urlencode 'doubledecode=1' "$endpoint"); echo "$r"|jq -e '(.cpanelresult.event.result // 0)==1'>/dev/null
+          done
+          cat > /tmp/maintenance.htaccess <<'EOF'
+          Options -Indexes
+          RewriteEngine On
+          RewriteRule ^health\.php$ - [L]
+          RewriteRule ^ - [R=503,L]
+          ErrorDocument 503 "سامانه در حال بروزرسانی است؛ چند لحظه دیگر دوباره تلاش کنید."
+          EOF
+          r=$(curl --fail-with-body -sS -H "$auth" -X POST --data-urlencode 'dir=public_html/namayandegi' --data-urlencode 'file=.htaccess' --data-urlencode 'content@/tmp/maintenance.htaccess' 'https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content'); echo "$r"|jq -e '.status==1'>/dev/null
+          sleep 1
+          test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 'https://websaza.ir/namayandegi/?maintenance_test=1')" = 503
+          touch /tmp/deploy_prepared
+
+      - name: Upload production release
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          upload(){ r=$(curl --fail-with-body -sS -H "$auth" -X POST --data-urlencode 'dir=public_html/namayandegi' --data-urlencode "file=$2" --data-urlencode "content@$1" 'https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content'); echo "$r"|jq -e '.status==1'>/dev/null; }
+          for f in index.php _security.php platform-v3.php style.css app.js smart-actions.php finance.php admin-control.php lead-ingest.php health.php backup-worker.php restore-backup.php sms-worker.php ops-worker.php db-export-v5.php sms-canary.php backup-download.php; do upload "WebSaza/namayandegi/$f" "$f"; done
+          upload 'WebSaza/namayandegi/.htaccess' '.htaccess'
+
+      - name: Verify production repeatedly
+        run: |
+          set -euo pipefail
+          v="${GITHUB_SHA::8}"
+          for attempt in 1 2 3; do
+            sleep 5
+            html=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=$v&attempt=$attempt"); echo "$html"|grep -F "style.css?v=$v">/dev/null; echo "$html"|grep -F 'مرا به خاطر بسپار'>/dev/null
+            reg=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=register&verify=$v&attempt=$attempt"); echo "$reg"|grep -F 'رمز ورود ۶ رقمی'>/dev/null; echo "$reg"|grep -F 'name="password_confirm"'>/dev/null; echo "$reg"|grep -F 'name="terms"'>/dev/null
+            h=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/health.php?v=$v"); echo "$h"|jq -e '.ok==true and .version=="platform-v4" and (has("php")|not) and (has("details")|not)'>/dev/null
+            test "$(curl -s -o /dev/null -w '%{http_code}' 'https://websaza.ir/namayandegi/lead-ingest.php')" = 401
+            test "$(curl -s -o /dev/null -w '%{http_code}' 'https://websaza.ir/namayandegi/_security.php')" = 403
+            test "$(curl -s -o /dev/null -w '%{http_code}' 'https://websaza.ir/namayandegi/_data/settings.json')" = 403
+            for f in backup-worker.php restore-backup.php sms-worker.php ops-worker.php db-export-v5.php sms-canary.php backup-download.php; do test "$(curl -s -o /dev/null -w '%{http_code}' "https://websaza.ir/namayandegi/$f")" = 403; done
+          done
+
+      - name: Automatic rollback on deployment failure
+        if: failure()
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set +e
+          [ -f /tmp/deploy_prepared ] || exit 0
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"; endpoint='https://mch4444.dnsuserver.com:2083/json-api/cpanel'; v="${GITHUB_SHA::8}"
+          for f in index.php _security.php platform-v3.php style.css app.js smart-actions.php finance.php admin-control.php lead-ingest.php health.php backup-worker.php restore-backup.php sms-worker.php ops-worker.php .htaccess; do
+            curl -sS -H "$auth" -X POST --data-urlencode 'cpanel_jsonapi_user=vt6qdx8' --data-urlencode 'cpanel_jsonapi_apiversion=2' --data-urlencode 'cpanel_jsonapi_module=Fileman' --data-urlencode 'cpanel_jsonapi_func=fileop' --data-urlencode 'op=copy' --data-urlencode "sourcefiles=websaza_deploy_rollback/$v/$f" --data-urlencode 'destfiles=public_html/namayandegi' --data-urlencode 'doubledecode=1' "$endpoint">/dev/null
+          done
+          sleep 3
+          curl -fsS --max-time 30 'https://websaza.ir/namayandegi/health.php?rollback=1'>/dev/null || true
+
+      - name: Clean release candidate
+        if: always()
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set +e
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"; rc="namayandegi-rc-${GITHUB_SHA::8}"
+          curl -sS -H "$auth" -X POST --data-urlencode 'dir=public_html' --data-urlencode "files=$rc" 'https://mch4444.dnsuserver.com:2083/execute/Fileman/delete_files'>/dev/null || true
