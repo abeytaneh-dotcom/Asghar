@@ -1,0 +1,64 @@
+name: Deploy HTAELEC Book
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/htaelec/site/**'
+      - '.github/workflows/deploy-htaelec-book.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: htaelec-book-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FTP_HOST: ${{ secrets.HTAELEC_FTP_HOST }}
+      FTP_USER: ${{ secrets.HTAELEC_FTP_USER }}
+      FTP_PASSWORD: ${{ secrets.HTAELEC_FTP_PASSWORD }}
+      FTP_PORT: ${{ secrets.HTAELEC_FTP_PORT }}
+      REMOTE_PATH: ${{ secrets.HTAELEC_REMOTE_PATH }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FTP_HOST" || { echo 'Missing HTAELEC_FTP_HOST'; exit 1; }
+          test -n "$FTP_USER" || { echo 'Missing HTAELEC_FTP_USER'; exit 1; }
+          test -n "$FTP_PASSWORD" || { echo 'Missing HTAELEC_FTP_PASSWORD'; exit 1; }
+          test -n "$REMOTE_PATH" || { echo 'Missing HTAELEC_REMOTE_PATH'; exit 1; }
+          if [ -z "${FTP_PORT:-}" ]; then echo 'FTP_PORT=21' >> "$GITHUB_ENV"; fi
+
+      - name: Install secure FTP client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      - name: Deploy only the protected book web app
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d ops/htaelec/site || { echo 'ops/htaelec/site not found'; exit 1; }
+          lftp <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 20
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set ssl:verify-certificate true
+          open -p ${FTP_PORT:-21} -u "$FTP_USER","$FTP_PASSWORD" "ftp://$FTP_HOST"
+          mirror --reverse --delete --verbose --exclude-glob .git* --exclude-glob '*.log' ops/htaelec/site "$REMOTE_PATH"
+          bye
+          LFTP
+
+      - name: Deployment complete
+        run: echo 'HTAELEC book deployment completed.'
