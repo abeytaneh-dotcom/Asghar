@@ -8,6 +8,9 @@ RewriteCond %{HTTPS} !=on [OR]
 RewriteCond %{HTTP_HOST} !^websaza\.ir$ [NC]
 RewriteRule ^ https://websaza.ir%{REQUEST_URI} [R=301,L,NE]
 
+# Hide temporary diagnostics even if an old copy still exists on hosting.
+RewriteRule ^nz-capability\.php$ - [R=404,L]
+
 # Niyazestan canonical public URL.
 # Redirect only real browser requests for the old PHP URLs so internal rewrites/includes do not loop.
 RewriteCond %{THE_REQUEST} \s/+marketplace\.php(?:[?\s]) [NC]
