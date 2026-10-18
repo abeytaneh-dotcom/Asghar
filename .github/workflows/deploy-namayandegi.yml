@@ -2,8 +2,7 @@ name: Deploy Namayandegi Portal
 
 "on":
   push:
-    branches:
-      - websaza-hosting
+    branches: [websaza-hosting]
     paths:
       - "WebSaza/namayandegi/**"
       - ".github/workflows/deploy-namayandegi.yml"
@@ -16,7 +15,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare production assets
+      - name: Build production portal
         shell: bash
         run: |
           set -euo pipefail
@@ -27,70 +26,43 @@ jobs:
           python3 WebSaza/namayandegi/pin-remember-v1.py
           python3 WebSaza/namayandegi/customer-retention-v1.py
           python3 WebSaza/namayandegi/customer-lifecycle-v1.py
-          if ! grep -Fq 'MOBILE_NAV_GRID_V2' WebSaza/namayandegi/style.css; then
-            cat >> WebSaza/namayandegi/style.css <<'CSS'
-          /* MOBILE_NAV_GRID_V2 */
-          @media(max-width:980px){
-            .layout{padding-bottom:150px}
-            .mobile{display:grid;grid-auto-flow:row;grid-template-columns:repeat(8,minmax(0,1fr));grid-auto-columns:auto;gap:6px;width:100%;max-width:100vw;overflow:hidden;padding:7px 8px calc(7px + env(safe-area-inset-bottom))}
-            .mobile a{grid-column:span 2;min-width:0;width:100%;min-height:48px;padding:6px 4px;border:1px solid #303844;border-radius:11px;background:#171c24;color:#d7dde5;font-size:10px;font-weight:900;line-height:1.25;display:flex;align-items:center;justify-content:center;text-align:center;white-space:normal;overflow-wrap:anywhere}
-            .mobile a.on{color:#11151c;background:var(--brand);border-color:var(--brand)}
-          }
-          CSS
-          fi
+          python3 WebSaza/namayandegi/core-upgrade-v3.py
+          python3 WebSaza/namayandegi/smart-upgrade-v3.py
+          python3 WebSaza/namayandegi/finance-upgrade-v3.py
+          python3 WebSaza/namayandegi/admin-upgrade-v3.py
+          python3 WebSaza/namayandegi/lifecycle-sms-v3.py
+          python3 WebSaza/namayandegi/security-upgrade-v3.py
           printf '\n' >> WebSaza/namayandegi/style.css
-          cat WebSaza/namayandegi/ux.css >> WebSaza/namayandegi/style.css
-          printf '\n' >> WebSaza/namayandegi/style.css
-          cat WebSaza/namayandegi/simple-v2.css >> WebSaza/namayandegi/style.css
-          printf '\n' >> WebSaza/namayandegi/style.css
-          cat WebSaza/namayandegi/polish-v6.css >> WebSaza/namayandegi/style.css
-          printf '\n' >> WebSaza/namayandegi/style.css
-          cat WebSaza/namayandegi/market-v8.css >> WebSaza/namayandegi/style.css
-          printf '\n' >> WebSaza/namayandegi/style.css
-          cat WebSaza/namayandegi/remember-fix-v1.css >> WebSaza/namayandegi/style.css
+          cat WebSaza/namayandegi/ux.css WebSaza/namayandegi/simple-v2.css WebSaza/namayandegi/polish-v6.css WebSaza/namayandegi/market-v8.css WebSaza/namayandegi/remember-fix-v1.css >> WebSaza/namayandegi/style.css
           printf '\n' >> WebSaza/namayandegi/app.js
-          cat WebSaza/namayandegi/simple-v2.js >> WebSaza/namayandegi/app.js
-          printf '\n' >> WebSaza/namayandegi/app.js
-          cat WebSaza/namayandegi/polish-v6.js >> WebSaza/namayandegi/app.js
-          printf '\n' >> WebSaza/namayandegi/app.js
-          cat WebSaza/namayandegi/market-v8.js >> WebSaza/namayandegi/app.js
-          printf '\n' >> WebSaza/namayandegi/app.js
-          cat WebSaza/namayandegi/performance-v1.js >> WebSaza/namayandegi/app.js
+          cat WebSaza/namayandegi/simple-v2.js WebSaza/namayandegi/polish-v6.js WebSaza/namayandegi/market-v8.js WebSaza/namayandegi/performance-v1.js WebSaza/namayandegi/seen-v3.js >> WebSaza/namayandegi/app.js
 
-      - name: Validate production build
+      - name: Validate and regression test
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile WebSaza/namayandegi/build-patch.py
-          python3 -m py_compile WebSaza/namayandegi/security-v2.py
-          python3 -m py_compile WebSaza/namayandegi/iranpayamak-api-v1.py
-          python3 -m py_compile WebSaza/namayandegi/pin-remember-v1.py
-          python3 -m py_compile WebSaza/namayandegi/customer-retention-v1.py
-          python3 -m py_compile WebSaza/namayandegi/customer-lifecycle-v1.py
+          python3 -m py_compile WebSaza/namayandegi/*.py
           php -l WebSaza/namayandegi/index.php
           php -l WebSaza/namayandegi/_security.php
+          php -l WebSaza/namayandegi/platform-v3.php
           php -l WebSaza/namayandegi/smart-actions.php
           php -l WebSaza/namayandegi/finance.php
+          php -l WebSaza/namayandegi/admin-control.php
+          php -l WebSaza/namayandegi/lead-ingest.php
+          php -l WebSaza/namayandegi/health.php
           node --check WebSaza/namayandegi/app.js
-          grep -F 'sec_can_login' WebSaza/namayandegi/index.php >/dev/null
-          grep -F 'recover_request' WebSaza/namayandegi/index.php >/dev/null
-          grep -F "'active'=>false,'mobile_verified'=>false" WebSaza/namayandegi/index.php >/dev/null
-          grep -F "register_verify" WebSaza/namayandegi/index.php >/dev/null
-          grep -F "ws_remember_try" WebSaza/namayandegi/index.php >/dev/null
-          grep -F "مرا به خاطر بسپار" WebSaza/namayandegi/index.php >/dev/null
-          grep -F "pattern=\"[0-9]{4}\"" WebSaza/namayandegi/index.php >/dev/null
-          grep -F "REMEMBER_FIX_V1" WebSaza/namayandegi/style.css >/dev/null
-          grep -F "sendRetentionSms" WebSaza/namayandegi/index.php >/dev/null
-          grep -F "retention_sms" WebSaza/namayandegi/index.php >/dev/null
-          grep -F "sendWonCustomerSms" WebSaza/namayandegi/index.php >/dev/null
-          grep -F "customer_won_sms" WebSaza/namayandegi/index.php >/dev/null
-          grep -F "sample_approved" WebSaza/namayandegi/finance.php >/dev/null
-          grep -F "payment_notice_created_at" WebSaza/namayandegi/finance.php >/dev/null
-          grep -F "فقط با شرکت وب ساز هماهنگ" WebSaza/namayandegi/finance.php >/dev/null
-          grep -F "https://api.iranpayamak.com/ws/v1/sms/pattern" WebSaza/namayandegi/_security.php >/dev/null
-          grep -F "'attributes'=>(object)\$params" WebSaza/namayandegi/_security.php >/dev/null
-          ! grep -Fq "کد بازیابی وب ساز:" WebSaza/namayandegi/_security.php
-          ! grep -Fq 'ورود مدیر سیستم' WebSaza/namayandegi/index.php
+          php WebSaza/namayandegi/self-test-v3.php
+          grep -F 'WEBSAZA_PLATFORM_V3' WebSaza/namayandegi/platform-v3.php >/dev/null
+          grep -F 'ws_contact_seen' WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'CRM اختصاصی این مشتری' WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'mark_seen' WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'SEEN_V3' WebSaza/namayandegi/app.js >/dev/null
+          grep -F 'ws_location_bonus' WebSaza/namayandegi/smart-actions.php >/dev/null
+          grep -F 'pattern_missing' WebSaza/namayandegi/smart-actions.php >/dev/null
+          grep -F 'تأیید دستگاه جدید' WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'sqlite-wal' WebSaza/namayandegi/platform-v3.php >/dev/null
+          ! grep -Fq "if(($_GET['system_tick']??'')==='1')" WebSaza/namayandegi/index.php
+          ! grep -Fq "https://edge.ippanel.com/v1/api/send" WebSaza/namayandegi/smart-actions.php
 
       - name: Ensure remote folder
         shell: bash
@@ -99,6 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          endpoint="https://mch4444.dnsuserver.com:2083/json-api/cpanel"
           response=$(curl --silent --show-error -H "$auth" --request POST \
             --data-urlencode "cpanel_jsonapi_user=vt6qdx8" \
             --data-urlencode "cpanel_jsonapi_apiversion=2" \
@@ -106,14 +79,13 @@ jobs:
             --data-urlencode "cpanel_jsonapi_func=mkdir" \
             --data-urlencode "path=/home/vt6qdx8/public_html" \
             --data-urlencode "name=namayandegi" \
-            --data-urlencode "permissions=0755" \
-            "https://mch4444.dnsuserver.com:2083/json-api/cpanel")
+            --data-urlencode "permissions=0755" "$endpoint")
           if [ "$(echo "$response" | jq -r '.cpanelresult.event.result // 0')" != "1" ]; then
             check=$(curl --fail-with-body --silent --show-error -H "$auth" "https://mch4444.dnsuserver.com:2083/execute/Fileman/list_files?dir=public_html&showdotfiles=1")
             echo "$check" | jq -e 'any(.data[]?; .file=="namayandegi" and .type=="dir")' >/dev/null
           fi
 
-      - name: Upload portal files
+      - name: Upload production files
         shell: bash
         env:
           CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
@@ -121,8 +93,7 @@ jobs:
           set -euo pipefail
           auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
           upload_text(){
-            src="$1"
-            name="$2"
+            src="$1"; name="$2"
             response=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
               --data-urlencode "dir=public_html/namayandegi" \
               --data-urlencode "file=$name" \
@@ -132,28 +103,47 @@ jobs:
           }
           upload_text WebSaza/namayandegi/index.php index.php
           upload_text WebSaza/namayandegi/_security.php _security.php
+          upload_text WebSaza/namayandegi/platform-v3.php platform-v3.php
           upload_text WebSaza/namayandegi/style.css style.css
           upload_text WebSaza/namayandegi/app.js app.js
           upload_text WebSaza/namayandegi/smart-actions.php smart-actions.php
           upload_text WebSaza/namayandegi/finance.php finance.php
+          upload_text WebSaza/namayandegi/admin-control.php admin-control.php
+          upload_text WebSaza/namayandegi/lead-ingest.php lead-ingest.php
+          upload_text WebSaza/namayandegi/health.php health.php
           upload_text WebSaza/namayandegi/.htaccess .htaccess
 
-      - name: Verify live portal
+      - name: Remove obsolete live diagnostics
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          for f in bootstrap-sms.php sms-probe.php; do
+            curl --silent --show-error -H "$auth" --request POST \
+              --data-urlencode "dir=public_html/namayandegi" \
+              --data-urlencode "files=$f" \
+              "https://mch4444.dnsuserver.com:2083/execute/Fileman/delete_files" >/dev/null || true
+          done
+
+      - name: Verify live portal repeatedly
         shell: bash
         run: |
           set -euo pipefail
-          sleep 5
           v="${GITHUB_SHA::8}"
-          curl -fsSI --max-time 30 https://websaza.ir/namayandegi/ | head -n 16
-          html=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=${v}")
-          echo "$html" | grep -F "style.css?v=${v}" >/dev/null
-          if echo "$html" | grep -Fq 'ورود مدیر سیستم'; then exit 1; fi
-          echo "$html" | grep -F 'مرا به خاطر بسپار' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${v}" | grep -F 'REMEMBER_FIX_V1' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=recover&verify=${v}" | grep -F 'بازیابی رمز عبور' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=verify&verify=${v}" | grep -F 'تأیید شماره موبایل' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=register&verify=${v}" | grep -F 'رمز ورود ۴ رقمی' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'PERFORMANCE_V1' >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/finance.php?verify_build=${v}" >/dev/null
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 https://websaza.ir/namayandegi/_security.php)
-          test "$code" = "403"
+          for attempt in 1 2 3; do
+            sleep 5
+            html=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=${v}&attempt=${attempt}")
+            echo "$html" | grep -F "style.css?v=${v}" >/dev/null
+            echo "$html" | grep -F 'مرا به خاطر بسپار' >/dev/null
+            echo "$html" | grep -F 'رمز ورود ۴ رقمی' >/dev/null
+            curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'SEEN_V3' >/dev/null
+            health=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/health.php?v=${v}")
+            echo "$health" | jq -e '.ok==true and .version=="platform-v3"' >/dev/null
+            echo "$health" | jq -e '.backend=="sqlite-wal"' >/dev/null
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/lead-ingest.php")
+            test "$code" = "401"
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/_security.php")
+            test "$code" = "403"
+          done
