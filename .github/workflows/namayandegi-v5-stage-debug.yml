@@ -1,0 +1,46 @@
+name: Namayandegi V5 Stage Debug
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/namayandegi-v5-stage-debug.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          set -euo pipefail
+          export ASSET_VERSION="${GITHUB_SHA::8}"
+          python3 WebSaza/namayandegi/build-v5.py
+      - name: Upload disposable stage and diagnose
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          endpoint="https://mch4444.dnsuserver.com:2083/json-api/cpanel"
+          v="${GITHUB_SHA::8}"; rc="namayandegi-debug-${v}"
+          curl -sS -H "$auth" --request POST \
+            --data-urlencode 'cpanel_jsonapi_user=vt6qdx8' --data-urlencode 'cpanel_jsonapi_apiversion=2' \
+            --data-urlencode 'cpanel_jsonapi_module=Fileman' --data-urlencode 'cpanel_jsonapi_func=mkdir' \
+            --data-urlencode 'path=/home/vt6qdx8/public_html' --data-urlencode "name=$rc" --data-urlencode 'permissions=0755' "$endpoint" >/dev/null
+          upload(){ r=$(curl --fail-with-body -sS -H "$auth" -X POST --data-urlencode "dir=public_html/$rc" --data-urlencode "file=$2" --data-urlencode "content@$1" 'https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content'); echo "$r" | jq -e '.status==1' >/dev/null; }
+          for f in index.php _security.php platform-v3.php style.css app.js smart-actions.php finance.php admin-control.php lead-ingest.php health.php .htaccess; do upload "WebSaza/namayandegi/$f" "$f"; done
+          sleep 4
+          echo '--- MAIN STATUS ---'
+          curl -sS -D /tmp/h1 -o /tmp/main "https://websaza.ir/${rc}/?verify=${v}" || true
+          head -20 /tmp/h1; head -c 800 /tmp/main; echo
+          echo '--- TAG CHECK ---'; grep -o 'style.css?v=[^" ]*' /tmp/main | head || true
+          echo '--- REGISTER STATUS ---'
+          curl -sS -D /tmp/h2 -o /tmp/reg "https://websaza.ir/${rc}/?mode=register&verify=${v}" || true
+          head -20 /tmp/h2; grep -o 'رمز ورود [^<]*' /tmp/reg | head || true; grep -o 'حریم خصوصی' /tmp/reg | head || true
+          echo '--- HEALTH ---'; curl -sS "https://websaza.ir/${rc}/health.php?v=${v}" || true; echo
+          echo '--- DATA CODE ---'; curl -s -o /dev/null -w '%{http_code}\n' "https://websaza.ir/${rc}/_data/settings.json"
+          curl -sS -H "$auth" -X POST --data-urlencode 'dir=public_html' --data-urlencode "files=$rc" 'https://mch4444.dnsuserver.com:2083/execute/Fileman/delete_files' >/dev/null || true
