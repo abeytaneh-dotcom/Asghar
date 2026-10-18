@@ -1,0 +1,44 @@
+name: Deploy Recovery Feedback
+
+"on":
+  push:
+    branches:
+      - websaza-hosting
+    paths:
+      - "WebSaza/namayandegi/recovery-feedback-v1.py"
+      - ".github/workflows/deploy-recovery-feedback.yml"
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build index with recovery diagnostics
+        run: |
+          set -euo pipefail
+          export ASSET_VERSION="${GITHUB_SHA::8}"
+          python3 WebSaza/namayandegi/build-patch.py
+          python3 WebSaza/namayandegi/security-v2.py
+          python3 WebSaza/namayandegi/customer-retention-v1.py
+          python3 WebSaza/namayandegi/customer-lifecycle-v1.py
+          python3 WebSaza/namayandegi/recovery-feedback-v1.py
+          python3 -m py_compile WebSaza/namayandegi/recovery-feedback-v1.py
+          php -l WebSaza/namayandegi/index.php
+          grep -F 'درخواست قبل از رسیدن به سرویس پیامک متوقف شد' WebSaza/namayandegi/index.php >/dev/null
+      - name: Upload index
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel vt6qdx8:${CPANEL_TOKEN}"
+          response=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
+            --data-urlencode "dir=public_html/namayandegi" \
+            --data-urlencode "file=index.php" \
+            --data-urlencode "content@WebSaza/namayandegi/index.php" \
+            "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
+          echo "$response" | jq -e '.status == 1' >/dev/null
+      - name: Verify recovery page
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 'https://websaza.ir/namayandegi/?admin=1&recover=1' | grep -F 'بازیابی دسترسی مدیریت' >/dev/null
