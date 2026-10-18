@@ -1,6 +1,6 @@
 (()=>{
   let installPrompt=null;
-  let guideUrl=null;
+  const GUIDE='/niazestan-install-guide.php?v=20261019-2';
   const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
   const isIos=/iphone|ipad|ipod/i.test(navigator.userAgent);
 
@@ -17,19 +17,7 @@
     if(modal) modal.remove();
   });
 
-  const loadGuide=async()=>{
-    if(guideUrl) return guideUrl;
-    const r=await fetch('/niazestan-install-guide.txt?v=20261019-1',{cache:'force-cache'});
-    if(!r.ok) throw new Error('guide');
-    const b64=(await r.text()).trim();
-    const raw=atob(b64);
-    const bytes=new Uint8Array(raw.length);
-    for(let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
-    guideUrl=URL.createObjectURL(new Blob([bytes],{type:'image/webp'}));
-    return guideUrl;
-  };
-
-  const showGuide=async()=>{
+  const showGuide=()=>{
     let modal=document.getElementById('nzInstallGuideModal');
     if(modal){modal.style.display='flex';return;}
 
@@ -37,7 +25,7 @@
     modal.id='nzInstallGuideModal';
     modal.setAttribute('role','dialog');
     modal.setAttribute('aria-modal','true');
-    modal.innerHTML=`<div class="nz-install-guide-card"><button type="button" class="nz-install-guide-close" aria-label="بستن">×</button><div class="nz-install-guide-loading">در حال باز کردن راهنمای نصب…</div><img alt="راهنمای تصویری نصب برنامه نیازستان" class="nz-install-guide-image"></div>`;
+    modal.innerHTML=`<div class="nz-install-guide-card"><button type="button" class="nz-install-guide-close" aria-label="بستن">×</button><div class="nz-install-guide-loading">در حال باز کردن راهنمای نصب…</div><img src="${GUIDE}" alt="راهنمای تصویری نصب برنامه نیازستان" class="nz-install-guide-image"></div>`;
     Object.assign(modal.style,{position:'fixed',inset:'0',zIndex:'10000',background:'rgba(7,12,20,.72)',display:'flex',alignItems:'center',justifyContent:'center',padding:'12px',direction:'rtl'});
     document.body.appendChild(modal);
 
@@ -49,18 +37,12 @@
     Object.assign(loading.style,{padding:'50px 20px',textAlign:'center',font:'800 13px Tahoma,Arial,sans-serif',color:'#555'});
     const image=modal.querySelector('.nz-install-guide-image');
     Object.assign(image.style,{display:'none',width:'100%',height:'auto',borderRadius:'14px'});
+    image.onload=()=>{loading.style.display='none';image.style.display='block';};
+    image.onerror=()=>{loading.innerHTML='راهنمای تصویری بارگذاری نشد.<br><a href="'+GUIDE+'" target="_blank" rel="noopener" style="display:inline-block;margin-top:12px;color:#b4232c;font-weight:900">باز کردن راهنمای نصب</a>';};
 
     const hide=()=>{modal.style.display='none';};
     close.addEventListener('click',hide);
     modal.addEventListener('click',e=>{if(e.target===modal)hide();});
-
-    try{
-      image.src=await loadGuide();
-      image.onload=()=>{loading.style.display='none';image.style.display='block';};
-      image.onerror=()=>{loading.textContent='راهنمای نصب باز نشد. دوباره تلاش کنید.';};
-    }catch(_){
-      loading.textContent='راهنمای نصب باز نشد. دوباره تلاش کنید.';
-    }
   };
 
   const bind=()=>{
@@ -95,11 +77,11 @@
             return;
           }
         }catch(_){ }
-        await showGuide();
+        showGuide();
         return;
       }
 
-      await showGuide();
+      showGuide();
     },true);
   };
 
