@@ -46,6 +46,8 @@ jobs:
           cat WebSaza/namayandegi/polish-v6.css >> WebSaza/namayandegi/style.css
           printf '\n' >> WebSaza/namayandegi/style.css
           cat WebSaza/namayandegi/market-v8.css >> WebSaza/namayandegi/style.css
+          printf '\n' >> WebSaza/namayandegi/style.css
+          cat WebSaza/namayandegi/remember-fix-v1.css >> WebSaza/namayandegi/style.css
           printf '\n' >> WebSaza/namayandegi/app.js
           cat WebSaza/namayandegi/simple-v2.js >> WebSaza/namayandegi/app.js
           printf '\n' >> WebSaza/namayandegi/app.js
@@ -77,6 +79,7 @@ jobs:
           grep -F "ws_remember_try" WebSaza/namayandegi/index.php >/dev/null
           grep -F "مرا به خاطر بسپار" WebSaza/namayandegi/index.php >/dev/null
           grep -F "pattern=\"[0-9]{4}\"" WebSaza/namayandegi/index.php >/dev/null
+          grep -F "REMEMBER_FIX_V1" WebSaza/namayandegi/style.css >/dev/null
           grep -F "sendRetentionSms" WebSaza/namayandegi/index.php >/dev/null
           grep -F "retention_sms" WebSaza/namayandegi/index.php >/dev/null
           grep -F "sendWonCustomerSms" WebSaza/namayandegi/index.php >/dev/null
@@ -146,6 +149,7 @@ jobs:
           echo "$html" | grep -F "style.css?v=${v}" >/dev/null
           if echo "$html" | grep -Fq 'ورود مدیر سیستم'; then exit 1; fi
           echo "$html" | grep -F 'مرا به خاطر بسپار' >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/namayandegi/style.css?v=${v}" | grep -F 'REMEMBER_FIX_V1' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=recover&verify=${v}" | grep -F 'بازیابی رمز عبور' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=verify&verify=${v}" | grep -F 'تأیید شماره موبایل' >/dev/null
           curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=register&verify=${v}" | grep -F 'رمز ورود ۴ رقمی' >/dev/null
