@@ -12,11 +12,9 @@ if ($html !== false) {
         $html
     );
 
-    // Use concept 2 brand lockup instead of the old letter mark/plain wordmark.
     $brandLockup = '<span class="niazestan-lockup"><img class="niazestan-brand-logo" src="/niazestan-logo.svg" alt=""><span class="niazestan-wordmark">نیازستان</span></span>';
     $html = str_replace('<span class="brand-mark">ن</span><span>نیازستان</span>', $brandLockup, $html);
 
-    // Remove the large "use like an app" hint from the home page.
     $html = preg_replace(
         '/<div class="install-hint">.*?<\/div><nav class="category-strip">/su',
         '<nav class="category-strip">',
@@ -24,7 +22,6 @@ if ($html !== false) {
         1
     ) ?? $html;
 
-    // Replace the rough mobile search glyph with a clean hook for vector styling.
     $html = str_replace(
         '<form class="mobile-search" method="get"><span>⌕</span>',
         '<form class="mobile-search" method="get"><span class="mobile-search-icon" aria-hidden="true"></span>',
@@ -38,7 +35,6 @@ if ($html !== false) {
 </button>
 HTML;
 
-    // Put the install button directly inside the mobile header row so it cannot disappear with desktop-header rules.
     $html = preg_replace(
         '/(<header class="mobile-head"><div class="mobile-row">)/',
         '$1' . $installButton,
@@ -48,22 +44,27 @@ HTML;
 
     $installCss = <<<'HTML'
 <style id="niazestan-install-style">
-/* Concept 2 brand lockup */
 .niazestan-lockup{display:inline-flex;align-items:center;gap:7px;line-height:1;text-decoration:none}.niazestan-brand-logo{display:block;width:46px;height:46px;object-fit:contain}.niazestan-wordmark{font-family:Tahoma,"Vazirmatn",Arial,sans-serif;font-weight:950;color:#073b79;font-size:19px;letter-spacing:-.4px}.brand .niazestan-lockup{flex-direction:row}.mobile-brand .niazestan-lockup{flex-direction:column;gap:0}.mobile-brand .niazestan-brand-logo{width:50px;height:42px}.mobile-brand .niazestan-wordmark{font-size:12.5px;margin-top:-1px;letter-spacing:-.3px}
-
-/* Keep logo at left and city selector at right, like the approved mockup. */
 .mobile-row{position:relative;direction:ltr;min-height:54px}.mobile-row>*{direction:rtl}.mobile-location{font-weight:850;background:#fff!important;border:1px solid #e3e7ec!important;box-shadow:0 3px 12px rgba(20,35,60,.05);padding-right:31px!important;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23161b22'%3E%3Cpath d='M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.4A2.4 2.4 0 1 1 12 6.6a2.4 2.4 0 0 1 0 4.8Z'/%3E%3C/svg%3E")!important;background-repeat:no-repeat!important;background-size:17px 17px!important;background-position:right 9px center!important}
-
-/* Prominent install CTA */
 .install-mini{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:25;border:2px solid #111;background:#ffd83d;box-shadow:0 5px 14px rgba(0,0,0,.18),0 0 0 1px rgba(255,216,61,.35);border-radius:999px;height:34px;padding:0 12px;color:#e31b23;font-family:Tahoma,"Vazirmatn",Arial,sans-serif;font-size:13px;font-weight:950;line-height:1;display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}.install-mini svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.5}.install-mini:hover{filter:brightness(1.03)}.install-mini:active{transform:translate(-50%,-50%) scale(.96)}
-
-/* Mockup-like mobile search */
 .mobile-search{position:relative;background:#fff!important;border:1px solid #e6e9ee!important;box-shadow:0 6px 20px rgba(28,42,65,.07);height:48px!important;border-radius:16px!important;padding:0 44px 0 13px!important}.mobile-search-icon{position:absolute;right:13px;top:50%;transform:translateY(-50%);width:22px;height:22px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230b1f3a' stroke-width='2.1' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E") center/contain no-repeat}.mobile-search::after{content:'';position:absolute;left:13px;top:50%;transform:translateY(-50%);width:22px;height:22px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230b1f3a' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 7h10M18 7h2M10 12h10M4 12h2M4 17h6M14 17h6'/%3E%3Ccircle cx='16' cy='7' r='2'/%3E%3Ccircle cx='8' cy='12' r='2'/%3E%3Ccircle cx='12' cy='17' r='2'/%3E%3C/svg%3E") center/contain no-repeat}.mobile-search input{padding-left:25px!important;font-weight:650;color:#252a32}.mobile-search input::placeholder{color:#a6abb3}
 
-/* Colorful category tiles from the approved visual direction */
-@media (max-width:760px){.category-strip{gap:7px!important;padding-top:7px!important}.cat-chip{min-width:82px!important;gap:7px!important;font-size:11px!important;font-weight:800;color:#252a32!important}.cat-icon{width:56px!important;height:56px!important;border-radius:16px!important;background:#f3f4f7!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.7);font-size:0!important}.cat-icon svg{width:31px;height:31px;display:block}.cat-icon.c-blue{background:#dcecff!important;color:#1769e8}.cat-icon.c-green{background:#dcf7e5!important;color:#06a84f}.cat-icon.c-pink{background:#ffe0eb!important;color:#f01868}.cat-icon.c-purple{background:#e8e0ff!important;color:#773ce3}.cat-icon.c-orange{background:#ffe8d8!important;color:#f56a12}.cat-icon.c-teal{background:#d9f5f3!important;color:#079f9b}.cat-icon.c-yellow{background:#fff0c6!important;color:#f3a500}.cat-icon.c-violet{background:#ece9ff!important;color:#6254ce}
-.section-head h1,.section-head h2{font-size:18px!important;font-weight:950}.section-head h1::before,.section-head h2::before{content:'🔥';margin-left:7px;font-size:19px}.section-head p{font-size:11px!important}
-.content-grid section .listings{display:grid!important;grid-template-columns:none!important;grid-auto-flow:column;grid-auto-columns:76%;overflow-x:auto;gap:12px!important;border-top:0!important;padding:3px 2px 13px;scroll-snap-type:x mandatory;scrollbar-width:none}.content-grid section .listings::-webkit-scrollbar{display:none}.content-grid section .listing{display:block!important;border:1px solid #e8ebef!important;border-radius:18px!important;padding:0!important;overflow:hidden!important;box-shadow:0 6px 18px rgba(25,39,63,.055);scroll-snap-align:start;background:#fff}.content-grid section .listing-media{display:block!important;aspect-ratio:1.28!important;border-radius:0!important}.content-grid section .listing-body{display:block!important;padding:10px 12px 12px!important}.content-grid section .listing-title{font-weight:900!important;font-size:14px!important;line-height:1.65!important;max-height:47px!important;margin:0 0 7px!important}.content-grid section .listing-price{font-weight:950!important;color:#1260db!important;font-size:13px!important;margin:0 0 6px!important}.content-grid section .listing-meta{font-size:10px!important;color:#8b929b!important}.content-grid section .feature-badge{background:#ff3535!important;border-radius:999px!important;padding:5px 9px!important}.content-grid section .fav-dot{background:rgba(255,255,255,.95)!important;color:#fff!important;text-shadow:0 1px 4px rgba(0,0,0,.35);font-size:22px!important}
+@media (max-width:760px){
+.category-strip{gap:7px!important;padding-top:7px!important}.cat-chip{min-width:82px!important;gap:7px!important;font-size:11px!important;font-weight:800;color:#252a32!important}.cat-icon{width:56px!important;height:56px!important;border-radius:16px!important;background:#f3f4f7!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.7);font-size:0!important}.cat-icon svg{width:31px;height:31px;display:block}.cat-icon.c-blue{background:#dcecff!important;color:#1769e8}.cat-icon.c-green{background:#dcf7e5!important;color:#06a84f}.cat-icon.c-pink{background:#ffe0eb!important;color:#f01868}.cat-icon.c-purple{background:#e8e0ff!important;color:#773ce3}.cat-icon.c-orange{background:#ffe8d8!important;color:#f56a12}.cat-icon.c-teal{background:#d9f5f3!important;color:#079f9b}.cat-icon.c-yellow{background:#fff0c6!important;color:#f3a500}.cat-icon.c-violet{background:#ece9ff!important;color:#6254ce}
+.section-head h1,.section-head h2{font-size:17px!important;font-weight:950}.section-head h1::before,.section-head h2::before{content:none!important}.section-head p{font-size:11px!important}
+
+/* Vertical one-ad-per-row mobile feed, matching familiar classifieds-app behavior. */
+.content-grid section .listings{display:block!important;overflow:visible!important;border-top:1px solid #eceef1!important;padding:0!important;scroll-snap-type:none!important}
+.content-grid section .listing{width:100%!important;display:grid!important;grid-template-columns:minmax(0,1fr) 116px!important;grid-template-rows:auto!important;gap:12px!important;border:0!important;border-bottom:1px solid #eceef1!important;border-radius:0!important;padding:12px 0!important;overflow:visible!important;box-shadow:none!important;background:#fff!important;scroll-snap-align:none!important;min-height:140px}
+.content-grid section .listing:hover{box-shadow:none!important;transform:none!important}
+.content-grid section .listing-media{grid-column:2!important;grid-row:1!important;width:116px!important;height:116px!important;aspect-ratio:1!important;border-radius:12px!important;overflow:hidden!important;align-self:start!important}
+.content-grid section .listing-media img{width:100%!important;height:100%!important;object-fit:cover!important}
+.content-grid section .listing-body{grid-column:1!important;grid-row:1!important;padding:1px 0!important;display:flex!important;flex-direction:column!important;min-width:0!important;min-height:116px!important;text-align:right!important}
+.content-grid section .listing-title{font-weight:850!important;font-size:14px!important;line-height:1.75!important;height:auto!important;max-height:50px!important;margin:0 0 7px!important;overflow:hidden!important;color:#202124!important}
+.content-grid section .listing-price{margin-top:auto!important;margin-bottom:7px!important;font-weight:850!important;color:#4f555c!important;font-size:12.5px!important}
+.content-grid section .listing-meta{display:flex!important;justify-content:flex-start!important;gap:5px!important;font-size:10.5px!important;color:#8a9097!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.content-grid section .fav-dot{width:29px!important;height:29px!important;top:6px!important;left:6px!important;background:rgba(255,255,255,.94)!important;color:#555!important;text-shadow:none!important;font-size:17px!important}
+.content-grid section .demo-badge{right:6px!important;top:6px!important;font-size:8.5px!important;padding:4px 6px!important}.content-grid section .feature-badge{right:6px!important;bottom:6px!important;background:#b4232c!important;border-radius:999px!important;padding:4px 7px!important;font-size:8.5px!important}
 }
 
 .install-sheet{position:fixed;inset:0;z-index:200;background:rgba(15,18,22,.42);display:none;align-items:flex-end;justify-content:center;padding:16px}.install-sheet.show{display:flex}.install-sheet-card{width:min(100%,440px);background:#fff;border-radius:22px;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 20px 60px rgba(0,0,0,.2);direction:rtl}.install-sheet-card h3{margin:0 0 8px;font-size:17px}.install-sheet-card p{margin:0;color:#626970;line-height:1.9;font-size:13px}.install-sheet-card .install-ok{width:100%;margin-top:14px;min-height:44px;border:0;border-radius:13px;background:#b4232c;color:#fff;font:800 13px Tahoma,Arial,sans-serif;cursor:pointer}
@@ -105,7 +106,6 @@ HTML;
   }
 })();
 
-// Upgrade category glyphs to the colorful vector icon system from concept 2.
 (()=>{
   const icons={
     'همه':['c-violet','<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></svg>'],
