@@ -85,8 +85,9 @@ try {
         $mediaTag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
         $wizardTag = '<script src="/nz-submit-wizard.js?v=20261019-3" defer></script>';
         $specTag = '<script src="/nz-spec-enforcer.js?v=20261019-1" defer></script>';
+        $modelFixTag = '<script src="/nz-model-refresh.js?v=20261019-1" defer></script>';
         $html = str_replace('</head>', $installTag."\n</head>", $html);
-        $html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n".$specTag."\n</body>", $html);
+        $html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n".$specTag."\n".$modelFixTag."\n</body>", $html);
         echo $html;
     }
 } catch (Throwable $e) {
