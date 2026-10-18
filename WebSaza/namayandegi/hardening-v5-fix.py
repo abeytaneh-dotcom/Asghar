@@ -34,6 +34,31 @@ if 'name="terms"' not in text:
     if n!=1:
         raise SystemExit('registration submit marker missing')
 text=text.replace('<label>کد معرف (اختیاری)<input name="ref"','<label>کد معرف (اختیاری)<input name="ref" inputmode="numeric" maxlength="4" placeholder="کد ۴ رقمی معرف"',1)
+# Existing 4-digit admin PINs remain usable once so the owner is not locked out,
+# but a successful legacy login immediately requires setting the stronger admin password.
+admin_login="if(post('admin_login')){"
+if admin_login in text and 'ADMIN_LEGACY_FORCE_UPGRADE_V5' not in text:
+    start=text.find(admin_login); brace=text.find('{',start); depth=0; quote=None; esc=False; end=None; i=brace
+    while i<len(text):
+        c=text[i]
+        if quote:
+            if esc: esc=False
+            elif c=='\\': esc=True
+            elif c==quote: quote=None
+        else:
+            if c in "'\"": quote=c
+            elif c=='{': depth+=1
+            elif c=='}':
+                depth-=1
+                if depth==0: end=i+1; break
+        i+=1
+    if end is None: raise SystemExit('admin login block unterminated')
+    z=text[start:end]
+    target="sec_success(D,'admin','root');"
+    repl="/* ADMIN_LEGACY_FORCE_UPGRADE_V5 */if(preg_match('/^\\d{4}$/',$p)){$a['must_change']=true;sj(AD,$a);}sec_success(D,'admin','root');"
+    if target not in z: raise SystemExit('admin success marker missing')
+    z=z.replace(target,repl,1)
+    text=text[:start]+z+text[end:]
 p.write_text(text,encoding='utf-8')
 
 # Ensure the first V5 archive is produced even if the daily snapshot is not due yet.
