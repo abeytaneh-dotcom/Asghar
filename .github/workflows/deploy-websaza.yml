@@ -8,6 +8,10 @@ on:
       - '.github/workflows/deploy-websaza.yml'
   workflow_dispatch:
 
+concurrency:
+  group: deploy-websaza-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -116,6 +120,21 @@ jobs:
               "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
             echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
           done
+
+      - name: Deploy Niyazestan directory entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f WebSaza/nz/index.php ]; then
+            RESPONSE=$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: cpanel vt6qdx8:${{ secrets.WEBSAZA_CPANEL_TOKEN }}" \
+              --request POST \
+              --data-urlencode "dir=public_html/nz" \
+              --data-urlencode "file=index.php" \
+              --data-urlencode "content@WebSaza/nz/index.php" \
+              "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
+            echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
+          fi
 
       - name: Upload image assets via cPanel UAPI
         shell: bash
