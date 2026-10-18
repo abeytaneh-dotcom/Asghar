@@ -25,3 +25,50 @@ if old not in text:
 text = text.replace(old, new, 1)
 
 p.write_text(text, encoding='utf-8')
+
+# Keep the Remember-me control compact and aligned on mobile. Generic form input
+# styles otherwise stretch checkboxes to the full field size.
+style = root / 'style.css'
+css = style.read_text(encoding='utf-8')
+remember_css = r'''
+/* REMEMBER_ME_COMPACT_V1 */
+.authcard .form label.remember,
+.authcard label.remember{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:8px!important;
+  width:auto!important;
+  min-height:24px!important;
+  margin:2px 0 8px!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  font-size:13px!important;
+  font-weight:700!important;
+  line-height:1.4!important;
+  direction:rtl!important;
+}
+.authcard .form label.remember input[type="checkbox"],
+.authcard label.remember input[type="checkbox"]{
+  appearance:auto!important;
+  -webkit-appearance:checkbox!important;
+  width:18px!important;
+  height:18px!important;
+  min-width:18px!important;
+  min-height:18px!important;
+  max-width:18px!important;
+  max-height:18px!important;
+  flex:0 0 18px!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:4px!important;
+  box-shadow:none!important;
+  accent-color:#11151c!important;
+}
+'''
+if 'REMEMBER_ME_COMPACT_V1' not in css:
+    style.write_text(css + '\n' + remember_css + '\n', encoding='utf-8')
