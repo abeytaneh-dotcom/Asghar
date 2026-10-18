@@ -20,20 +20,31 @@ if ($html !== false) {
         1
     ) ?? $html;
 
+    $installButton = <<<'HTML'
+<button type="button" id="installMini" class="install-mini" aria-label="نصب برنامه نیازستان روی گوشی">
+<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"/></svg>
+<span>نصب برنامه</span>
+</button>
+HTML;
+
+    // Put the install button directly inside the mobile header row so it cannot disappear with desktop-header rules.
+    $html = preg_replace(
+        '/(<header class="mobile-head"><div class="mobile-row">)/',
+        '$1' . $installButton,
+        $html,
+        1
+    ) ?? $html;
+
     $installCss = <<<'HTML'
 <style id="niazestan-install-style">
-.mobile-row,.topbar{position:relative}.install-mini{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:25;border:1px solid rgba(0,0,0,.08);background:rgba(255,255,255,.96);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 4px 14px rgba(0,0,0,.08);border-radius:999px;height:32px;padding:0 12px;color:#333;font:700 12px Tahoma,Arial,sans-serif;display:none;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}.install-mini.ready{display:inline-flex}.install-mini svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2}.install-mini:active{transform:translate(-50%,-50%) scale(.96)}
+.mobile-row{position:relative}.install-mini{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:25;border:1px solid rgba(0,0,0,.08);background:rgba(255,255,255,.98);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 4px 14px rgba(0,0,0,.08);border-radius:999px;height:30px;padding:0 10px;color:#333;font:700 11.5px Tahoma,Arial,sans-serif;display:inline-flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap}.install-mini svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}.install-mini:active{transform:translate(-50%,-50%) scale(.96)}
 .install-sheet{position:fixed;inset:0;z-index:200;background:rgba(15,18,22,.42);display:none;align-items:flex-end;justify-content:center;padding:16px}.install-sheet.show{display:flex}.install-sheet-card{width:min(100%,440px);background:#fff;border-radius:22px;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 20px 60px rgba(0,0,0,.2);direction:rtl}.install-sheet-card h3{margin:0 0 8px;font-size:17px}.install-sheet-card p{margin:0;color:#626970;line-height:1.9;font-size:13px}.install-sheet-card .install-ok{width:100%;margin-top:14px;min-height:44px;border:0;border-radius:13px;background:#b4232c;color:#fff;font:800 13px Tahoma,Arial,sans-serif;cursor:pointer}
-@media (max-width:760px){.install-mini{height:30px;padding:0 10px;font-size:11.5px;gap:4px}.install-mini svg{width:14px;height:14px}}
+@media (min-width:761px){.install-mini{display:none!important}}
 @media (display-mode:standalone){.install-mini{display:none!important}.install-sheet{display:none!important}}
 </style>
 HTML;
 
     $installUi = <<<'HTML'
-<button type="button" id="installMini" class="install-mini" aria-label="نصب برنامه نیازستان روی گوشی">
-<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"/></svg>
-<span>نصب برنامه</span>
-</button>
 <div id="installSheet" class="install-sheet" role="dialog" aria-modal="true" aria-label="راهنمای نصب نیازستان">
   <div class="install-sheet-card">
     <h3 id="installSheetTitle">نصب نیازستان</h3>
@@ -50,32 +61,19 @@ HTML;
   if(!btn||!sheet)return;
 
   const standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
-  if(standalone)return;
-
-  const placeInHeader=()=>{
-    const mobile=window.matchMedia('(max-width:760px)').matches;
-    const host=mobile?document.querySelector('.mobile-row'):document.querySelector('.topbar');
-    if(!host)return false;
-    if(btn.parentElement!==host)host.appendChild(btn);
-    return true;
-  };
-  placeInHeader();
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',placeInHeader,{once:true});
-  window.addEventListener('resize',placeInHeader);
+  if(standalone){btn.style.display='none';return;}
 
   let deferredPrompt=null;
   const isIos=/iphone|ipad|ipod/i.test(navigator.userAgent);
   const isSafari=/safari/i.test(navigator.userAgent)&&!/crios|fxios|edgios/i.test(navigator.userAgent);
-  btn.classList.add('ready');
 
   window.addEventListener('beforeinstallprompt',e=>{
     e.preventDefault();
     deferredPrompt=e;
-    btn.classList.add('ready');
   });
 
   window.addEventListener('appinstalled',()=>{
-    btn.classList.remove('ready');
+    btn.style.display='none';
     sheet.classList.remove('show');
     deferredPrompt=null;
   });
@@ -85,7 +83,7 @@ HTML;
       deferredPrompt.prompt();
       try{
         const choice=await deferredPrompt.userChoice;
-        if(choice&&choice.outcome==='accepted')btn.classList.remove('ready');
+        if(choice&&choice.outcome==='accepted')btn.style.display='none';
       }catch(_){ }
       deferredPrompt=null;
       return;
