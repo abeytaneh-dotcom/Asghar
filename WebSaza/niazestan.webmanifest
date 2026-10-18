@@ -1,10 +1,11 @@
 {
+  "id": "/nz",
   "name": "نیازستان",
   "short_name": "نیازستان",
   "description": "پلتفرم آگهی خرید، فروش و خدمات",
   "lang": "fa",
   "dir": "rtl",
-  "start_url": "/marketplace.php?source=pwa",
+  "start_url": "/nz?source=pwa",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
