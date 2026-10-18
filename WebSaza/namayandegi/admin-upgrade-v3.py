@@ -36,6 +36,11 @@ new="'sms_enabled'=>true,'sms_sender'=>'90008361','sms_manager_mobile'=>'',\n  '
 if old in text:text=text.replace(old,new,1)
 text=text.replace("'sms_api_endpoint',","")
 text=text.replace("$c['sms_api_endpoint']=s('sms_api_endpoint',(string)$c['sms_api_endpoint']);\n","")
+text=text.replace("'sms_manager_report_pattern','manager_report_enabled'","'sms_manager_report_pattern','sms_customer_payment_pattern','sms_payment_safety_pattern','sms_customer_won_pattern','sms_retention_pattern','manager_report_enabled'",1)
+pat_save="$c['sms_manager_report_pattern']=s('sms_manager_report_pattern',(string)$c['sms_manager_report_pattern']);"
+extra=pat_save+"\n  $c['sms_customer_payment_pattern']=s('sms_customer_payment_pattern',(string)($c['sms_customer_payment_pattern']??''));\n  $c['sms_payment_safety_pattern']=s('sms_payment_safety_pattern',(string)($c['sms_payment_safety_pattern']??''));\n  $c['sms_customer_won_pattern']=s('sms_customer_won_pattern',(string)($c['sms_customer_won_pattern']??''));\n  $c['sms_retention_pattern']=s('sms_retention_pattern',(string)($c['sms_retention_pattern']??''));"
+if pat_save not in text: raise SystemExit('pattern save marker missing')
+text=text.replace(pat_save,extra,1)
 
 # Admin editing a representative must follow the same 4-digit PIN rule as the live portal.
 text=text.replace("if(strlen($newPassword)<8)out(['ok'=>false,'message'=>'رمز جدید شعبه حداقل ۸ کاراکتر باشد.'],422);","if(!preg_match('/^\\d{4}$/',$newPassword))out(['ok'=>false,'message'=>'رمز جدید نمایندگی باید دقیقاً ۴ رقم باشد.'],422);",1)
