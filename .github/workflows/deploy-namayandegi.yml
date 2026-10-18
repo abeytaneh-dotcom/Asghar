@@ -27,38 +27,21 @@ jobs:
         run: |
           set -euo pipefail
           export ASSET_VERSION="${GITHUB_SHA::8}"
-          python3 WebSaza/namayandegi/build-patch.py
-          python3 WebSaza/namayandegi/security-v2.py
-          python3 WebSaza/namayandegi/iranpayamak-api-v1.py
-          python3 WebSaza/namayandegi/pin-remember-v1.py
-          python3 WebSaza/namayandegi/customer-retention-v1.py
-          python3 WebSaza/namayandegi/customer-lifecycle-v1.py
-          python3 WebSaza/namayandegi/core-upgrade-v3.py
-          python3 WebSaza/namayandegi/smart-upgrade-v3.py
-          python3 WebSaza/namayandegi/finance-upgrade-v3.py
-          python3 WebSaza/namayandegi/admin-upgrade-v3.py
-          python3 WebSaza/namayandegi/lifecycle-sms-v3.py
-          python3 WebSaza/namayandegi/security-upgrade-v3.py
-          python3 WebSaza/namayandegi/single-engine-v3.py
-          python3 WebSaza/namayandegi/transaction-upgrade-v4.py
-          python3 WebSaza/namayandegi/queue-upgrade-v4.py
-          printf '\n' >> WebSaza/namayandegi/style.css
-          cat WebSaza/namayandegi/ux.css WebSaza/namayandegi/simple-v2.css WebSaza/namayandegi/polish-v6.css WebSaza/namayandegi/market-v8.css WebSaza/namayandegi/remember-fix-v1.css >> WebSaza/namayandegi/style.css
-          printf '\n' >> WebSaza/namayandegi/app.js
-          cat WebSaza/namayandegi/simple-v2.js WebSaza/namayandegi/polish-v6.js WebSaza/namayandegi/market-v8.js WebSaza/namayandegi/performance-v1.js WebSaza/namayandegi/seen-v3.js >> WebSaza/namayandegi/app.js
+          python3 WebSaza/namayandegi/build-v5.py
 
       - name: Validate and regression test
         shell: bash
         run: |
           set -euo pipefail
           python3 -m py_compile WebSaza/namayandegi/*.py
-          for f in index.php _security.php platform-v3.php smart-actions.php finance.php admin-control.php lead-ingest.php health.php backup-worker.php restore-backup.php sms-worker.php ops-worker.php; do
+          for f in index.php _security.php platform-v3.php smart-actions.php finance.php admin-control.php lead-ingest.php health.php backup-worker.php restore-backup.php sms-worker.php ops-worker.php db-export-v5.php sms-canary.php; do
             php -l "WebSaza/namayandegi/$f"
           done
           node --check WebSaza/namayandegi/app.js
           php WebSaza/namayandegi/self-test-v3.php | tee /tmp/self-test.log
           grep -F 'SELF_TEST_V4_PASS' /tmp/self-test.log >/dev/null
           grep -F 'WEBSAZA_PLATFORM_V4' WebSaza/namayandegi/platform-v3.php >/dev/null
+          grep -F 'admin_audit' WebSaza/namayandegi/platform-v3.php >/dev/null
           grep -F 'ws_ingest_commit' WebSaza/namayandegi/lead-ingest.php >/dev/null
           grep -F 'ws_sms_process_queue' WebSaza/namayandegi/platform-v3.php >/dev/null
           grep -F 'finance_ledger' WebSaza/namayandegi/platform-v3.php >/dev/null
@@ -66,6 +49,14 @@ jobs:
           grep -F 'mark_seen' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'SINGLE_ENGINE_V3' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'SEEN_V3' WebSaza/namayandegi/app.js >/dev/null
+          grep -F 'WEBSAZA_SUBMIT_GUARD_V5' WebSaza/namayandegi/app.js >/dev/null
+          grep -F 'رمز ورود ۶ رقمی' WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'terms_accepted_at' WebSaza/namayandegi/index.php >/dev/null
+          grep -F "mode==='privacy'" WebSaza/namayandegi/index.php >/dev/null
+          grep -F 'verify_expires_at' WebSaza/namayandegi/finance.php >/dev/null
+          grep -F '5242880' WebSaza/namayandegi/finance.php >/dev/null
+          grep -F 'latest-export.tar.gz' WebSaza/namayandegi/backup-worker.php >/dev/null
+          grep -F 'rb_copy_tree' WebSaza/namayandegi/restore-backup.php >/dev/null
           grep -F 'ws_location_bonus' WebSaza/namayandegi/smart-actions.php >/dev/null
           grep -F 'تأیید دستگاه جدید' WebSaza/namayandegi/index.php >/dev/null
           grep -F 'sms_payment_safety_pattern' WebSaza/namayandegi/admin-control.php >/dev/null
@@ -115,7 +106,8 @@ jobs:
           sleep 4
           html=$(curl -fsS --max-time 30 "https://websaza.ir/${rc}/?verify=${v}")
           echo "$html" | grep -F "style.css?v=${v}" >/dev/null
-          curl -fsS --max-time 30 "https://websaza.ir/${rc}/?mode=register&verify=${v}" | grep -F 'رمز ورود ۴ رقمی' >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/${rc}/?mode=register&verify=${v}" | grep -F 'رمز ورود ۶ رقمی' >/dev/null
+          curl -fsS --max-time 30 "https://websaza.ir/${rc}/?mode=register&verify=${v}" | grep -F 'حریم خصوصی' >/dev/null
           health=$(curl -fsS --max-time 30 "https://websaza.ir/${rc}/health.php?v=${v}")
           echo "$health" | jq -e '.ok==true and .version=="platform-v4"' >/dev/null
           test "$(curl -s -o /dev/null -w '%{http_code}' "https://websaza.ir/${rc}/_data/settings.json")" = "403"
@@ -162,7 +154,8 @@ jobs:
             "style.css:style.css" "app.js:app.js" "smart-actions.php:smart-actions.php" \
             "finance.php:finance.php" "admin-control.php:admin-control.php" "lead-ingest.php:lead-ingest.php" \
             "health.php:health.php" "backup-worker.php:backup-worker.php" "restore-backup.php:restore-backup.php" \
-            "sms-worker.php:sms-worker.php" "ops-worker.php:ops-worker.php" ".htaccess:.htaccess"; do
+            "sms-worker.php:sms-worker.php" "ops-worker.php:ops-worker.php" "db-export-v5.php:db-export-v5.php" \
+            "sms-canary.php:sms-canary.php" ".htaccess:.htaccess"; do
             src="${pair%%:*}"; dst="${pair##*:}"; upload_text "WebSaza/namayandegi/$src" "$dst"
           done
 
@@ -190,14 +183,18 @@ jobs:
             html=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?verify=${v}&attempt=${attempt}")
             echo "$html" | grep -F "style.css?v=${v}" >/dev/null
             echo "$html" | grep -F 'مرا به خاطر بسپار' >/dev/null
-            curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=register&verify=${v}&attempt=${attempt}" | grep -F 'رمز ورود ۴ رقمی' >/dev/null
+            curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=register&verify=${v}&attempt=${attempt}" | grep -F 'رمز ورود ۶ رقمی' >/dev/null
+            curl -fsS --max-time 30 "https://websaza.ir/namayandegi/?mode=register&verify=${v}&attempt=${attempt}" | grep -F 'شرایط همکاری' >/dev/null
             curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'SEEN_V3' >/dev/null
+            curl -fsS --max-time 30 "https://websaza.ir/namayandegi/app.js?v=${v}" | grep -F 'WEBSAZA_SUBMIT_GUARD_V5' >/dev/null
             health=$(curl -fsS --max-time 30 "https://websaza.ir/namayandegi/health.php?v=${v}")
             echo "$health" | jq -e '.ok==true and .version=="platform-v4" and (has("php")|not) and (has("details")|not)' >/dev/null
             test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/lead-ingest.php")" = "401"
             test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/_security.php")" = "403"
             test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/_data/settings.json")" = "403"
             test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/backup-worker.php")" = "403"
+            test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/db-export-v5.php")" = "403"
+            test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://websaza.ir/namayandegi/sms-canary.php")" = "403"
           done
 
       - name: Clean release candidate
