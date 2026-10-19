@@ -19,6 +19,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Syntax check Niyazestan code
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v php >/dev/null 2>&1; then
+            find WebSaza -maxdepth 1 -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          fi
+          for file in WebSaza/nz-*.js WebSaza/niazestan-sw.js; do
+            [ -f "$file" ] || continue
+            node --check "$file"
+          done
+
       - name: Build local image assets
         shell: bash
         run: |
