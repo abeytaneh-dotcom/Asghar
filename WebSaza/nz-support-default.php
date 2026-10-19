@@ -156,8 +156,8 @@ function nzsupport_enhance(string $html): string {
         .'.nzs-admin-user-card{margin:0 0 12px;border:1px solid #dce8f7;background:#f8fbff;border-radius:16px;padding:13px}'
         .'.nzs-admin-user-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.nzs-admin-user-title span{font-size:10px;color:#687386}'
         .'.nzs-admin-user-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.nzs-admin-user-grid>div{background:#fff;border:1px solid #e7edf5;border-radius:11px;padding:9px}.nzs-admin-user-grid small,.nzs-admin-user-grid b{display:block}.nzs-admin-user-grid small{font-size:10px;color:#7b8491;margin-bottom:4px}.nzs-admin-user-grid b{font-size:12px;overflow-wrap:anywhere}.nzs-admin-user-card details{margin-top:9px}.nzs-admin-user-card summary{cursor:pointer;font-size:11px;font-weight:800}.nzs-admin-user-card code{display:block;margin-top:7px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:10px;line-height:1.7}'
-        .'@media(max-width:620px){.nzs-admin-user-grid{grid-template-columns:1fr}}'</n        .'</style>';
-    $css = str_replace("'</n        .'", '', $css);
-    if (!str_contains($html, 'nz-support-default-style')) $html = str_replace('</head>', $css.'\n</head>', $html);
+        .'@media(max-width:620px){.nzs-admin-user-grid{grid-template-columns:1fr}}'
+        .'</style>';
+    if (!str_contains($html, 'nz-support-default-style')) $html = str_replace('</head>', $css."\n</head>", $html);
     return $html;
 }
