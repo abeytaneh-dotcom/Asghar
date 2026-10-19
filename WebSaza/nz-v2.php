@@ -2,11 +2,20 @@
 declare(strict_types=1);
 require_once __DIR__ . '/nz-fileinfo-compat.php';
 require_once __DIR__ . '/nz-community.php';
+require_once __DIR__ . '/nz-hardening.php';
+require_once __DIR__ . '/nz-otp.php';
 require_once __DIR__ . '/nz-create-pending.php';
 require_once __DIR__ . '/nz-submit-server.php';
 
+nzh_headers();
 try {
-    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (($_POST['action'] ?? '') === 'create_post')) {
+    nzh_guard_request();
+    $action = (string)($_POST['action'] ?? '');
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && nzotp_ready()) {
+        if ($action === 'request_otp') nzotp_request();
+        if ($action === 'verify_otp') nzotp_verify();
+    }
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $action === 'create_post') {
         nzss_handle_create();
     }
     nzc_prepare_request();
@@ -24,9 +33,10 @@ try {
     $html = ob_get_clean();
     if ($html !== false) {
         $html = nzc_transform($html);
+        $html = nzm_enhance_admin_html($html);
         $html = str_replace(
             '<link rel="manifest" href="/nz-manifest.json">',
-            '<link rel="manifest" href="/nz-manifest.json?v=20261019-3" crossorigin="use-credentials">',
+            '<link rel="manifest" href="/nz-manifest.json?v=20261019-4" crossorigin="use-credentials">',
             $html
         );
         $html = str_replace(
@@ -44,7 +54,7 @@ try {
         }
         $html = str_replace(
             "navigator.serviceWorker.register('/niazestan-sw.js')",
-            "navigator.serviceWorker.register('/niazestan-sw.js?v=20261019-5',{scope:'/',updateViaCache:'none'})",
+            "navigator.serviceWorker.register('/niazestan-sw.js?v=20261019-6',{scope:'/nz',updateViaCache:'none'})",
             $html
         );
 
@@ -81,13 +91,15 @@ try {
             }
         }
 
+        $html = nzh_seo($html);
         $installTag = '<script src="/nz-install-direct.js?v=20261019-6"></script>';
         $mediaTag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
         $wizardTag = '<script src="/nz-submit-wizard.js?v=20261019-3" defer></script>';
         $specTag = '<script src="/nz-spec-lite.js?v=20261019-1" defer></script>';
         $brandModelTag = '<script src="/nz-brand-model.js?v=20261019-2" defer></script>';
+        $moderationTag = '<script src="/nz-image-moderation.js?v=20261019-1" defer></script>';
         $html = str_replace('</head>', $installTag."\n</head>", $html);
-        $html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n".$specTag."\n".$brandModelTag."\n</body>", $html);
+        $html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n".$specTag."\n".$brandModelTag."\n".$moderationTag."\n</body>", $html);
         echo $html;
     }
 } catch (Throwable $e) {
