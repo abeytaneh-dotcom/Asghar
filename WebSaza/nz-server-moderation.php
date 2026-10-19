@@ -1,0 +1,23 @@
+<?php
+declare(strict_types=1);
+
+function nzsm_find_binary(string $name): ?string {
+    foreach(['/usr/bin/'.$name,'/usr/local/bin/'.$name]as$p)if(is_file($p)&&is_executable($p))return$p;
+    if(!function_exists('shell_exec'))return null;$disabled=array_filter(array_map('trim',explode(',',(string)ini_get('disable_functions'))));if(in_array('shell_exec',$disabled,true))return null;$p=trim((string)@shell_exec('command -v '.escapeshellarg($name).' 2>/dev/null'));return$p!==''?$p:null;
+}
+function nzsm_skin_ratio(string $path): float {
+    if(!is_file($path)||!function_exists('imagecreatetruecolor'))return 0.0;$info=@getimagesize($path);$mime=(string)($info['mime']??'');$src=false;if($mime==='image/jpeg'&&function_exists('imagecreatefromjpeg'))$src=@imagecreatefromjpeg($path);elseif($mime==='image/png'&&function_exists('imagecreatefrompng'))$src=@imagecreatefrompng($path);elseif($mime==='image/webp'&&function_exists('imagecreatefromwebp'))$src=@imagecreatefromwebp($path);if(!$src)return 0.0;$w=imagesx($src);$h=imagesy($src);if($w<1||$h<1){imagedestroy($src);return 0.0;}$dst=imagecreatetruecolor(64,64);imagecopyresampled($dst,$src,0,0,0,0,64,64,$w,$h);imagedestroy($src);$skin=0;$valid=0;for($y=4;$y<60;$y++)for($x=4;$x<60;$x++){$rgb=imagecolorat($dst,$x,$y);$r=($rgb>>16)&255;$g=($rgb>>8)&255;$b=$rgb&255;$max=max($r,$g,$b);$min=min($r,$g,$b);$valid++;$classic=$r>95&&$g>40&&$b>20&&($max-$min)>15&&abs($r-$g)>15&&$r>$g&&$r>$b;$light=$r>180&&$g>130&&$b>100&&$r>$g&&$g>$b&&($r-$b)>25;if($classic||$light)$skin++;}imagedestroy($dst);return$valid?($skin/$valid):0.0;
+}
+function nzsm_ocr(string $path): string {
+    $bin=nzsm_find_binary('tesseract');if(!$bin)return'';$base=tempnam(sys_get_temp_dir(),'nzocr_');if($base===false)return'';@unlink($base);$cmd=escapeshellarg($bin).' '.escapeshellarg($path).' '.escapeshellarg($base).' -l fas+eng --psm 6 2>/dev/null';@shell_exec($cmd);$txt=@file_get_contents($base.'.txt');@unlink($base.'.txt');if(!is_string($txt)||trim($txt)===''){$cmd=escapeshellarg($bin).' '.escapeshellarg($path).' '.escapeshellarg($base).' -l eng --psm 6 2>/dev/null';@shell_exec($cmd);$txt=@file_get_contents($base.'.txt');@unlink($base.'.txt');}return mb_substr(trim(preg_replace('/\s+/u',' ',(string)$txt)??''),0,1600);
+}
+function nzsm_scan_uploads(array $files): array {
+    $reasons=[];$details=[];$ocr=[];$serverChecked=0;$names=(array)($files['name']??[]);$tmps=(array)($files['tmp_name']??[]);$errors=(array)($files['error']??[]);$count=min(5,count($tmps));
+    for($i=0;$i<$count;$i++){if(($errors[$i]??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK)continue;$tmp=(string)($tmps[$i]??'');if(!is_file($tmp))continue;$serverChecked++;$ratio=nzsm_skin_ratio($tmp);if($ratio>=0.48){$reasons[]='نسبت بالای نواحی شبیه پوست در تصویر';$details[]='تصویر '.($i+1).': نسبت تقریبی پوست '.number_format($ratio*100,0).'%';}$text=nzsm_ocr($tmp);if($text!==''){$ocr[]=$text;$reasons[]='متن داخل تصویر توسط سرور شناسایی شد';$details[]='تصویر '.($i+1).': OCR سمت سرور انجام شد';$scan=function_exists('nzm_text_scan')?nzm_text_scan($text):['flagged'=>false,'reasons'=>[]];if(!empty($scan['flagged'])){$reasons=array_merge($reasons,(array)($scan['reasons']??[]));$details[]='OCR تصویر '.($i+1).': متن مشکوک شناسایی شد';}}}
+    $clientRaw=trim((string)($_POST['moderation_client']??''));$clientOk=false;if($clientRaw!==''){ $j=json_decode($clientRaw,true);$clientOk=is_array($j)&&isset($j['images'])&&is_array($j['images']); }
+    if($count>0&&!$clientOk){$reasons[]='بررسی خودکار سمت کاربر کامل یا معتبر نبود';$details[]='آگهی برای بازبینی دستی تصویر با اولویت بالا نگه داشته شد';}
+    return['flagged'=>(bool)$reasons,'priority'=>$reasons?'high':'normal','score'=>$reasons?92:0,'reasons'=>array_values(array_unique($reasons)),'details'=>$details,'ocr_text'=>mb_substr(implode("\n",$ocr),0,4000),'server_checked'=>$serverChecked,'client_signal_valid'=>$clientOk,'checked_at'=>date('c'),'engine'=>'nzsm-1'];
+}
+function nzsm_merge(array $base,array $server): array {
+    $reasons=array_values(array_unique(array_merge((array)($base['reasons']??[]),(array)($server['reasons']??[]))));$base['flagged']=!empty($base['flagged'])||!empty($server['flagged']);$base['priority']=$base['flagged']?'high':'normal';$base['score']=max((int)($base['score']??0),(int)($server['score']??0));$base['reasons']=$reasons;$base['server']=['engine'=>$server['engine']??'nzsm-1','details'=>$server['details']??[],'server_checked'=>$server['server_checked']??0,'client_signal_valid'=>$server['client_signal_valid']??false];if(!empty($server['ocr_text']))$base['ocr_excerpt']=mb_substr(trim((string)($base['ocr_excerpt']??'')."\n".(string)$server['ocr_text']),0,1600);return$base;
+}
