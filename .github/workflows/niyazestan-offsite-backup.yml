@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Create encrypted backup bundle
+      - name: Create encrypted backup bundle and test restore
         shell: bash
         env:
           CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
@@ -30,22 +30,26 @@ jobs:
           [ -n "$CRON_KEY" ] || CRON_KEY=$(printf '%s' "$CPANEL_TOKEN" | sha256sum | awk '{print $1}')
           BACKUP_KEY="$NIAZESTAN_BACKUP_KEY"
           [ -n "$BACKUP_KEY" ] || BACKUP_KEY=$(printf '%s' "$CPANEL_TOKEN|niyazestan-backup-v1" | sha256sum | awk '{print $1}')
-          mkdir -p staging/media encrypted
-          chmod 700 staging encrypted
+          mkdir -p staging/media encrypted /tmp/restore-check
+          chmod 700 staging encrypted /tmp/restore-check
           curl -fsS --retry 3 --max-time 90 -H "X-Niyazestan-Cron: $CRON_KEY" https://websaza.ir/nz-backup-export.php -o staging/data.json
-          jq -e '.ok == true and (.data|type)=="object"' staging/data.json >/dev/null
+          jq -e '.ok == true and (.data|type)=="object" and (.data.posts|type)=="array" and (.data.users|type)=="array"' staging/data.json >/dev/null
           jq -r '.data.posts[]? | (.images[]? // empty), (.video // empty)' staging/data.json | sed '/^$/d' | sort -u > staging/media-files.txt
           while IFS= read -r file; do
             case "$file" in ''|*[!A-Za-z0-9._-]*) echo "Unsafe media filename in backup export" >&2; exit 1;; esac
             curl -fsS --retry 2 --max-time 90 "https://websaza.ir/marketplace-uploads/$file" -o "staging/media/$file"
           done < staging/media-files.txt
           printf '%s\n' "$(date -u +%FT%TZ)" > staging/generated-at.txt
-          jq -r '.data.posts|length as $p | .data.users|length as $u | "posts=\($p) users=\($u)"' staging/data.json > staging/summary.txt || true
+          jq -r '"posts=\(.data.posts|length) users=\(.data.users|length)"' staging/data.json > staging/summary.txt
           tar -C staging -czf /tmp/niazestan-backup.tar.gz .
           openssl enc -aes-256-cbc -salt -pbkdf2 -iter 250000 -md sha256 -pass env:BACKUP_KEY -in /tmp/niazestan-backup.tar.gz -out encrypted/niazestan-backup.enc
           printf '%s' "$BACKUP_KEY" | sha256sum | awk '{print $1}' > encrypted/key-id.txt
           printf '%s\n' "AES-256-CBC PBKDF2-SHA256 iter=250000" > encrypted/format.txt
-          rm -rf staging /tmp/niazestan-backup.tar.gz
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -md sha256 -pass env:BACKUP_KEY -in encrypted/niazestan-backup.enc -out /tmp/restore-check.tar.gz
+          tar -C /tmp/restore-check -xzf /tmp/restore-check.tar.gz
+          jq -e '.ok == true and (.data|type)=="object"' /tmp/restore-check/data.json >/dev/null
+          test "$(find /tmp/restore-check/media -type f | wc -l)" -eq "$(wc -l < /tmp/restore-check/media-files.txt)"
+          rm -rf staging /tmp/restore-check /tmp/niazestan-backup.tar.gz /tmp/restore-check.tar.gz
           test -s encrypted/niazestan-backup.enc
 
       - name: Store encrypted offsite artifact
