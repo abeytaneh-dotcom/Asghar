@@ -20,3 +20,17 @@ if(session_status()!==PHP_SESSION_ACTIVE){
     }
     @session_start();
 }
+if(session_status()===PHP_SESSION_ACTIVE){
+    $now=time();
+    $created=(int)($_SESSION['_created_at']??0);
+    $last=(int)($_SESSION['_last_at']??0);
+    if(($created>0&&$now-$created>30*86400)||($last>0&&$now-$last>7*86400)){
+        $_SESSION=[];
+        @session_regenerate_id(true);
+        $created=0;
+    }
+    if($created===0)$_SESSION['_created_at']=$now;
+    $regen=(int)($_SESSION['_regen_at']??0);
+    if($regen===0||$now-$regen>1800){@session_regenerate_id(true);$_SESSION['_regen_at']=$now;}
+    $_SESSION['_last_at']=$now;
+}
