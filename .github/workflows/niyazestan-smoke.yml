@@ -9,6 +9,7 @@ on:
       - 'WebSaza/marketplace-uploads/**'
       - 'WebSaza/.htaccess'
       - '.github/workflows/niyazestan-smoke.yml'
+      - '.github/workflows/deploy-websaza.yml'
   workflow_dispatch:
 
 jobs:
@@ -16,21 +17,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - name: Wait for current Niyazestan deployment
+      - name: Wait for this commit to be deployed
         shell: bash
         run: |
           set -euo pipefail
+          EXPECTED="${GITHUB_SHA:0:12}"
           for i in $(seq 1 50); do
             HTML=$(curl -fsS --max-time 12 https://websaza.ir/nz 2>/dev/null || true)
             SW=$(curl -fsS --max-time 12 https://websaza.ir/niazestan-sw.js 2>/dev/null || true)
-            if grep -Eq 'nz-brand-model\.js\?v=[a-f0-9]{12}' <<<"$HTML" \
+            HEALTH=$(curl -fsS --max-time 12 https://websaza.ir/nz-health.php 2>/dev/null || true)
+            RELEASE=$(jq -r '.release // empty' <<<"$HEALTH" 2>/dev/null || true)
+            if [ "$RELEASE" = "$EXPECTED" ] \
+              && grep -Eq 'nz-brand-model\.js\?v=[a-f0-9]{12}' <<<"$HTML" \
               && grep -Eq 'nz-a11y\.js\?v=[a-f0-9]{12}' <<<"$HTML" \
               && grep -Eq '^const CACHE="niazestan-[a-f0-9]{16}";' <<<"$SW"; then
-              echo "Current deployment is live."; exit 0
+              echo "Deployment for $EXPECTED is live."; exit 0
             fi
             sleep 10
           done
-          echo "Deployment did not become ready in time." >&2; exit 1
+          echo "Deployment for $EXPECTED did not become ready in time." >&2; exit 1
 
       - name: Check public application and security boundaries
         shell: bash
@@ -63,8 +68,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in nz-draft-preview.js nz-taxonomy-client.js nz-chat-live.js nz-brand-model.js nz-geocode-proxy.js nz-location-privacy.js nz-a11y.js; do curl -fsS --retry 6 --retry-all-errors --retry-delay 3 --max-time 25 "https://websaza.ir/$f" >/dev/null; done
+          for f in nz-draft-preview.js nz-taxonomy-client.js nz-chat-live.js nz-brand-model.js nz-geocode-proxy.js nz-location-privacy.js nz-a11y.js; do
+            echo "Checking $f"
+            curl -fsS --retry 6 --retry-all-errors --retry-delay 3 --max-time 25 "https://websaza.ir/$f" >/dev/null
+          done
+          echo "Checking service worker body"
           curl -fsS --retry 6 --retry-all-errors --retry-delay 3 --max-time 25 https://websaza.ir/niazestan-sw.js | grep -E '^const CACHE="niazestan-[a-f0-9]{16}";' >/dev/null
+          echo "Checking service worker content type"
           curl -fsS -D /tmp/sw-headers --retry 6 --retry-all-errors --retry-delay 3 --max-time 25 https://websaza.ir/niazestan-sw.js -o /dev/null
           grep -iE '^content-type:.*(application|text)/javascript' /tmp/sw-headers >/dev/null
-          curl -fsS --max-time 25 https://websaza.ir/nz-manifest.json | jq -e '.scope=="/nz" and .start_url=="/nz" and .display=="standalone"' >/dev/null
+          echo "Checking manifest scope/start_url/display"
+          curl -fsS --max-time 25 https://websaza.ir/nz-manifest.json | jq -e '.scope=="/nz" and .start_url=="/nz?source=pwa" and .display=="standalone"' >/dev/null
