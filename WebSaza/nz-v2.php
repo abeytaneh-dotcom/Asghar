@@ -6,6 +6,7 @@ require_once __DIR__ . '/nz-community.php';
 require_once __DIR__ . '/nz-support-default.php';
 require_once __DIR__ . '/nz-hardening.php';
 require_once __DIR__ . '/nz-otp.php';
+require_once __DIR__ . '/nz-admin-stepup.php';
 require_once __DIR__ . '/nz-detail-enhance.php';
 require_once __DIR__ . '/nz-chat-enhance.php';
 require_once __DIR__ . '/nz-search-enhance.php';
@@ -26,6 +27,12 @@ try {
     $action = (string)($_POST['action'] ?? '');
     $isPost = (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST');
 
+    if ($isPost && in_array($action, ['admin_stepup_request','admin_stepup_verify','admin_stepup_lock'], true)) {
+        nzauth_handle_post($action);
+    }
+    if ($isPost) {
+        nzauth_require_for_action($action);
+    }
     if ($isPost && in_array($action, ['request_ad_service','approve_service_payment','reject_service_payment'], true)) {
         nzl_prepare_request();
     }
@@ -135,6 +142,7 @@ try {
         $html = nzpm_enhance($html);
         $html = nzasec_enhance($html);
         $html = nzlegal_enhance($html);
+        $html = nzauth_enhance($html);
         $html = nzh_seo($html);
         $html = nzchat_enhance_html($html);
         $html = nzsupport_enhance($html);
