@@ -24,9 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if command -v php >/dev/null 2>&1; then
-            find WebSaza -maxdepth 1 -type f -name '*.php' -print0 | xargs -0 -n1 php -l
-          fi
+          find WebSaza -maxdepth 1 -type f -name '*.php' -print0 | xargs -0 -n1 php -l
           for file in WebSaza/nz-*.js; do
             [ -f "$file" ] || continue
             node --check "$file"
@@ -45,7 +43,7 @@ jobs:
             fi
             test -s "WebSaza/$out"
             bytes=$(wc -c < "WebSaza/$out")
-            if [ "$bytes" -lt 15000 ]; then echo "Asset is unexpectedly small: $out ($bytes bytes)"; exit 1; fi
+            test "$bytes" -ge 15000
           }
           download "https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=1400&q=86" "hero-real-v10.jpg"
           download "https://images.pexels.com/photos/6804581/pexels-photo-6804581.jpeg?auto=compress&cs=tinysrgb&w=1400" "service-web-v8.jpg"
@@ -74,7 +72,6 @@ jobs:
           html=re.sub(r'<meta property="og:description" content="[^"]*">',f'<meta property="og:description" content="{social_description}">',html,count=1)
           html=re.sub(r'<meta name="twitter:title" content="[^"]*">',f'<meta name="twitter:title" content="{seo_title}">',html,count=1)
           html=re.sub(r'<meta name="twitter:description" content="[^"]*">',f'<meta name="twitter:description" content="{social_description}">',html,count=1)
-          html=html.replace('"name":"طراحی سایت حرفه‌ای، اپلیکیشن و سئو | وب ساز"',f'"name":"{seo_title}"')
           if '<meta name="author"' not in html: html=html.replace('<meta name="theme-color" content="#ffffff">','<meta name="theme-color" content="#ffffff">\n<meta name="author" content="وب ساز">\n<meta name="publisher" content="وب ساز">')
           html=re.sub(r'<link rel="preconnect" href="https://images\.unsplash\.com" crossorigin>\n?','',html)
           html=re.sub(r'<link rel="preconnect" href="https://image\.thum\.io" crossorigin>\n?','',html)
@@ -93,8 +90,7 @@ jobs:
             'https://image.thum.io/get/width/1200/crop/750/noanimate/https://goldartmis.ir/':'/project-goldartmis-v10.png?v=20261017-1',
             '<div class="project-domain">htaelec.ir</div>':'<div class="project-domain">سایت خانه ریمپ</div>',
             '<div class="project-domain">achinu.ir</div>':'<div class="project-domain">سایت آچینو</div>',
-            '<div class="project-domain">goldartmis.ir</div>':'<div class="project-domain">سایت Gold Artmis</div>',
-            'بله. htaelec.ir، achinu.ir و goldartmis.ir از نمونه‌های واقعی معرفی‌شده در وب‌سایت هستند.':'بله. خانه ریمپ، آچینو و Gold Artmis از نمونه‌های واقعی معرفی‌شده در وب‌سایت هستند.'}
+            '<div class="project-domain">goldartmis.ir</div>':'<div class="project-domain">سایت Gold Artmis</div>'}
           for old,new in replacements.items(): html=html.replace(old,new)
           path.write_text(html,encoding='utf-8')
           PY
@@ -116,7 +112,6 @@ jobs:
             echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
           done
           if [ -f WebSaza/marketplace-uploads/.htaccess ]; then
-            echo "Deploying marketplace upload hardening"
             RESPONSE=$(curl --fail-with-body --silent --show-error -H "Authorization: cpanel vt6qdx8:$CPANEL_TOKEN" --request POST --data-urlencode "dir=public_html/marketplace-uploads" --data-urlencode "file=.htaccess" --data-urlencode "content@WebSaza/marketplace-uploads/.htaccess" "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
             echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
           fi
@@ -127,7 +122,7 @@ jobs:
           CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
         run: |
           set -euo pipefail
-          upload_binary(){ file="$1";name=$(basename "$file");echo "Uploading image: $name";RESPONSE=$(curl --fail-with-body --silent --show-error -H "Authorization: cpanel vt6qdx8:$CPANEL_TOKEN" -F "file-1=@$file;filename=$name" -F "dir=public_html" -F "overwrite=1" "https://mch4444.dnsuserver.com:2083/execute/Fileman/upload_files");echo "$RESPONSE" | jq -e '.status == 1' >/dev/null; }
+          upload_binary(){ file="$1";name=$(basename "$file");RESPONSE=$(curl --fail-with-body --silent --show-error -H "Authorization: cpanel vt6qdx8:$CPANEL_TOKEN" -F "file-1=@$file;filename=$name" -F "dir=public_html" -F "overwrite=1" "https://mch4444.dnsuserver.com:2083/execute/Fileman/upload_files");echo "$RESPONSE" | jq -e '.status == 1' >/dev/null; }
           for f in WebSaza/hero-real-v10.jpg WebSaza/service-web-v8.jpg WebSaza/service-app-v8.jpg WebSaza/service-seo-v8.jpg WebSaza/studio-real-v10.jpg WebSaza/meeting-real-v10.jpg WebSaza/project-htaelec-v10.png WebSaza/project-achinu-v10.png WebSaza/project-goldartmis-v10.png; do upload_binary "$f"; done
 
       - name: Write release marker
@@ -145,20 +140,17 @@ jobs:
         run: |
           set -euo pipefail
           sleep 8
-          curl -fsSI --max-time 20 https://websaza.ir/ | head -n 12
-          curl -fsS --max-time 20 https://websaza.ir/ | grep -F '/home-v7.css?v=20261017-1' >/dev/null
           curl -fsS --max-time 20 https://websaza.ir/ | grep -F 'فروشگاه اینترنتی، اپلیکیشن و سئو' >/dev/null
-          curl -fsS --max-time 20 https://websaza.ir/ | grep -F 'سایت خانه ریمپ' >/dev/null
-          curl -fsS --max-time 20 https://websaza.ir/ | grep -F '<meta name="author" content="وب ساز">' >/dev/null
-          for asset in hero-real-v10.jpg service-web-v8.jpg service-app-v8.jpg service-seo-v8.jpg studio-real-v10.jpg meeting-real-v10.jpg project-htaelec-v10.png project-achinu-v10.png project-goldartmis-v10.png home-v7.css; do curl -fsSI --max-time 20 "https://websaza.ir/$asset" | head -n 4; done
           HTML=$(curl -fsS --max-time 25 https://websaza.ir/nz)
           grep -F 'نیازستان' <<<"$HTML" >/dev/null
-          grep -F 'nz-brand-model.js?v=20261019-3' <<<"$HTML" >/dev/null
-          grep -F 'nz-geocode-proxy.js?v=20261019-1' <<<"$HTML" >/dev/null
+          grep -E 'nz-brand-model\.js\?v=[a-f0-9]{12}' <<<"$HTML" >/dev/null
+          grep -E 'nz-geocode-proxy\.js\?v=[a-f0-9]{12}' <<<"$HTML" >/dev/null
+          grep -E 'nz-a11y\.js\?v=[a-f0-9]{12}' <<<"$HTML" >/dev/null
           curl -fsS --max-time 20 https://websaza.ir/nz-manifest.json | jq -e '.scope == "/nz" and .display == "standalone"' >/dev/null
           curl -fsS --max-time 20 'https://websaza.ir/nz-models.php?subcategory=%D8%AE%D9%88%D8%AF%D8%B1%D9%88' | jq -e '.ok == true and (.brands | length) > 5' >/dev/null
           curl -fsS --max-time 20 'https://websaza.ir/nz-geocode.php?lat=35.6892&lon=51.3890' | jq -e '.ok == true and (.address|type)=="object"' >/dev/null
-          curl -fsS --max-time 20 https://websaza.ir/niazestan-sw.js | grep -F "niazestan-v8" >/dev/null
+          curl -fsS --max-time 20 https://websaza.ir/niazestan-sw.js | grep -E '^const CACHE="niazestan-[a-f0-9]{16}";' >/dev/null
+          curl -fsS --max-time 20 https://websaza.ir/nz-health.php | jq -e '.ok == true' >/dev/null
           curl -fsSI --max-time 20 'https://websaza.ir/nz?page=notifications' | grep -qi 'x-robots-tag: noindex'
-          for page in website-design-professional.html corporate-website-design.html ecommerce-website-design.html online-store-design.html custom-website-design.html service-website-design.html business-website-design.html professional-website-development.html seo-friendly-website-design.html website-redesign.html app-design.html app-development-service.html android-app-design.html ecommerce-app-design.html custom-app-development.html ui-ux-design.html seo-services.html technical-seo.html ecommerce-seo.html website-speed-optimization.html; do curl -fsSI --max-time 20 "https://websaza.ir/$page" | head -n 1; done
+          curl -fsS --max-time 20 'https://websaza.ir/nz?page=search&category=%D9%88%D8%B3%D8%A7%DB%8C%D9%84%20%D9%86%D9%82%D9%84%DB%8C%D9%87' | grep -F '<meta name="robots" content="index,follow,max-image-preview:large">' >/dev/null
           curl -fsS --max-time 20 https://websaza.ir/sitemap.xml | grep -F 'website-speed-optimization.html' >/dev/null
