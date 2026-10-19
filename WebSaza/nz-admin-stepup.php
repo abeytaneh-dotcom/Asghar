@@ -87,20 +87,21 @@ function nzauth_verify(): never {
     session_regenerate_id(true);$_SESSION['uid']=$uid;$_SESSION['nz_admin_stepup']=['uid'=>$uid,'until'=>time()+NZAUTH_ELEVATED_SECONDS,'fp'=>nzauth_fp()];unset($_SESSION['nz_admin_stepup_pending']);
     nzc_audit($uid,'admin_stepup_verified','admin',$uid);nzc_flash('ورود امن مدیریت انجام شد.','ok');nzc_redirect('/nz?page=admin');
 }
-function nzauth_logout_stepup(): never {
-    $u=nzauth_admin_user();if(!nzc_csrf_valid())throw new RuntimeException('درخواست نامعتبر است.');unset($_SESSION['nz_admin_stepup'],$_SESSION['nz_admin_stepup_pending']);nzc_audit($u,'admin_stepup_locked','admin',(string)$u['id']);nzc_redirect('/nz?page=admin');
-}
 function nzauth_change_admin_access(string $action): never {
     $admin=nzauth_admin_user();if(!nzauth_is_elevated($admin))throw new RuntimeException('ابتدا ورود امن مدیریت را تأیید کنید.');if(!nzauth_is_superadmin($admin))throw new RuntimeException('فقط مدیرکل می‌تواند دسترسی مدیران را تغییر دهد.');if(!nzc_csrf_valid())throw new RuntimeException('درخواست نامعتبر است.');
     $uid=trim((string)($_POST['user_id']??''));if($uid===''||$uid===(string)($admin['id']??''))throw new RuntimeException('کاربر انتخاب‌شده معتبر نیست.');
     nzc_db_write(function(&$db)use($uid,$action,$admin){$found=false;foreach($db['users']??[]as&$row){if((string)($row['id']??'')!==$uid)continue;$found=true;if($action==='admin_grant_access'){$row['role']='admin';$row['is_admin']=true;$row['admin_granted_at']=nzc_now();$row['admin_granted_by']=$admin['id'];}else{if((string)($row['role']??'')==='superadmin')throw new RuntimeException('دسترسی مدیرکل قابل حذف نیست.');$row['role']='user';$row['is_admin']=false;$row['admin_revoked_at']=nzc_now();$row['admin_revoked_by']=$admin['id'];}break;}unset($row);if(!$found)throw new RuntimeException('کاربر پیدا نشد.');});
     nzc_audit($admin,$action,'user',$uid);nzc_flash($action==='admin_grant_access'?'دسترسی مدیریت کاربر فعال شد.':'دسترسی مدیریت کاربر لغو شد.','ok');nzc_redirect('/nz?page=admin&tab=users');
 }
+function nzauth_logout_stepup(): never {
+    $accessAction=(string)($_POST['admin_access_action']??'');if(in_array($accessAction,['admin_grant_access','admin_revoke_access'],true))nzauth_change_admin_access($accessAction);
+    $u=nzauth_admin_user();if(!nzc_csrf_valid())throw new RuntimeException('درخواست نامعتبر است.');unset($_SESSION['nz_admin_stepup'],$_SESSION['nz_admin_stepup_pending']);nzc_audit($u,'admin_stepup_locked','admin',(string)$u['id']);nzc_redirect('/nz?page=admin');
+}
 function nzauth_handle_post(string $action): never {
-    if($action==='admin_stepup_request')nzauth_request();if($action==='admin_stepup_verify')nzauth_verify();if($action==='admin_stepup_lock')nzauth_logout_stepup();if(in_array($action,['admin_grant_access','admin_revoke_access'],true))nzauth_change_admin_access($action);throw new RuntimeException('درخواست امنیت مدیریت نامعتبر است.');
+    if($action==='admin_stepup_request')nzauth_request();if($action==='admin_stepup_verify')nzauth_verify();if($action==='admin_stepup_lock')nzauth_logout_stepup();throw new RuntimeException('درخواست امنیت مدیریت نامعتبر است.');
 }
 function nzauth_require_for_action(string $action): void {
-    if(!in_array($action,['approve_post','reject_post','resolve_report','admin_block_user','admin_unblock_user','admin_send_notice','admin_set_post_status','admin_toggle_featured','admin_resolve_report','admin_reopen_report','approve_service_payment','reject_service_payment','admin_grant_access','admin_revoke_access'],true))return;
+    if(!in_array($action,['approve_post','reject_post','resolve_report','admin_block_user','admin_unblock_user','admin_send_notice','admin_set_post_status','admin_toggle_featured','admin_resolve_report','admin_reopen_report','approve_service_payment','reject_service_payment'],true))return;
     $u=nzauth_admin_user();if(!nzauth_is_elevated($u)){nzc_flash('برای عملیات مدیریت ابتدا کد پیامکی را وارد کنید.','warn');nzc_redirect('/nz?page=admin');}
 }
 function nzauth_challenge_html(): string {
@@ -112,8 +113,8 @@ function nzauth_challenge_html(): string {
 }
 function nzauth_admin_access_html(array $db,array $admin): string {
     if(!nzauth_is_superadmin($admin))return'';$csrf=nzc_e($_SESSION['csrf']??'');$options='';$current='';
-    foreach($db['users']??[]as$u){$uid=(string)($u['id']??'');if($uid===''||$uid===(string)($admin['id']??''))continue;$label=trim((string)($u['name']??''));$phone=(string)($u['phone']??'');$label=($label!==''?$label.' - ':'').$phone;if(nzauth_is_admin_user($u)){$current.='<div class="nzadmin-row"><div class="nzadmin-grow"><b>'.nzc_e($label).'</b><small>مدیر مجاز</small></div>'.((string)($u['role']??'')==='superadmin'?'':'<form method="post"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="admin_revoke_access"><input type="hidden" name="user_id" value="'.nzc_e($uid).'"><button class="btn ghost">لغو دسترسی</button></form>').'</div>';}else{$options.='<option value="'.nzc_e($uid).'">'.nzc_e($label).'</option>';}}
-    $grant=$options!==''?'<form method="post" class="nzadmin-search"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="admin_grant_access"><select name="user_id" required>'.$options.'</select><button class="btn primary">اعطای دسترسی مدیر</button></form>':'<p class="subtle">کاربر دیگری برای اعطای دسترسی وجود ندارد.</p>';
+    foreach($db['users']??[]as$u){$uid=(string)($u['id']??'');if($uid===''||$uid===(string)($admin['id']??''))continue;$label=trim((string)($u['name']??''));$phone=(string)($u['phone']??'');$label=($label!==''?$label.' - ':'').$phone;if(nzauth_is_admin_user($u)){$current.='<div class="nzadmin-row"><div class="nzadmin-grow"><b>'.nzc_e($label).'</b><small>مدیر مجاز</small></div>'.((string)($u['role']??'')==='superadmin'?'':'<form method="post"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="admin_stepup_lock"><input type="hidden" name="admin_access_action" value="admin_revoke_access"><input type="hidden" name="user_id" value="'.nzc_e($uid).'"><button class="btn ghost">لغو دسترسی</button></form>').'</div>';}else{$options.='<option value="'.nzc_e($uid).'">'.nzc_e($label).'</option>';}}
+    $grant=$options!==''?'<form method="post" class="nzadmin-search"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="admin_stepup_lock"><input type="hidden" name="admin_access_action" value="admin_grant_access"><select name="user_id" required>'.$options.'</select><button class="btn primary">اعطای دسترسی مدیر</button></form>':'<p class="subtle">کاربر دیگری برای اعطای دسترسی وجود ندارد.</p>';
     return'<section class="surface" style="margin-bottom:14px"><h3>دسترسی مدیران</h3><p class="subtle">فقط مدیرکل می‌تواند مدیر جدید اضافه یا دسترسی او را لغو کند.</p>'.$grant.$current.'</section>';
 }
 function nzauth_replace_admin_main(string $html,string $replacement): string {
