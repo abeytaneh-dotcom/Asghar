@@ -8,12 +8,14 @@ require_once __DIR__ . '/nz-detail-enhance.php';
 require_once __DIR__ . '/nz-chat-enhance.php';
 require_once __DIR__ . '/nz-search-enhance.php';
 require_once __DIR__ . '/nz-market-upgrades.php';
+require_once __DIR__ . '/nz-lifecycle.php';
 require_once __DIR__ . '/nz-create-pending.php';
 require_once __DIR__ . '/nz-submit-server.php';
 
 nzh_headers();
 try {
     nzh_guard_request();
+    nzl_prepare_request();
     $action = (string)($_POST['action'] ?? '');
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && in_array($action, ['request_otp','verify_otp'], true)) {
         if (!nzotp_ready()) throw new RuntimeException('سرویس پیامک ورود هنوز روی سرور پیکربندی نشده است.');
@@ -107,6 +109,7 @@ try {
         $html = nzd_enhance($html);
         $html = nzs_enhance($html);
         $html = nzu_enhance($html);
+        $html = nzl_enhance($html);
         $html = nzh_seo($html);
         $html = nzchat_enhance_html($html);
         $installTag = '<script src="/nz-install-direct.js?v=20261019-6"></script>';
