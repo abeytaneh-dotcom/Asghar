@@ -17,7 +17,7 @@ $static=[
     nzsw_asset('nz-manifest.json'),nzsw_asset('niazestan-icon.svg'),nzsw_asset('niazestan-icon-192.php'),nzsw_asset('niazestan-icon-512.php'),
     nzsw_asset('nz-offline.html'),nzsw_asset('nz-install-direct.js'),nzsw_asset('nz-media-client.js'),nzsw_asset('nz-geocode-proxy.js'),
     nzsw_asset('nz-submit-wizard.js'),nzsw_asset('nz-location-privacy.js'),nzsw_asset('nz-taxonomy-client.js'),nzsw_asset('nz-spec-lite.js'),
-    nzsw_asset('nz-brand-model.js'),nzsw_asset('nz-image-moderation.js'),nzsw_asset('nz-draft-preview.js'),nzsw_asset('nz-chat-live.js')
+    nzsw_asset('nz-brand-model.js'),nzsw_asset('nz-image-moderation.js'),nzsw_asset('nz-draft-preview.js'),nzsw_asset('nz-chat-live.js'),nzsw_asset('nz-a11y.js')
 ];
 $cache='niazestan-'.substr(hash('sha256',implode('|',$static)),0,16);
 $staticJson=json_encode($static,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
