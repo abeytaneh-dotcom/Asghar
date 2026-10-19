@@ -15,6 +15,10 @@ function nzss_clean_attributes(mixed $raw): array {
     }
     return $out;
 }
+function nzss_location_id(string $type, string $value): string {
+    $normalized = nzm_normalize($value);
+    return $normalized === '' ? '' : $type.'_'.substr(hash('sha256', $normalized),0,12);
+}
 
 function nzss_duplicate_risk(array $db, string $userId, string $title, string $description): ?string {
     $needle = nzm_normalize($title.' '.$description);
@@ -78,6 +82,9 @@ function nzss_handle_create(): never {
     if (!$images) throw new RuntimeException('حداقل یک عکس برای آگهی انتخاب کنید.');
     [$video, $videoDuration] = nzcp_process_video($_FILES['video'] ?? [], (float)($_POST['video_duration'] ?? 0));
 
+    $provinceId=nzss_location_id('province',$province);
+    $cityId=nzss_location_id('city',$province.'|'.$city);
+    $districtId=$district!==''?nzss_location_id('district',$province.'|'.$city.'|'.$district):'';
     $post = [
         'id' => nzc_uid('p'),
         'user_id' => $user['id'],
@@ -86,13 +93,16 @@ function nzss_handle_create(): never {
         'category' => $category,
         'subcategory' => $subcategory,
         'province' => $province,
+        'province_id' => $provinceId,
         'city' => $city,
+        'city_id' => $cityId,
         'district' => $district,
+        'district_id' => $districtId,
         'street' => $street,
         'latitude' => $lat,
         'longitude' => $lng,
         'location_mode' => $mode,
-        'location' => ['province'=>$province,'city'=>$city,'district'=>$district,'street'=>$street,'lat'=>$lat,'lng'=>$lng,'mode'=>$mode],
+        'location' => ['province'=>$province,'province_id'=>$provinceId,'city'=>$city,'city_id'=>$cityId,'district'=>$district,'district_id'=>$districtId,'street'=>$street,'lat'=>$lat,'lng'=>$lng,'mode'=>$mode],
         'attributes' => $attributes,
         'price' => max(0, (int)($_POST['price'] ?? 0)),
         'images' => $images,
