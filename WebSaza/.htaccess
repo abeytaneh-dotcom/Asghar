@@ -16,6 +16,9 @@ RewriteRule \.(?:sqlite3?|db|log|bak|lock)$ - [R=404,L,NC]
 # Hide temporary diagnostics even if an old copy still exists on hosting.
 RewriteRule ^nz-capability\.php$ - [R=404,L]
 
+# Serve Niyazestan service worker through a stable dynamic endpoint.
+RewriteRule ^niazestan-sw\.js$ nz-sw.php [L]
+
 # Niyazestan sitemap.
 RewriteRule ^nz-sitemap\.xml$ nz-sitemap.php [L,QSA]
 
