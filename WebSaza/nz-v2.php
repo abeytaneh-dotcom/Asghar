@@ -16,6 +16,7 @@ require_once __DIR__ . '/nz-post-management.php';
 require_once __DIR__ . '/nz-admin-security.php';
 require_once __DIR__ . '/nz-notifications.php';
 require_once __DIR__ . '/nz-legal.php';
+require_once __DIR__ . '/nz-privacy-actions.php';
 require_once __DIR__ . '/nz-create-pending.php';
 require_once __DIR__ . '/nz-submit-server.php';
 
@@ -38,7 +39,7 @@ try {
     if ($isPost && in_array($action, ['notifications_read_all','notification_read'], true)) nzn_handle_post($action);
     if ($isPost && in_array($action, ['mark_sold','archive_post','restore_post','update_post'], true)) nzpm_handle_post($action);
     if ($isPost && in_array($action, ['admin_block_user','admin_unblock_user'], true)) nzasec_handle_post($action);
-    if ($isPost && in_array($action, ['delete_account','request_account_export'], true) && function_exists('nzlegal_handle_post')) nzlegal_handle_post($action);
+    if ($isPost && in_array($action, ['deactivate_account','request_account_export'], true)) nzprivacy_handle($action);
     if ($isPost && $action === 'create_post') nzss_handle_create();
 
     nzu_prepare_approval_watch();nzc_prepare_request();nzchat_mark_read();
