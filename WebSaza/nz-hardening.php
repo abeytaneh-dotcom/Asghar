@@ -56,6 +56,12 @@ function nzh_meta_replace(string $html, string $name, string $content): string {
 }
 
 function nzh_seo(string $html): string {
+    $html = str_replace(
+        ['</style>\\n</head>', '<!-- nz-community-v1 -->\\n</body>'],
+        ["</style>\n</head>", "<!-- nz-community-v1 -->\n</body>"],
+        $html
+    );
+
     $page=(string)($_GET['page']??'home'); $id=(string)($_GET['id']??'');
     $private=in_array($page,['login','new','profile','myposts','chat','admin','support','search','saved-searches'],true) || (!empty($_GET['q']) && $id==='');
     $robots=$private ? 'noindex,nofollow,noarchive' : 'index,follow,max-image-preview:large';
