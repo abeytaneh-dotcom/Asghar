@@ -4,6 +4,7 @@ require_once __DIR__ . '/nz-fileinfo-compat.php';
 require_once __DIR__ . '/nz-community.php';
 require_once __DIR__ . '/nz-hardening.php';
 require_once __DIR__ . '/nz-otp.php';
+require_once __DIR__ . '/nz-detail-enhance.php';
 require_once __DIR__ . '/nz-create-pending.php';
 require_once __DIR__ . '/nz-submit-server.php';
 
@@ -91,6 +92,7 @@ try {
             }
         }
 
+        $html = nzd_enhance($html);
         $html = nzh_seo($html);
         $installTag = '<script src="/nz-install-direct.js?v=20261019-6"></script>';
         $mediaTag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
