@@ -73,13 +73,14 @@ try {
 
         $installTag = '<script src="/nz-install-direct.js?v=20261019-6"></script>';
         $mediaTag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
+        $geoTag = '<script src="/nz-geocode-proxy.js?v=20261019-1"></script>';
         $wizardTag = '<script src="/nz-submit-wizard.js?v=20261019-3" defer></script>';
         $taxonomyTag = '<script src="/nz-taxonomy-client.js?v=20261019-1" defer></script>';
         $specTag = '<script src="/nz-spec-lite.js?v=20261019-1" defer></script>';
         $brandModelTag = '<script src="/nz-brand-model.js?v=20261019-3" defer></script>';
         $moderationTag = '<script src="/nz-image-moderation.js?v=20261019-1" defer></script>';
         $draftTag = '<script src="/nz-draft-preview.js?v=20261019-1" defer></script>';
-        $html = str_replace('</head>', $installTag."\n</head>", $html);$html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n".$taxonomyTag."\n".$specTag."\n".$brandModelTag."\n".$moderationTag."\n".$draftTag."\n</body>", $html);echo $html;
+        $html = str_replace('</head>', $installTag."\n".$geoTag."\n</head>", $html);$html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n".$taxonomyTag."\n".$specTag."\n".$brandModelTag."\n".$moderationTag."\n".$draftTag."\n</body>", $html);echo $html;
     }
 } catch (Throwable $e) {
     if (ob_get_level() > 0) ob_end_clean();if (function_exists('flash')) {flash($e->getMessage(), 'error');header('Location: /nz?page=new');exit;}nzc_flash($e->getMessage(), 'error');http_response_code(400);header('Content-Type: text/html; charset=utf-8');echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:560px;margin:60px auto;padding:20px"><h2>خطا در بارگذاری</h2><p>'.htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8').'</p><a href="/nz?page=new">بازگشت به ثبت آگهی</a></div>';
