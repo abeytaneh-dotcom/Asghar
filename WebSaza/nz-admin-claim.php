@@ -13,8 +13,8 @@ header('X-Frame-Options: DENY');
 header('Referrer-Policy: no-referrer');
 header("Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'");
 
-const NZ_ADMIN_CLAIM_HASH = 'a31897c43a07d371eb8d9b4cde53b79f4040fd2d708530179fdd5552bc5b7406';
-const NZ_ADMIN_CLAIM_EXPIRES_AT = 1792400609;
+const NZ_ADMIN_CLAIM_HASH = 'bcfddda02c61cd007f39eeb77702f7a6c52a3a0a2abfc15eae2f59550356661c';
+const NZ_ADMIN_CLAIM_EXPIRES_AT = 1792400856;
 
 function nzclaim_page(string $title,string $message,int $status=200): never {
     http_response_code($status);
