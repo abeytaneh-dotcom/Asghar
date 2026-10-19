@@ -1,0 +1,41 @@
+name: Niyazestan Encrypted Backup
+
+on:
+  schedule:
+    - cron: '43 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download authenticated backup and encrypt it
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CPANEL_TOKEN"
+          CRON_KEY=$(printf '%s' "$CPANEL_TOKEN" | sha256sum | awk '{print $1}')
+          BACKUP_KEY=$(printf 'niyazestan-backup|%s' "$CPANEL_TOKEN" | sha256sum | awk '{print $1}')
+          curl -fsS --retry 3 --retry-delay 5 --max-time 60 \
+            -H "X-Niyazestan-Cron: $CRON_KEY" \
+            https://websaza.ir/nz-backup-export.php \
+            -o niyazestan-backup.json
+          jq -e '.ok == true and .version >= 2 and (.data|type == "object")' niyazestan-backup.json >/dev/null
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+            -pass env:BACKUP_KEY \
+            -in niyazestan-backup.json \
+            -out "niyazestan-$(date -u +%Y-%m-%d).json.enc"
+          rm -f niyazestan-backup.json
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: niyazestan-encrypted-backup-${{ github.run_id }}
+          path: niyazestan-*.json.enc
+          retention-days: 30
+          if-no-files-found: error
