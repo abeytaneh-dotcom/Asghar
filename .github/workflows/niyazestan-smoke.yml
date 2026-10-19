@@ -1,0 +1,43 @@
+name: Niyazestan Smoke QA
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'WebSaza/nz-*'
+      - 'WebSaza/niazestan-*'
+      - 'WebSaza/.htaccess'
+      - '.github/workflows/niyazestan-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for deployment
+        run: sleep 75
+
+      - name: Check public application and security boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 25 https://websaza.ir/nz | grep -F 'نیازستان' >/dev/null
+          curl -fsS --max-time 25 'https://websaza.ir/nz?page=login' | grep -F 'ورود' >/dev/null
+          curl -fsS --max-time 25 https://websaza.ir/nz-taxonomy.php | jq -e '.ok == true and (.categories|length) >= 10 and (.provinces|length) == 31' >/dev/null
+          curl -fsS --max-time 25 'https://websaza.ir/nz-models.php?subcategory=%D8%AE%D9%88%D8%AF%D8%B1%D9%88' | jq -e '.ok == true and (.brands|length) > 5' >/dev/null
+          curl -fsS --max-time 25 https://websaza.ir/nz-sitemap.xml | grep -F '<urlset' >/dev/null
+          curl -fsS --max-time 25 https://websaza.ir/nz-offline.html | grep -F 'اتصال اینترنت برقرار نیست' >/dev/null
+          code=$(curl -sS -o /tmp/cron.json -w '%{http_code}' --max-time 25 https://websaza.ir/nz-lifecycle-cron.php)
+          test "$code" = "403"
+          code=$(curl -sS -o /tmp/private -w '%{http_code}' --max-time 25 https://websaza.ir/.marketplace-data/data.json)
+          test "$code" = "404"
+          curl -fsSI --max-time 25 'https://websaza.ir/nz?page=login' | grep -i 'cache-control:.*no-store' >/dev/null
+          curl -fsSI --max-time 25 'https://websaza.ir/nz?page=login' | grep -i 'content-security-policy:' >/dev/null
+
+      - name: Check static upgrade assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in nz-draft-preview.js nz-taxonomy-client.js nz-chat-live.js niyazestan-sw.js; do
+            curl -fsSI --max-time 25 "https://websaza.ir/$f" | head -n 1 | grep -E '200|304' >/dev/null
+          done
