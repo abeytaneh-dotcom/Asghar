@@ -1,30 +1,28 @@
 name: WebSaza Lighthouse QA
 
 on:
-  push:
+  workflow_run:
+    workflows: ['Deploy WebSaza to cPanel']
     branches: [websaza-hosting]
-    paths:
-      - 'WebSaza/**'
-      - '.github/workflows/websaza-lighthouse.yml'
+    types: [completed]
   workflow_dispatch:
 
 jobs:
   audit:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
-      - name: Wait for deployment
-        run: sleep 90
-
       - name: Run Lighthouse for WebSaza
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
           npx -y lighthouse@13.0.1 https://websaza.ir/ --only-categories=performance,accessibility,best-practices,seo --output=json --output=html --output-path="$GITHUB_WORKSPACE/websaza-lighthouse" --chrome-flags="--headless --no-sandbox --disable-gpu" --quiet
 
       - name: Run Lighthouse for Niyazestan
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
           npx -y lighthouse@13.0.1 https://websaza.ir/nz --only-categories=performance,accessibility,best-practices,seo --output=json --output=html --output-path="$GITHUB_WORKSPACE/niyazestan-lighthouse" --chrome-flags="--headless --no-sandbox --disable-gpu" --quiet
 
       - name: Print and enforce scores
@@ -47,7 +45,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: websaza-niyazestan-lighthouse
+          name: websaza-niyazestan-lighthouse-${{ github.run_id }}
           path: |
             websaza-lighthouse.report.json
             websaza-lighthouse.report.html
