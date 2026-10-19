@@ -13,9 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Wait for deployment
-        run: sleep 45
+        run: sleep 70
 
-      - name: Run Lighthouse
+      - name: Run Lighthouse for WebSaza
         shell: bash
         run: |
           set -e
@@ -25,20 +25,40 @@ jobs:
             --output-path="$GITHUB_WORKSPACE/websaza-lighthouse" \
             --chrome-flags="--headless --no-sandbox --disable-gpu" \
             --quiet
+
+      - name: Run Lighthouse for Niyazestan
+        shell: bash
+        run: |
+          set -e
+          npx -y lighthouse@13.0.1 https://websaza.ir/nz \
+            --only-categories=performance,accessibility,best-practices,seo \
+            --output=json --output=html \
+            --output-path="$GITHUB_WORKSPACE/niyazestan-lighthouse" \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --quiet
+
+      - name: Print scores
+        shell: bash
+        run: |
           node - <<'NODE'
           const fs=require('fs');
-          const r=JSON.parse(fs.readFileSync('websaza-lighthouse.report.json','utf8'));
-          for (const k of ['performance','accessibility','best-practices','seo']) console.log(`${k}: ${Math.round(r.categories[k].score*100)}`);
-          console.log('LCP:',r.audits['largest-contentful-paint'].displayValue);
-          console.log('CLS:',r.audits['cumulative-layout-shift'].displayValue);
-          console.log('TBT:',r.audits['total-blocking-time'].displayValue);
+          for (const name of ['websaza','niyazestan']) {
+            const r=JSON.parse(fs.readFileSync(`${name}-lighthouse.report.json`,'utf8'));
+            console.log(`\n${name.toUpperCase()}`);
+            for (const k of ['performance','accessibility','best-practices','seo']) console.log(`${k}: ${Math.round(r.categories[k].score*100)}`);
+            console.log('LCP:',r.audits['largest-contentful-paint'].displayValue);
+            console.log('CLS:',r.audits['cumulative-layout-shift'].displayValue);
+            console.log('TBT:',r.audits['total-blocking-time'].displayValue);
+          }
           NODE
 
-      - name: Upload Lighthouse report
+      - name: Upload Lighthouse reports
         uses: actions/upload-artifact@v4
         with:
-          name: websaza-lighthouse
+          name: websaza-niyazestan-lighthouse
           path: |
             websaza-lighthouse.report.json
             websaza-lighthouse.report.html
-          retention-days: 3
+            niyazestan-lighthouse.report.json
+            niyazestan-lighthouse.report.html
+          retention-days: 5
