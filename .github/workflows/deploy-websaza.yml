@@ -121,21 +121,6 @@ jobs:
             echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
           done
 
-      - name: Deploy Niyazestan directory entry
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f WebSaza/nz/index.php ]; then
-            RESPONSE=$(curl --fail-with-body --silent --show-error \
-              -H "Authorization: cpanel vt6qdx8:${{ secrets.WEBSAZA_CPANEL_TOKEN }}" \
-              --request POST \
-              --data-urlencode "dir=public_html/nz" \
-              --data-urlencode "file=index.php" \
-              --data-urlencode "content@WebSaza/nz/index.php" \
-              "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
-            echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
-          fi
-
       - name: Upload image assets via cPanel UAPI
         shell: bash
         run: |
@@ -162,7 +147,7 @@ jobs:
           upload_binary WebSaza/project-achinu-v10.png
           upload_binary WebSaza/project-goldartmis-v10.png
 
-      - name: Verify live domain
+      - name: Verify live domain and Niyazestan
         shell: bash
         run: |
           set -euo pipefail
@@ -180,6 +165,12 @@ jobs:
             echo "Checking $asset"
             curl -fsSI --max-time 20 "https://websaza.ir/$asset" | head -n 4
           done
+          echo "Niyazestan runtime"
+          curl -fsS --max-time 20 https://websaza.ir/nz | grep -F 'نیازستان' >/dev/null
+          curl -fsS --max-time 20 https://websaza.ir/nz | grep -F 'nz-image-moderation.js?v=20261019-1' >/dev/null
+          curl -fsS --max-time 20 https://websaza.ir/nz-manifest.json | jq -e '.scope == "/nz" and .display == "standalone"' >/dev/null
+          curl -fsS --max-time 20 'https://websaza.ir/nz-models.php?subcategory=%D8%AE%D9%88%D8%AF%D8%B1%D9%88' | jq -e '.ok == true and (.brands | length) > 5' >/dev/null
+          curl -fsSI --max-time 20 https://websaza.ir/nz-image-moderation.js | head -n 4
           echo "SEO landing pages"
           for page in website-design-professional.html corporate-website-design.html ecommerce-website-design.html online-store-design.html custom-website-design.html service-website-design.html business-website-design.html professional-website-development.html seo-friendly-website-design.html website-redesign.html app-design.html app-development-service.html android-app-design.html ecommerce-app-design.html custom-app-development.html ui-ux-design.html seo-services.html technical-seo.html ecommerce-seo.html website-speed-optimization.html; do
             echo "Checking $page"
