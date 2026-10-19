@@ -13,6 +13,7 @@ require_once __DIR__ . '/nz-market-upgrades.php';
 require_once __DIR__ . '/nz-lifecycle.php';
 require_once __DIR__ . '/nz-post-management.php';
 require_once __DIR__ . '/nz-admin-security.php';
+require_once __DIR__ . '/nz-legal.php';
 require_once __DIR__ . '/nz-create-pending.php';
 require_once __DIR__ . '/nz-submit-server.php';
 
@@ -133,6 +134,7 @@ try {
         $html = nzl_enhance($html);
         $html = nzpm_enhance($html);
         $html = nzasec_enhance($html);
+        $html = nzlegal_enhance($html);
         $html = nzh_seo($html);
         $html = nzchat_enhance_html($html);
         $html = nzsupport_enhance($html);
