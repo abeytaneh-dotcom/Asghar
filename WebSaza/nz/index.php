@@ -1,3 +1,8 @@
 <?php
 declare(strict_types=1);
-require dirname(__DIR__) . '/nz-v2.php';
+$root = dirname(__DIR__);
+require_once $root . '/nz-external-feeds.php';
+nzext_maybe_sync();
+ob_start('nzext_output_filter');
+require $root . '/nz-v2.php';
+if (ob_get_level() > 0) ob_end_flush();
