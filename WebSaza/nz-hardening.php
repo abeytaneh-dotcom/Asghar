@@ -17,6 +17,7 @@ function nzh_rate_limit(string $bucket, int $limit, int $windowSeconds): void {
     $now=time(); $key=nzh_client_key().'|'.$bucket; $rows=array_values(array_filter((array)($data[$key]??[]), static fn($t)=>is_int($t)&&$t>$now-$windowSeconds));
     if (count($rows) >= $limit) {
         flock($fh,LOCK_UN); fclose($fh);
+        if ($bucket === 'otp_request') throw new RuntimeException('برای دریافت مجدد کد ورود باید ۶۰ ثانیه صبر کنید.');
         throw new RuntimeException('تعداد درخواست‌های شما زیاد است. چند دقیقه بعد دوباره تلاش کنید.');
     }
     $rows[]=$now; $data[$key]=$rows;
@@ -31,7 +32,7 @@ function nzh_guard_request(): void {
     $action=(string)($_POST['action']??'');
     match($action) {
         'create_post' => nzh_rate_limit('create_post', 6, 3600),
-        'request_otp' => nzh_rate_limit('otp_request', 5, 600),
+        'request_otp' => nzh_rate_limit('otp_request', 1, 60),
         'verify_otp' => nzh_rate_limit('otp_verify', 10, 600),
         'send_message','support_send' => nzh_rate_limit('message', 35, 60),
         'report_post' => nzh_rate_limit('report', 12, 3600),
@@ -53,6 +54,21 @@ function nzh_meta_replace(string $html, string $name, string $content): string {
     $replacement = '<meta name="'.$name.'" content="'.$safe.'">';
     if (preg_match($pattern,$html)) return preg_replace($pattern,$replacement,$html,1) ?? $html;
     return str_replace('</head>', $replacement."\n</head>", $html);
+}
+
+function nzh_otp_ui(string $html): string {
+    nzc_session_open();
+    $otp = $_SESSION['otp'] ?? [];
+    $sentAt = is_array($otp) ? (int)($otp['sent_at'] ?? 0) : 0;
+    $remaining = $sentAt > 0 ? max(0, 60 - (time() - $sentAt)) : 0;
+    $phone = is_array($otp) ? (string)($otp['phone'] ?? '') : '';
+    $csrf = (string)($_SESSION['csrf'] ?? '');
+    $cfg = json_encode(['remaining'=>$remaining,'phone'=>$phone,'csrf'=>$csrf], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    if ($cfg === false) return $html;
+
+    $ui = '<style id="nz-otp-cooldown-style">.nz-otp-resend{margin-top:14px}.nz-otp-resend button:disabled,form[data-nz-otp-request] button:disabled{opacity:.55;cursor:not-allowed}.nz-otp-countdown{display:block;text-align:center;margin-top:9px;font-size:12px;color:#70757d;min-height:19px}</style>';
+    $ui .= '<script id="nz-otp-cooldown-script">(()=>{const cfg='.$cfg.';const KEY="nzOtpCooldownUntil";const PHONE="nzOtpPhone";const fa=n=>new Intl.NumberFormat("fa-IR",{useGrouping:false}).format(n);let until=0;try{until=Number(sessionStorage.getItem(KEY)||0)||0}catch(_){}if(cfg.remaining>0)until=Math.max(until,Date.now()+cfg.remaining*1000);const statusFor=btn=>{let s=btn.parentElement&&btn.parentElement.querySelector(".nz-otp-countdown");if(!s){s=document.createElement("small");s.className="nz-otp-countdown";btn.insertAdjacentElement("afterend",s)}return s};const bindButton=(form,btn,status)=>{const original=btn.dataset.nzOriginal||btn.textContent.trim()||"دریافت کد ورود";btn.dataset.nzOriginal=original;const render=()=>{const sec=Math.max(0,Math.ceil((until-Date.now())/1000));if(sec>0){btn.disabled=true;if(!btn.dataset.nzSending)btn.textContent=original;status.textContent="دریافت مجدد کد تا "+fa(sec)+" ثانیه دیگر"}else{btn.disabled=false;btn.dataset.nzSending="";btn.textContent=original;status.textContent="";try{sessionStorage.removeItem(KEY)}catch(_){}}};form.addEventListener("submit",()=>{until=Date.now()+60000;try{sessionStorage.setItem(KEY,String(until));const p=form.querySelector("input[name=phone]");if(p&&p.value)sessionStorage.setItem(PHONE,p.value)}catch(_){}btn.disabled=true;btn.dataset.nzSending="1";btn.textContent="در حال ارسال کد…";render()});render();setInterval(render,250)};const requestInput=document.querySelector("form input[name=action][value=request_otp]");if(requestInput){const form=requestInput.form;form.dataset.nzOtpRequest="1";const btn=form.querySelector("button");if(btn)bindButton(form,btn,statusFor(btn))}const verifyInput=document.querySelector("form input[name=action][value=verify_otp]");if(verifyInput&&cfg.phone){const verifyForm=verifyInput.form;if(!document.querySelector(".nz-otp-resend")){const form=document.createElement("form");form.method="post";form.className="nz-otp-resend";form.dataset.nzOtpRequest="1";const add=(name,value)=>{const i=document.createElement("input");i.type="hidden";i.name=name;i.value=value;form.appendChild(i)};add("csrf",cfg.csrf);add("action","request_otp");add("phone",cfg.phone);const btn=document.createElement("button");btn.type="submit";btn.className="btn ghost";btn.style.width="100%";btn.textContent="دریافت مجدد کد";form.appendChild(btn);const s=document.createElement("small");s.className="nz-otp-countdown";form.appendChild(s);verifyForm.insertAdjacentElement("afterend",form);bindButton(form,btn,s)}}})();</script>';
+    return str_replace('</body>', $ui.'</body>', $html);
 }
 
 function nzh_seo(string $html): string {
@@ -91,5 +107,7 @@ function nzh_seo(string $html): string {
         '<meta property="og:url" content="'.htmlspecialchars($canonical,ENT_QUOTES,'UTF-8').'">'.
         '<meta property="og:image" content="'.htmlspecialchars($image,ENT_QUOTES,'UTF-8').'">'."\n".
         '<script type="application/ld+json">'.json_encode($schema,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).'</script>'."\n";
-    return str_replace('</head>',$og.'</head>',$html);
+    $html = str_replace('</head>',$og.'</head>',$html);
+    if ($page === 'login') $html = nzh_otp_ui($html);
+    return $html;
 }
