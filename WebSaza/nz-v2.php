@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/nz-fileinfo-compat.php';
 require_once __DIR__ . '/nz-community.php';
+require_once __DIR__ . '/nz-support-default.php';
 require_once __DIR__ . '/nz-hardening.php';
 require_once __DIR__ . '/nz-otp.php';
 require_once __DIR__ . '/nz-detail-enhance.php';
@@ -15,6 +16,8 @@ require_once __DIR__ . '/nz-submit-server.php';
 nzh_headers();
 try {
     nzh_guard_request();
+    nzsupport_touch_current_user();
+    nzsupport_ensure_for_current_user();
     nzl_prepare_request();
     $action = (string)($_POST['action'] ?? '');
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && in_array($action, ['request_otp','verify_otp'], true)) {
@@ -112,6 +115,7 @@ try {
         $html = nzl_enhance($html);
         $html = nzh_seo($html);
         $html = nzchat_enhance_html($html);
+        $html = nzsupport_enhance($html);
         $installTag = '<script src="/nz-install-direct.js?v=20261019-6"></script>';
         $mediaTag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
         $wizardTag = '<script src="/nz-submit-wizard.js?v=20261019-3" defer></script>';
