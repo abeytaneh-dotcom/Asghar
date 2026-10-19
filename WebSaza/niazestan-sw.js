@@ -1,6 +1,6 @@
-const CACHE='niazestan-v6';
+const CACHE='niazestan-v7';
 const STATIC=[
-  '/nz-manifest.json?v=20261019-4',
+  '/nz-manifest.json?v=20261019-5',
   '/niazestan-icon.svg',
   '/niazestan-icon-192.php?v=20261019-2',
   '/niazestan-icon-512.php?v=20261019-2',
@@ -8,19 +8,21 @@ const STATIC=[
   '/nz-install-direct.js?v=20261019-6',
   '/nz-media-client.js?v=20261019-2',
   '/nz-submit-wizard.js?v=20261019-3',
+  '/nz-taxonomy-client.js?v=20261019-1',
   '/nz-spec-lite.js?v=20261019-1',
   '/nz-brand-model.js?v=20261019-2',
   '/nz-image-moderation.js?v=20261019-1',
+  '/nz-draft-preview.js?v=20261019-1',
   '/nz-chat-live.js?v=20261019-2'
 ];
 const NEVER_CACHE_PATHS=[
   '/nz-chat-api.php','/nz-lifecycle-cron.php','/nz-models.php','/nz-taxonomy.php',
-  '/nz-sitemap.php','/nz-sms-health.php'
+  '/nz-sitemap.php','/nz-sms-status.php','/nz-backup-export.php','/nz-sw.php'
 ];
 function isPrivateNavigation(url){
   if(url.pathname!=='/nz') return false;
   const page=url.searchParams.get('page')||'';
-  return ['login','new','profile','myposts','chat','chats','admin','support','saved-searches','services','edit'].includes(page);
+  return ['login','new','profile','myposts','chat','chats','admin','support','saved-searches','services','edit','notifications'].includes(page);
 }
 function isStatic(url){
   if(url.origin!==self.location.origin) return false;
@@ -55,7 +57,10 @@ self.addEventListener('fetch',event=>{
 
   if(isStatic(url)){
     event.respondWith(caches.match(event.request).then(hit=>hit||fetch(event.request).then(response=>{
-      if(response&&response.ok){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy)).catch(()=>{});}
+      if(response&&response.ok){
+        const copy=response.clone();
+        caches.open(CACHE).then(cache=>cache.put(event.request,copy)).catch(()=>{});
+      }
       return response;
     })));
   }
