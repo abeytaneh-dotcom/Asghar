@@ -6,6 +6,7 @@ on:
     paths:
       - 'WebSaza/**'
       - '.github/workflows/deploy-websaza.yml'
+      - '.github/workflows/niyazestan-smoke.yml'
   workflow_dispatch:
 
 concurrency:
