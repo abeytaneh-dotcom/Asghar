@@ -11,35 +11,82 @@ function nzotp_legacy_settings(): array {
     if (function_exists('ws_raw_read')) return ws_raw_read($file);
     $raw=@file_get_contents($file); $data=json_decode($raw?:'',true); return is_array($data)?$data:[];
 }
+function nzotp_legacy_key(array $c): string {
+    if (function_exists('ws_sms_key')) return trim((string)ws_sms_key($c));
+    foreach(['sms_api_key','faraz_api_key','ippanel_api_key','api_key'] as $k){$v=trim((string)($c[$k]??''));if($v!=='')return$v;}
+    foreach(['FARAZ_SMS_API_KEY','IPPANEL_API_KEY','SMS_API_KEY'] as $k){$v=nzotp_env($k);if($v!=='')return$v;}
+    return'';
+}
 function nzotp_legacy_pattern(): string {
     $env=nzotp_env('NIAZESTAN_OTP_PATTERN'); if($env!=='')return$env;
     $c=nzotp_legacy_settings();
     foreach(['niazestan_otp_pattern','sms_login_pattern','sms_recovery_pattern'] as$k){$v=trim((string)($c[$k]??''));if($v!=='')return$v;}
-    return'';
+    // شناسه عمومی همان پترنی است که زیرساخت پیامک وب‌ساز برای کد تأیید استفاده می‌کند.
+    return '4RXte6aAmq';
+}
+function nzotp_legacy_sender(array $c): string {
+    $v=trim((string)($c['sms_sender']??$c['sms_from_number']??''));
+    if($v!=='')return$v;
+    $env=nzotp_env('SMS_FROM_NUMBER'); if($env!=='')return$env;
+    return '90008361';
 }
 function nzotp_legacy_ready(): bool {
-    if(!function_exists('ws_sms_send_now')||!function_exists('ws_sms_key'))return false;
-    $c=nzotp_legacy_settings(); return nzotp_legacy_pattern()!=='' && ws_sms_key($c)!=='';
+    $c=nzotp_legacy_settings();
+    if(array_key_exists('sms_enabled',$c) && empty($c['sms_enabled'])) return false;
+    return nzotp_legacy_pattern()!=='' && nzotp_legacy_key($c)!=='' && function_exists('curl_init');
 }
 function nzotp_direct_ready(): bool {
-    return nzotp_env('IPPANEL_API_KEY')!=='' && nzotp_env('IPPANEL_PATTERN_CODE')!=='' && nzotp_env('IPPANEL_FROM_NUMBER')!=='';
+    return nzotp_env('IPPANEL_API_KEY')!=='' && nzotp_env('IPPANEL_PATTERN_CODE')!=='' && nzotp_env('IPPANEL_FROM_NUMBER')!=='' && function_exists('curl_init');
 }
 function nzotp_ready(): bool { return nzotp_legacy_ready() || nzotp_direct_ready(); }
 function nzotp_phone(string $phone): string {
     $p=preg_replace('/\D+/','',$phone)??'';
-    if(str_starts_with($p,'98')&&strlen($p)===12)$p='0'.substr($p,2);
+    if(str_starts_with($p,'0098'))$p=substr($p,4);
+    elseif(str_starts_with($p,'98')&&strlen($p)===12)$p='0'.substr($p,2);
     if(str_starts_with($p,'9')&&strlen($p)===10)$p='0'.$p;
     return $p;
 }
 function nzotp_e164(string $phone): string { return '+98'.substr($phone,1); }
 
+function nzotp_send_legacy(string $phone,string $code): bool {
+    $settings=nzotp_legacy_settings_file();
+    if(function_exists('ws_sms_send_now')){
+        $result=ws_sms_send_now($settings,$phone,nzotp_legacy_pattern(),['code'=>$code]);
+        return !empty($result['ok']);
+    }
+    $c=nzotp_legacy_settings(); $key=nzotp_legacy_key($c);
+    if($key===''||!function_exists('curl_init'))return false;
+    $payload=[
+        'code'=>nzotp_legacy_pattern(),
+        'attributes'=>(object)['code'=>$code],
+        'recipient'=>nzotp_phone($phone),
+        'line_number'=>nzotp_legacy_sender($c),
+        'number_format'=>'english',
+    ];
+    $ch=curl_init('https://api.iranpayamak.com/ws/v1/sms/pattern');
+    curl_setopt_array($ch,[
+        CURLOPT_POST=>true,
+        CURLOPT_POSTFIELDS=>json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),
+        CURLOPT_HTTPHEADER=>['Content-Type: application/json','Accept: application/json','Api-Key: '.$key],
+        CURLOPT_RETURNTRANSFER=>true,
+        CURLOPT_CONNECTTIMEOUT=>8,
+        CURLOPT_TIMEOUT=>20,
+        CURLOPT_IPRESOLVE=>CURL_IPRESOLVE_V4,
+        CURLOPT_HTTP_VERSION=>CURL_HTTP_VERSION_1_1,
+    ]);
+    $raw=curl_exec($ch); $http=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE); $err=(string)curl_error($ch); curl_close($ch);
+    if($raw===false||$err!==''||$http<200||$http>=300)return false;
+    $j=json_decode((string)$raw,true);
+    if(is_array($j)&&isset($j['status'])&&strtolower((string)$j['status'])!=='success')return false;
+    return true;
+}
+
 function nzotp_send_pattern(string $phone, string $code): void {
     if (nzotp_legacy_ready()) {
-        $result=ws_sms_send_now(nzotp_legacy_settings_file(),$phone,nzotp_legacy_pattern(),['code'=>$code]);
-        if(!empty($result['ok']))return;
-        throw new RuntimeException('ارسال کد ورود انجام نشد. کمی بعد دوباره تلاش کنید.');
+        if(nzotp_send_legacy($phone,$code))return;
+        throw new RuntimeException('سرویس پیامک در دسترس است اما ارسال کد پذیرفته نشد. تنظیمات پترن یا خط ارسال را بررسی کنید.');
     }
-    if (!nzotp_direct_ready() || !function_exists('curl_init')) throw new RuntimeException('سرویس پیامک ورود هنوز روی سرور پیکربندی نشده است.');
+    if (!nzotp_direct_ready()) throw new RuntimeException('سرویس پیامک ورود هنوز روی سرور پیکربندی نشده است.');
     $paramKey=nzotp_env('IPPANEL_PATTERN_PARAM'); if($paramKey==='')$paramKey='code';
     $payload=[
         'sending_type'=>'pattern',
