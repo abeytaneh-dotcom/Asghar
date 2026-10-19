@@ -49,8 +49,10 @@ function nzh_headers(): void {
 
 function nzh_meta_replace(string $html, string $name, string $content): string {
     $safe = htmlspecialchars($content, ENT_QUOTES, 'UTF-8');
-    if (preg_match('/<meta\s+name="'.preg_quote($name,'/').'"[^>]*>/iu',$html)) return preg_replace('/<meta\s+name="'.preg_quote($name,'/').'"[^>]*>/iu','<meta name="'.$name.'" content="'.$safe.'">',$html,1) ?? $html;
-    return str_replace('</head>','<meta name="'.$name.'" content="'.$safe.'">'."\n</head>",$html);
+    $pattern = '/<meta\s+name="'.preg_quote($name,'/').'"[^>]*>/iu';
+    $replacement = '<meta name="'.$name.'" content="'.$safe.'">';
+    if (preg_match($pattern,$html)) return preg_replace($pattern,$replacement,$html,1) ?? $html;
+    return str_replace('</head>', $replacement."\n</head>", $html);
 }
 
 function nzh_seo(string $html): string {
@@ -74,6 +76,14 @@ function nzh_seo(string $html): string {
     }
     $html=preg_replace('/<title>.*?<\/title>/isu','<title>'.htmlspecialchars($title,ENT_QUOTES,'UTF-8').'</title>',$html,1)??$html;
     $html=nzh_meta_replace($html,'description',$desc);
-    $og='\n<link rel="canonical" href="'.htmlspecialchars($canonical,ENT_QUOTES,'UTF-8').'">\n<meta property="og:type" content="website"><meta property="og:site_name" content="نیازستان"><meta property="og:title" content="'.htmlspecialchars($title,ENT_QUOTES,'UTF-8').'"><meta property="og:description" content="'.htmlspecialchars($desc,ENT_QUOTES,'UTF-8').'"><meta property="og:url" content="'.htmlspecialchars($canonical,ENT_QUOTES,'UTF-8').'"><meta property="og:image" content="'.htmlspecialchars($image,ENT_QUOTES,'UTF-8').'">\n<script type="application/ld+json">'.json_encode($schema,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).'</script>\n';
+    $og = "\n".
+        '<link rel="canonical" href="'.htmlspecialchars($canonical,ENT_QUOTES,'UTF-8').'">'."\n".
+        '<meta property="og:type" content="website">'.
+        '<meta property="og:site_name" content="نیازستان">'.
+        '<meta property="og:title" content="'.htmlspecialchars($title,ENT_QUOTES,'UTF-8').'">'.
+        '<meta property="og:description" content="'.htmlspecialchars($desc,ENT_QUOTES,'UTF-8').'">'.
+        '<meta property="og:url" content="'.htmlspecialchars($canonical,ENT_QUOTES,'UTF-8').'">'.
+        '<meta property="og:image" content="'.htmlspecialchars($image,ENT_QUOTES,'UTF-8').'">'."\n".
+        '<script type="application/ld+json">'.json_encode($schema,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).'</script>'."\n";
     return str_replace('</head>',$og.'</head>',$html);
 }
