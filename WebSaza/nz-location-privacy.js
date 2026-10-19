@@ -3,7 +3,7 @@
 function init(){
   const mode=document.querySelector('input[name="location_mode"]');
   if(mode&&(!mode.value||mode.value==='exact'))mode.value='approx';
-  const modal=document.querySelector('.nz-location-modal, #nzLocationModal, [data-nz-location-modal]');
+  const modal=document.querySelector('#nzProvince')?.closest('.nz-modal')||document.querySelector('.nz-location-modal, #nzLocationModal, [data-nz-location-modal]');
   const exact=modal?.querySelector('input[name="nzLocMode"][value="exact"]');
   const approx=modal?.querySelector('input[name="nzLocMode"][value="approx"]');
   if(approx&&mode?.value==='approx')approx.checked=true;
