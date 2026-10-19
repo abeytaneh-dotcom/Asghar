@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/nz-moderation.php';
 
 function nzs_attr(array $p,array $names):string{foreach((array)($p['attributes']??[]) as $k=>$v)if(in_array((string)$k,$names,true))return trim((string)$v);return'';}
 function nzs_num(string $v):int{return(int)preg_replace('/\D+/u','',$v);}
