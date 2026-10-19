@@ -14,7 +14,8 @@ nzh_headers();
 try {
     nzh_guard_request();
     $action = (string)($_POST['action'] ?? '');
-    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && nzotp_ready()) {
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && in_array($action, ['request_otp','verify_otp'], true)) {
+        if (!nzotp_ready()) throw new RuntimeException('سرویس پیامک ورود هنوز روی سرور پیکربندی نشده است.');
         if ($action === 'request_otp') nzotp_request();
         if ($action === 'verify_otp') nzotp_verify();
     }
