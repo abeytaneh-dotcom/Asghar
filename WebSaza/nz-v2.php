@@ -5,6 +5,7 @@ require_once __DIR__ . '/nz-fileinfo-compat.php';
 require_once __DIR__ . '/nz-community.php';
 require_once __DIR__ . '/nz-support-default.php';
 require_once __DIR__ . '/nz-hardening.php';
+require_once __DIR__ . '/nz-assets.php';
 require_once __DIR__ . '/nz-otp.php';
 require_once __DIR__ . '/nz-admin-stepup.php';
 require_once __DIR__ . '/nz-detail-enhance.php';
@@ -52,11 +53,11 @@ try {
     require __DIR__ . '/nz-app.php';$html = ob_get_clean();
     if ($html !== false) {
         $html = nzc_transform($html);$html = nzm_enhance_admin_html($html);
-        $html = str_replace('<link rel="manifest" href="/nz-manifest.json">','<link rel="manifest" href="/nz-manifest.json?v=20261019-8" crossorigin="use-credentials">',$html);
-        $html = str_replace('<link rel="apple-touch-icon" href="/niazestan-icon.svg">','<link rel="apple-touch-icon" sizes="180x180" href="/niazestan-icon-180.php?v=20261019-2">',$html);
-        $html = str_replace('<link rel="icon" href="/niazestan-icon.svg" type="image/svg+xml">','<link rel="icon" type="image/png" sizes="192x192" href="/niazestan-icon-192.php?v=20261019-2"><link rel="icon" href="/niazestan-icon.svg" type="image/svg+xml">',$html);
+        $html = str_replace('<link rel="manifest" href="/nz-manifest.json">','<link rel="manifest" href="/nz-manifest.json?v=0" crossorigin="use-credentials">',$html);
+        $html = str_replace('<link rel="apple-touch-icon" href="/niazestan-icon.svg">','<link rel="apple-touch-icon" sizes="180x180" href="/niazestan-icon-180.php?v=0">',$html);
+        $html = str_replace('<link rel="icon" href="/niazestan-icon.svg" type="image/svg+xml">','<link rel="icon" type="image/png" sizes="192x192" href="/niazestan-icon-192.php?v=0"><link rel="icon" href="/niazestan-icon.svg" type="image/svg+xml">',$html);
         if (!str_contains($html, 'name="color-scheme"')) $html = str_replace('<meta name="theme-color" content="#ffffff">', '<meta name="theme-color" content="#ffffff"><meta name="color-scheme" content="only light">', $html);
-        $html = str_replace("navigator.serviceWorker.register('/niazestan-sw.js')","navigator.serviceWorker.register('/niazestan-sw.js?v=20261019-8',{scope:'/nz',updateViaCache:'none'})",$html);
+        $html = str_replace("navigator.serviceWorker.register('/niazestan-sw.js')","navigator.serviceWorker.register('/niazestan-sw.js?v=0',{scope:'/nz',updateViaCache:'none'})",$html);
 
         if (!empty($_GET['id'])) {
             $postId = (string)$_GET['id'];$detailPost = null;foreach (nzc_db_read()['posts'] as $candidate) {if (($candidate['id'] ?? '') === $postId) { $detailPost = $candidate; break; }}
@@ -72,17 +73,18 @@ try {
 
         $html = nzd_enhance($html);$html = nzs_enhance($html);$html = nzu_enhance($html);$html = nzl_enhance($html);$html = nzpm_enhance($html);$html = nzasec_enhance($html);$html = nzn_enhance($html);$html = nzlegal_enhance($html);$html = nzauth_enhance($html);$html = nzh_seo($html);$html = nzchat_enhance_html($html);$html = nzsupport_enhance($html);
 
-        $installTag = '<script src="/nz-install-direct.js?v=20261019-6"></script>';
-        $mediaTag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
-        $geoTag = '<script src="/nz-geocode-proxy.js?v=20261019-1"></script>';
-        $wizardTag = '<script src="/nz-submit-wizard.js?v=20261019-3" defer></script>';
-        $locationPrivacyTag = '<script src="/nz-location-privacy.js?v=20261019-1" defer></script>';
-        $taxonomyTag = '<script src="/nz-taxonomy-client.js?v=20261019-1" defer></script>';
-        $specTag = '<script src="/nz-spec-lite.js?v=20261019-1" defer></script>';
-        $brandModelTag = '<script src="/nz-brand-model.js?v=20261019-3" defer></script>';
-        $moderationTag = '<script src="/nz-image-moderation.js?v=20261019-1" defer></script>';
-        $draftTag = '<script src="/nz-draft-preview.js?v=20261019-1" defer></script>';
-        $html = str_replace('</head>', $installTag."\n".$geoTag."\n</head>", $html);$html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n".$locationPrivacyTag."\n".$taxonomyTag."\n".$specTag."\n".$brandModelTag."\n".$moderationTag."\n".$draftTag."\n</body>", $html);echo $html;
+        $installTag = '<script src="/nz-install-direct.js?v=0"></script>';
+        $mediaTag = '<script src="/nz-media-client.js?v=0" defer></script>';
+        $geoTag = '<script src="/nz-geocode-proxy.js?v=0"></script>';
+        $wizardTag = '<script src="/nz-submit-wizard.js?v=0" defer></script>';
+        $locationPrivacyTag = '<script src="/nz-location-privacy.js?v=0" defer></script>';
+        $taxonomyTag = '<script src="/nz-taxonomy-client.js?v=0" defer></script>';
+        $specTag = '<script src="/nz-spec-lite.js?v=0" defer></script>';
+        $brandModelTag = '<script src="/nz-brand-model.js?v=0" defer></script>';
+        $moderationTag = '<script src="/nz-image-moderation.js?v=0" defer></script>';
+        $draftTag = '<script src="/nz-draft-preview.js?v=0" defer></script>';
+        $a11yTag = '<script src="/nz-a11y.js?v=0" defer></script>';
+        $html = str_replace('</head>', $installTag."\n".$geoTag."\n</head>", $html);$html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n".$locationPrivacyTag."\n".$taxonomyTag."\n".$specTag."\n".$brandModelTag."\n".$moderationTag."\n".$draftTag."\n".$a11yTag."\n</body>", $html);$html=nzassets_rewrite($html);echo $html;
     }
 } catch (Throwable $e) {
     if (ob_get_level() > 0) ob_end_clean();if (function_exists('flash')) {flash($e->getMessage(), 'error');header('Location: /nz?page=new');exit;}nzc_flash($e->getMessage(), 'error');http_response_code(400);header('Content-Type: text/html; charset=utf-8');echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:560px;margin:60px auto;padding:20px"><h2>خطا در بارگذاری</h2><p>'.htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8').'</p><a href="/nz?page=new">بازگشت به ثبت آگهی</a></div>';
