@@ -1,0 +1,50 @@
+name: Niyazestan Live Feed Health
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'WebSaza/nz-external-feeds.php'
+      - 'WebSaza/nz/index.php'
+      - 'WebSaza/nz-feed-health.php'
+      - '.github/workflows/niyazestan-feed-health.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: niyazestan-live-feed-health
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger live feed sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 3 --retry-delay 3 --connect-timeout 15 --max-time 90 'https://websaza.ir/nz?feed_health_probe=1' -o /tmp/nz.html
+          grep -F 'نیازستان' /tmp/nz.html >/dev/null
+
+      - name: Verify Jobicy listings are populated
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            JSON=$(curl -fsS --retry 2 --connect-timeout 15 --max-time 30 'https://websaza.ir/nz-feed-health.php')
+            echo "$JSON" | jq .
+            if echo "$JSON" | jq -e '.ok == true and .jobicy.active > 0 and (.jobicy.last_success_at != null)' >/dev/null; then
+              ACTIVE=$(echo "$JSON" | jq -r '.jobicy.active')
+              TOTAL=$(echo "$JSON" | jq -r '.jobicy.total')
+              EXPIRED=$(echo "$JSON" | jq -r '.jobicy.expired')
+              LAST=$(echo "$JSON" | jq -r '.jobicy.last_success_at')
+              echo "JOBICY_ACTIVE=$ACTIVE"
+              echo "JOBICY_TOTAL=$TOTAL"
+              echo "JOBICY_EXPIRED=$EXPIRED"
+              echo "JOBICY_LAST_SUCCESS_AT=$LAST"
+              exit 0
+            fi
+            sleep 8
+          done
+          echo 'Jobicy live feed did not become healthy.' >&2
+          exit 1
