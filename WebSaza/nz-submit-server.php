@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/nz-controlled-validation.php';
+require_once __DIR__ . '/nz-moderation.php';
 
 function nzss_clean_attributes(mixed $raw): array {
     if (!is_array($raw)) return [];
@@ -13,6 +14,21 @@ function nzss_clean_attributes(mixed $raw): array {
         if ($val !== '') $out[$label] = $val;
     }
     return $out;
+}
+
+function nzss_duplicate_risk(array $db, string $userId, string $title, string $description): ?string {
+    $needle = nzm_normalize($title.' '.$description);
+    if (mb_strlen($needle) < 20) return null;
+    $cutoff = time() - 7 * 86400;
+    foreach (array_reverse($db['posts'] ?? []) as $p) {
+        if (($p['user_id'] ?? '') !== $userId || ($p['status'] ?? '') === 'deleted') continue;
+        if (strtotime((string)($p['created_at'] ?? '1970-01-01')) < $cutoff) continue;
+        $hay = nzm_normalize((string)($p['title'] ?? '').' '.(string)($p['description'] ?? ''));
+        if ($hay === '') continue;
+        similar_text($needle, $hay, $percent);
+        if ($percent >= 92) return 'احتمال آگهی تکراری توسط همین کاربر';
+    }
+    return null;
 }
 
 function nzss_handle_create(): never {
@@ -43,16 +59,24 @@ function nzss_handle_create(): never {
     $lat = (float)$latRaw;
     $lng = (float)$lngRaw;
     if ($lat < 24 || $lat > 40.5 || $lng < 43 || $lng > 64) throw new RuntimeException('موقعیت انتخاب‌شده خارج از محدوده قابل قبول است.');
-    if ($mode === 'approx') {
-        $lat = round($lat, 3);
-        $lng = round($lng, 3);
+    if ($mode === 'approx') { $lat = round($lat, 3); $lng = round($lng, 3); }
+
+    $attributes = nzss_clean_attributes($_POST['attributes'] ?? []);
+    nzcv_validate($category, $subcategory, $attributes);
+
+    $moderation = nzm_scan_submission($title, $desc, $attributes);
+    $duplicateReason = nzss_duplicate_risk($db, (string)$user['id'], $title, $desc);
+    if ($duplicateReason !== null) {
+        $moderation['flagged'] = true;
+        $moderation['priority'] = 'high';
+        $moderation['score'] = max(85, (int)($moderation['score'] ?? 0));
+        $moderation['reasons'][] = $duplicateReason;
+        $moderation['reasons'] = array_values(array_unique($moderation['reasons']));
     }
 
     $images = nzcp_process_images($_FILES['images'] ?? []);
     if (!$images) throw new RuntimeException('حداقل یک عکس برای آگهی انتخاب کنید.');
     [$video, $videoDuration] = nzcp_process_video($_FILES['video'] ?? [], (float)($_POST['video_duration'] ?? 0));
-    $attributes = nzss_clean_attributes($_POST['attributes'] ?? []);
-    nzcv_validate($category, $subcategory, $attributes);
 
     $post = [
         'id' => nzc_uid('p'),
@@ -68,15 +92,7 @@ function nzss_handle_create(): never {
         'latitude' => $lat,
         'longitude' => $lng,
         'location_mode' => $mode,
-        'location' => [
-            'province' => $province,
-            'city' => $city,
-            'district' => $district,
-            'street' => $street,
-            'lat' => $lat,
-            'lng' => $lng,
-            'mode' => $mode,
-        ],
+        'location' => ['province'=>$province,'city'=>$city,'district'=>$district,'street'=>$street,'lat'=>$lat,'lng'=>$lng,'mode'=>$mode],
         'attributes' => $attributes,
         'price' => max(0, (int)($_POST['price'] ?? 0)),
         'images' => $images,
@@ -86,6 +102,8 @@ function nzss_handle_create(): never {
         'phone_visible' => isset($_POST['phone_visible']),
         'status' => 'pending',
         'review_status' => 'pending',
+        'review_priority' => !empty($moderation['flagged']) ? 'high' : 'normal',
+        'moderation' => $moderation,
         'featured' => false,
         'views' => 0,
         'created_at' => nzc_now(),
@@ -95,10 +113,16 @@ function nzss_handle_create(): never {
 
     nzc_db_write(function (&$db) use ($post) {
         $db['posts'][] = $post;
-        nzc_support_message($db, $post['user_id'], 'آگهی «'.$post['title'].'» دریافت شد و برای بررسی مدیر ارسال شد. تا زمان تأیید مدیر برای سایر کاربران نمایش داده نمی‌شود.');
+        if (!empty($post['moderation']['flagged'])) nzm_add_system_report($db, $post);
+        $suffix = !empty($post['moderation']['flagged']) ? ' این آگهی توسط پایش خودکار برای بررسی فوری مدیر علامت‌گذاری شده است.' : '';
+        nzc_support_message($db, $post['user_id'], 'آگهی «'.$post['title'].'» دریافت شد و برای بررسی مدیر ارسال شد. تا زمان تأیید مدیر برای سایر کاربران نمایش داده نمی‌شود.'.$suffix);
         nzc_notify($db, $post['user_id'], 'آگهی «'.$post['title'].'» در انتظار تأیید مدیر است.');
     });
 
-    nzc_flash('آگهی برای بررسی مدیر ارسال شد. نتیجه تأیید یا رد در چت پشتیبانی برای شما فرستاده می‌شود.', 'ok');
+    if (!empty($moderation['flagged'])) {
+        nzc_flash('آگهی ثبت شد و به دلیل تشخیص محتوای مشکوک با اولویت بالا برای بررسی مدیر ارسال شد. تا تصمیم مدیر منتشر نمی‌شود.', 'warn');
+    } else {
+        nzc_flash('آگهی برای بررسی مدیر ارسال شد. نتیجه تأیید یا رد در چت پشتیبانی برای شما فرستاده می‌شود.', 'ok');
+    }
     nzc_redirect('/nz?page=myposts');
 }
