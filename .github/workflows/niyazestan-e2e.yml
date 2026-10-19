@@ -1,0 +1,80 @@
+name: Niyazestan Browser E2E
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'WebSaza/nz-*'
+      - 'WebSaza/niazestan-*'
+      - '.github/workflows/niyazestan-e2e.yml'
+  workflow_dispatch:
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wait for deployed release
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 50); do
+            if curl -fsS --max-time 15 https://websaza.ir/nz-health.php | jq -e '.ok == true' >/dev/null 2>&1 \
+              && curl -fsS --max-time 15 https://websaza.ir/nz | grep -Eq 'nz-a11y\.js\?v=[a-f0-9]{12}'; then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+
+      - name: Install Playwright
+        shell: bash
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Run public E2E scenarios
+        shell: bash
+        run: |
+          node <<'NODE'
+          const { chromium } = require('playwright');
+          const assert = require('node:assert/strict');
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            const page=await browser.newPage({locale:'fa-IR',viewport:{width:390,height:844}});
+            const errors=[];
+            page.on('pageerror',e=>errors.push(String(e)));
+            await page.goto('https://websaza.ir/nz',{waitUntil:'networkidle'});
+            assert.match(await page.textContent('body'),/نیازستان/);
+            assert.ok(await page.locator('a.nz-skip-link').count()===1,'skip link missing');
+            const asset=await page.locator('script[src*="nz-brand-model.js"]').getAttribute('src');
+            assert.match(asset,/\?v=[a-f0-9]{12}$/);
+
+            await page.goto('https://websaza.ir/nz?page=login',{waitUntil:'networkidle'});
+            assert.match(await page.textContent('body'),/ورود \/ ثبت‌نام/);
+            const phone=page.locator('input[name="phone"]');
+            assert.ok(await phone.count()===1,'phone field missing');
+
+            const models=await page.evaluate(async()=>await (await fetch('/nz-models.php?subcategory='+encodeURIComponent('خودرو'))).json());
+            assert.equal(models.ok,true);assert.ok(models.brands.length>5);
+            const iran=await page.evaluate(async()=>await (await fetch('/nz-models.php?subcategory='+encodeURIComponent('خودرو')+'&brand='+encodeURIComponent('ایران خودرو'))).json());
+            assert.ok(iran.models.length>5);
+
+            await page.goto('https://websaza.ir/nz?page=new',{waitUntil:'networkidle'});
+            assert.match(await page.textContent('body'),/برای ادامه وارد حساب شوید|ورود/);
+
+            await page.goto('https://websaza.ir/nz?page=safety',{waitUntil:'networkidle'});
+            assert.match(await page.textContent('body'),/راهنمای معامله امن/);
+            assert.match(await page.textContent('body'),/کد ورود پیامکی/);
+
+            await page.goto('https://websaza.ir/nz?page=privacy',{waitUntil:'networkidle'});
+            assert.match(await page.textContent('body'),/حریم خصوصی نیازستان/);
+
+            await page.setViewportSize({width:1366,height:900});
+            await page.goto('https://websaza.ir/nz',{waitUntil:'networkidle'});
+            assert.ok(await page.locator('footer.nz-legal-footer').count()===1,'legal footer missing');
+            if(errors.length)throw new Error('Page errors: '+errors.join(' | '));
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
