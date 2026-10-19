@@ -14,6 +14,7 @@ require_once __DIR__ . '/nz-market-upgrades.php';
 require_once __DIR__ . '/nz-lifecycle.php';
 require_once __DIR__ . '/nz-post-management.php';
 require_once __DIR__ . '/nz-admin-security.php';
+require_once __DIR__ . '/nz-notifications.php';
 require_once __DIR__ . '/nz-legal.php';
 require_once __DIR__ . '/nz-create-pending.php';
 require_once __DIR__ . '/nz-submit-server.php';
@@ -49,6 +50,9 @@ try {
     }
     if ($isPost && in_array($action, ['save_search','delete_saved_search'], true)) {
         nzs_handle_post($action);
+    }
+    if ($isPost && in_array($action, ['notifications_read_all','notification_read'], true)) {
+        nzn_handle_post($action);
     }
     if ($isPost && in_array($action, ['mark_sold','archive_post','restore_post','update_post'], true)) {
         nzpm_handle_post($action);
@@ -141,6 +145,7 @@ try {
         $html = nzl_enhance($html);
         $html = nzpm_enhance($html);
         $html = nzasec_enhance($html);
+        $html = nzn_enhance($html);
         $html = nzlegal_enhance($html);
         $html = nzauth_enhance($html);
         $html = nzh_seo($html);
