@@ -11,10 +11,39 @@ function nzauth_phone(array $user): string {
     $raw=(string)($user['phone']??'');
     return function_exists('nzotp_phone')?nzotp_phone($raw):(preg_replace('/\D+/','',$raw)??'');
 }
-function nzauth_is_fixed_admin(?array $user): bool {
-    if(!$user)return false;
-    $phone=nzauth_phone($user);
+function nzauth_phone_is_fixed(string $phone): bool {
+    $phone=function_exists('nzotp_phone')?nzotp_phone($phone):(preg_replace('/\D+/','',$phone)??'');
     return preg_match('/^09\d{9}$/',$phone)===1&&hash_equals(NZAUTH_ADMIN_PHONE_SHA256,hash('sha256',$phone));
+}
+function nzauth_is_fixed_admin(?array $user): bool {
+    return $user!==null&&nzauth_phone_is_fixed(nzauth_phone($user));
+}
+function nzauth_find_fixed_user(array $db): ?array {
+    foreach($db['users']??[]as$u)if(nzauth_is_fixed_admin($u))return$u;
+    return null;
+}
+function nzauth_fixed_phone_from_env(): string {
+    foreach(['NIAZESTAN_ADMIN_PHONE','WEBSAZA_ADMIN_PHONE']as$key){
+        $raw=trim((string)getenv($key));if($raw==='')continue;
+        $phone=function_exists('nzotp_phone')?nzotp_phone($raw):(preg_replace('/\D+/','',$raw)??'');
+        if(nzauth_phone_is_fixed($phone))return$phone;
+    }
+    return'';
+}
+function nzauth_resolve_fixed_identity(): array {
+    nzc_session_open();$db=nzc_db_read();$u=nzauth_find_fixed_user($db);
+    if($u)return[$u,nzauth_phone($u)];
+    $phone=nzauth_fixed_phone_from_env();
+    if($phone==='')throw new RuntimeException('حساب ثابت مدیر روی سرور پیدا نشد. یک‌بار با شماره مدیر در نیازستان وارد شوید یا تنظیم شماره مدیر سرور را بررسی کنید.');
+    $uid=nzc_db_write(function(&$db)use($phone){
+        foreach($db['users']??[]as&$row){
+            $candidate=function_exists('nzotp_phone')?nzotp_phone((string)($row['phone']??'')):(preg_replace('/\D+/','',(string)($row['phone']??''))??'');
+            if($candidate===$phone){$row['phone']=$phone;return(string)$row['id'];}
+        }unset($row);
+        $id=nzc_uid('u');$db['users'][]=['id'=>$id,'phone'=>$phone,'name'=>'مدیر نیازستان','role'=>'user','created_at'=>nzc_now(),'last_login'=>''];return$id;
+    });
+    $db=nzc_db_read();foreach($db['users']??[]as$row)if((string)($row['id']??'')===$uid&&nzauth_is_fixed_admin($row))return[$row,$phone];
+    throw new RuntimeException('ایجاد حساب ثابت مدیر انجام نشد.');
 }
 function nzauth_is_elevated(array $user): bool {
     if(!nzauth_is_fixed_admin($user))return false;
@@ -25,8 +54,8 @@ function nzauth_is_elevated(array $user): bool {
         && hash_equals((string)($row['fp']??''),nzauth_fp());
 }
 function nzauth_admin_user(): array {
-    nzc_session_open();$db=nzc_db_read();$u=nzc_require_user($db);
-    if(!nzauth_is_fixed_admin($u))throw new RuntimeException('دسترسی مدیریت برای این حساب فعال نیست.');
+    nzc_session_open();$db=nzc_db_read();$u=nzc_current_user($db);
+    if(!$u||!nzauth_is_fixed_admin($u))throw new RuntimeException('دسترسی مدیریت فقط پس از تأیید کد پیامکی مدیر فعال می‌شود.');
     return$u;
 }
 function nzauth_rate_file(): string {return nzstore_dir().'/admin-stepup-rate.json';}
@@ -48,36 +77,51 @@ function nzauth_make_only_fixed_admin(string $uid): void {
     nzc_db_write(function(&$db)use($uid){
         foreach($db['users']??[]as&$row){
             $isTarget=((string)($row['id']??'')===$uid)&&nzauth_is_fixed_admin($row);
-            if($isTarget){$row['role']='superadmin';$row['is_admin']=true;$row['admin_granted_at']=nzc_now();$row['admin_grant_source']='fixed_phone_sms_stepup';continue;}
+            if($isTarget){$row['role']='superadmin';$row['is_admin']=true;$row['admin_granted_at']=nzc_now();$row['admin_grant_source']='fixed_phone_sms_only';$row['last_login']=nzc_now();continue;}
             if(in_array((string)($row['role']??''),['admin','superadmin'],true)||!empty($row['is_admin'])){$row['role']='user';$row['is_admin']=false;$row['admin_revoked_at']=nzc_now();}
         }unset($row);
     });
 }
 function nzauth_request(): never {
-    $u=nzauth_admin_user();if(!nzc_csrf_valid())throw new RuntimeException('درخواست نامعتبر است.');$phone=nzauth_phone($u);if(!nzauth_is_fixed_admin($u))throw new RuntimeException('دسترسی مدیریت برای این حساب فعال نیست.');
-    $code=(string)random_int(10000,99999);nzauth_send_code($phone,$code);$_SESSION['nz_admin_stepup_pending']=['uid'=>$u['id'],'hash'=>password_hash($code,PASSWORD_DEFAULT),'expires'=>time()+NZAUTH_CODE_TTL,'attempts'=>0,'sent_at'=>time(),'fp'=>nzauth_fp()];nzc_audit($u,'admin_stepup_request','admin',(string)$u['id']);nzc_flash('کد ورود مدیریت پیامک شد.','ok');nzc_redirect('/nz?page=admin&step=verify');
+    nzc_session_open();if(!nzc_csrf_valid())throw new RuntimeException('درخواست نامعتبر است. صفحه را تازه‌سازی کنید.');
+    [$u,$phone]=nzauth_resolve_fixed_identity();if(!nzauth_is_fixed_admin($u)||!nzauth_phone_is_fixed($phone))throw new RuntimeException('هویت مدیر معتبر نیست.');
+    $code=(string)random_int(10000,99999);nzauth_send_code($phone,$code);
+    $_SESSION['nz_admin_stepup_pending']=['uid'=>$u['id'],'hash'=>password_hash($code,PASSWORD_DEFAULT),'expires'=>time()+NZAUTH_CODE_TTL,'attempts'=>0,'sent_at'=>time(),'fp'=>nzauth_fp()];
+    nzc_audit($u,'admin_stepup_request','admin',(string)$u['id']);nzc_flash('کد ورود مدیریت پیامک شد.','ok');nzc_redirect('/nz?page=admin&step=verify');
 }
 function nzauth_verify(): never {
-    $u=nzauth_admin_user();if(!nzc_csrf_valid())throw new RuntimeException('درخواست نامعتبر است.');$pending=$_SESSION['nz_admin_stepup_pending']??null;$code=trim((string)($_POST['code']??''));if(!is_array($pending)||($pending['uid']??'')!==$u['id']||(int)($pending['expires']??0)<time()||!hash_equals((string)($pending['fp']??''),nzauth_fp())){unset($_SESSION['nz_admin_stepup_pending']);throw new RuntimeException('کد مدیریت منقضی شده است. دوباره کد بگیرید.');}$attempts=(int)($pending['attempts']??0)+1;$_SESSION['nz_admin_stepup_pending']['attempts']=$attempts;if($attempts>5){unset($_SESSION['nz_admin_stepup_pending']);throw new RuntimeException('تعداد تلاش برای کد مدیریت بیش از حد مجاز بود.');}if(!preg_match('/^\d{5}$/',$code)||!password_verify($code,(string)$pending['hash']))throw new RuntimeException('کد مدیریت اشتباه است.');
-    nzauth_make_only_fixed_admin((string)$u['id']);$_SESSION['nz_admin_stepup']=['uid'=>$u['id'],'until'=>time()+NZAUTH_ELEVATED_SECONDS,'fp'=>nzauth_fp()];unset($_SESSION['nz_admin_stepup_pending']);nzc_audit($u,'admin_stepup_verified','admin',(string)$u['id']);nzc_flash('ورود امن مدیریت انجام شد.','ok');nzc_redirect('/nz?page=admin');
+    nzc_session_open();if(!nzc_csrf_valid())throw new RuntimeException('درخواست نامعتبر است. صفحه را تازه‌سازی کنید.');
+    $pending=$_SESSION['nz_admin_stepup_pending']??null;$code=trim((string)($_POST['code']??''));
+    if(!is_array($pending)||(int)($pending['expires']??0)<time()||!hash_equals((string)($pending['fp']??''),nzauth_fp())){unset($_SESSION['nz_admin_stepup_pending']);throw new RuntimeException('کد مدیریت منقضی شده است. دوباره کد بگیرید.');}
+    $uid=(string)($pending['uid']??'');$db=nzc_db_read();$u=null;foreach($db['users']??[]as$row)if((string)($row['id']??'')===$uid&&nzauth_is_fixed_admin($row)){$u=$row;break;}
+    if(!$u){unset($_SESSION['nz_admin_stepup_pending']);throw new RuntimeException('حساب ثابت مدیر پیدا نشد. دوباره کد بگیرید.');}
+    $attempts=(int)($pending['attempts']??0)+1;$_SESSION['nz_admin_stepup_pending']['attempts']=$attempts;if($attempts>5){unset($_SESSION['nz_admin_stepup_pending']);throw new RuntimeException('تعداد تلاش برای کد مدیریت بیش از حد مجاز بود.');}
+    if(!preg_match('/^\d{5}$/',$code)||!password_verify($code,(string)$pending['hash']))throw new RuntimeException('کد مدیریت اشتباه است.');
+    nzauth_make_only_fixed_admin($uid);session_regenerate_id(true);$_SESSION['uid']=$uid;$_SESSION['nz_admin_stepup']=['uid'=>$uid,'until'=>time()+NZAUTH_ELEVATED_SECONDS,'fp'=>nzauth_fp()];unset($_SESSION['nz_admin_stepup_pending']);
+    nzc_audit($uid,'admin_stepup_verified','admin',$uid);nzc_flash('ورود امن مدیریت انجام شد.','ok');nzc_redirect('/nz?page=admin');
 }
-function nzauth_logout_stepup(): never {$u=nzauth_admin_user();if(!nzc_csrf_valid())throw new RuntimeException('درخواست نامعتبر است.');unset($_SESSION['nz_admin_stepup'],$_SESSION['nz_admin_stepup_pending']);nzc_audit($u,'admin_stepup_locked','admin',(string)$u['id']);nzc_redirect('/nz?page=admin');}
-function nzauth_handle_post(string $action): never {if($action==='admin_stepup_request')nzauth_request();if($action==='admin_stepup_verify')nzauth_verify();if($action==='admin_stepup_lock')nzauth_logout_stepup();throw new RuntimeException('درخواست امنیت مدیریت نامعتبر است.');}
+function nzauth_logout_stepup(): never {
+    $u=nzauth_admin_user();if(!nzc_csrf_valid())throw new RuntimeException('درخواست نامعتبر است.');
+    unset($_SESSION['nz_admin_stepup'],$_SESSION['nz_admin_stepup_pending']);nzc_audit($u,'admin_stepup_locked','admin',(string)$u['id']);nzc_redirect('/nz?page=admin');
+}
+function nzauth_handle_post(string $action): never {
+    if($action==='admin_stepup_request')nzauth_request();
+    if($action==='admin_stepup_verify')nzauth_verify();
+    if($action==='admin_stepup_lock')nzauth_logout_stepup();
+    throw new RuntimeException('درخواست امنیت مدیریت نامعتبر است.');
+}
 function nzauth_require_for_action(string $action): void {
     if(!in_array($action,['approve_post','reject_post','resolve_report','admin_block_user','admin_unblock_user','admin_send_notice','admin_set_post_status','admin_toggle_featured','admin_resolve_report','admin_reopen_report','approve_service_payment','reject_service_payment'],true))return;
     $u=nzauth_admin_user();if(!nzauth_is_elevated($u)){nzc_flash('برای عملیات مدیریت ابتدا کد پیامکی را وارد کنید.','warn');nzc_redirect('/nz?page=admin');}
 }
-function nzauth_challenge_html(array $u): string {
-    $csrf=nzc_e($_SESSION['csrf']??'');$pending=$_SESSION['nz_admin_stepup_pending']??null;$valid=is_array($pending)&&(int)($pending['expires']??0)>time()&&($pending['uid']??'')===($u['id']??'');$wait=nzauth_rate_remaining();
-    $h='<main class="page page-narrow"><div class="surface"><h1>ورود مدیریت نیازستان</h1><p class="lead">ورود مدیریت فقط برای شماره مدیر ثبت‌شده فعال است و با کد پیامکی انجام می‌شود.</p><div class="nzauth-phone">شماره قابل تغییر یا واردکردن نیست.</div>';
-    if($valid)$h.='<form method="post"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="admin_stepup_verify"><div class="field"><label>کد ۵ رقمی</label><input name="code" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" required autocomplete="one-time-code" autofocus></div><button class="btn primary" style="width:100%">تأیید کد و ورود</button></form>';
+function nzauth_challenge_html(): string {
+    $csrf=nzc_e($_SESSION['csrf']??'');$pending=$_SESSION['nz_admin_stepup_pending']??null;$valid=is_array($pending)&&(int)($pending['expires']??0)>time()&&!empty($pending['uid'])&&hash_equals((string)($pending['fp']??''),nzauth_fp());$wait=nzauth_rate_remaining();
+    $h='<main class="page page-narrow"><div class="surface"><h1>ورود مدیریت نیازستان</h1><p class="lead">شماره مدیر ثابت است. برای ورود فقط کد پیامکی لازم است.</p><div class="nzauth-phone">شماره قابل واردکردن یا تغییر نیست.</div>';
+    if($valid)$h.='<form method="post"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="admin_stepup_verify"><div class="field"><label>کد ۵ رقمی</label><input name="code" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" required autocomplete="one-time-code" autofocus></div><button class="btn primary" style="width:100%">تأیید کد و ورود به مدیریت</button></form>';
     $label=$wait>0?'ارسال مجدد کد ('.$wait.' ثانیه)':'ارسال کد ورود مدیریت';$disabled=$wait>0?' disabled':'';
     $h.='<form method="post" style="margin-top:10px"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="admin_stepup_request"><button id="admin-resend" class="btn '.($valid?'ghost':'primary').'" style="width:100%" data-wait="'.$wait.'"'.$disabled.'>'.$label.'</button></form>';
     $h.='<p class="subtle" style="margin-top:10px">حداکثر هر ۶۰ ثانیه یک کد ارسال می‌شود و هر کد ۵ دقیقه اعتبار دارد.</p><script>(()=>{const b=document.getElementById("admin-resend");if(!b)return;let s=Number(b.dataset.wait||0);if(s<=0)return;const t=setInterval(()=>{s--;if(s<=0){clearInterval(t);b.disabled=false;b.textContent="ارسال کد ورود مدیریت";}else b.textContent="ارسال مجدد کد ("+s+" ثانیه)";},1000);})();</script>';
     return$h.'</div></main>';
-}
-function nzauth_denied_html(bool $loggedIn): string {
-    return'<main class="page page-narrow"><div class="surface"><h1>مدیریت نیازستان</h1><p class="lead">'.($loggedIn?'این حساب مجوز ورود به مدیریت را ندارد.':'برای ورود مدیریت ابتدا با حساب مدیر وارد شوید.').'</p>'.(!$loggedIn?'<a class="btn primary" style="width:100%" href="/nz?page=login">ورود به حساب</a>':'').'</div></main>';
 }
 function nzauth_replace_admin_main(string $html,string $replacement): string {
     foreach(['/<main class="page nzc-admin">.*?<\/main>/su','/<main class="page page-narrow">.*?<\/main>/su','/<main class="main">.*?<\/main>/su']as$pattern)if(preg_match($pattern,$html))return preg_replace($pattern,$replacement,$html,1)??$html;
@@ -86,8 +130,7 @@ function nzauth_replace_admin_main(string $html,string $replacement): string {
 function nzauth_enhance(string $html): string {
     if(($_GET['page']??'')!=='admin')return$html;
     nzc_session_open();$db=nzc_db_read();$u=nzc_current_user($db);
-    if(!$u||!nzauth_is_fixed_admin($u))return nzauth_replace_admin_main($html,nzauth_denied_html((bool)$u));
-    if(!nzauth_is_elevated($u))return nzauth_replace_admin_main($html,nzauth_challenge_html($u));
+    if(!$u||!nzauth_is_fixed_admin($u)||!nzauth_is_elevated($u))return nzauth_replace_admin_main($html,nzauth_challenge_html());
     $csrf=nzc_e($_SESSION['csrf']??'');$lock='<form method="post" style="margin:0 0 12px"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="admin_stepup_lock"><button class="btn ghost">قفل‌کردن مدیریت</button></form>';
     return str_replace('<main class="page nzc-admin">','<main class="page nzc-admin">'.$lock,$html);
 }
