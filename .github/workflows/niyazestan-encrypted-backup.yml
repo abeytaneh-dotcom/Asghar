@@ -12,7 +12,7 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Download authenticated backup and encrypt it
+      - name: Download authenticated backup, encrypt and restore-test it
         shell: bash
         env:
           CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
@@ -21,16 +21,23 @@ jobs:
           test -n "$CPANEL_TOKEN"
           CRON_KEY=$(printf '%s' "$CPANEL_TOKEN" | sha256sum | awk '{print $1}')
           export BACKUP_KEY=$(printf 'niyazestan-backup|%s' "$CPANEL_TOKEN" | sha256sum | awk '{print $1}')
+          ENC_FILE="niyazestan-$(date -u +%Y-%m-%d).json.enc"
           curl -fsS --retry 3 --retry-delay 5 --max-time 60 \
             -H "X-Niyazestan-Cron: $CRON_KEY" \
             https://websaza.ir/nz-backup-export.php \
             -o niyazestan-backup.json
-          jq -e '.ok == true and .version >= 2 and (.data|type == "object")' niyazestan-backup.json >/dev/null
+          jq -e '.ok == true and .version >= 2 and (.data|type == "object") and (.data.users|type == "array") and (.data.posts|type == "array")' niyazestan-backup.json >/dev/null
           openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
             -pass env:BACKUP_KEY \
             -in niyazestan-backup.json \
-            -out "niyazestan-$(date -u +%Y-%m-%d).json.enc"
+            -out "$ENC_FILE"
           rm -f niyazestan-backup.json
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+            -pass env:BACKUP_KEY \
+            -in "$ENC_FILE" \
+            -out restored-check.json
+          jq -e '.ok == true and (.data.users|type == "array") and (.data.posts|type == "array") and (.data.messages|type == "array")' restored-check.json >/dev/null
+          rm -f restored-check.json
 
       - name: Upload encrypted backup
         uses: actions/upload-artifact@v4
