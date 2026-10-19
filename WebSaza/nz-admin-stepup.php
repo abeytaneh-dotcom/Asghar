@@ -32,6 +32,15 @@ function nzauth_challenge_html(array $u): string {
     else $h.='<form method="post"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="admin_stepup_request"><button class="btn primary" style="width:100%">دریافت کد امنیتی مدیریت</button></form>';
     return$h.'</div></main>';
 }
+function nzauth_replace_admin_main(string $html,string $replacement): string {
+    $pattern='/<main class="page nzc-admin">.*?<\/main>/su';
+    if(preg_match($pattern,$html))return preg_replace($pattern,$replacement,$html,1)??$html;
+    return str_replace('<nav class="mobile-nav">',$replacement.'<nav class="mobile-nav">',$html);
+}
 function nzauth_enhance(string $html): string {
-    if(($_GET['page']??'')!=='admin')return$html;nzc_session_open();$db=nzc_db_read();$u=nzc_current_user($db);if(!$u||!nzc_is_admin($u))return$html;if(!nzauth_is_elevated($u)&&function_exists('nzd_replace_main'))return nzd_replace_main($html,nzauth_challenge_html($u));$csrf=nzc_e($_SESSION['csrf']??'');$lock='<form method="post" style="margin:0 0 12px"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="admin_stepup_lock"><button class="btn ghost">قفل‌کردن دسترسی حساس مدیریت</button></form>';$html=str_replace('<main class="page nzc-admin">','<main class="page nzc-admin">'.$lock,$html);return$html;
+    if(($_GET['page']??'')!=='admin')return$html;
+    nzc_session_open();$db=nzc_db_read();$u=nzc_current_user($db);if(!$u||!nzc_is_admin($u))return$html;
+    if(!nzauth_is_elevated($u))return nzauth_replace_admin_main($html,nzauth_challenge_html($u));
+    $csrf=nzc_e($_SESSION['csrf']??'');$lock='<form method="post" style="margin:0 0 12px"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="admin_stepup_lock"><button class="btn ghost">قفل‌کردن دسترسی حساس مدیریت</button></form>';
+    return str_replace('<main class="page nzc-admin">','<main class="page nzc-admin">'.$lock,$html);
 }
