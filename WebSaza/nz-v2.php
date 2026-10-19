@@ -5,6 +5,7 @@ require_once __DIR__ . '/nz-community.php';
 require_once __DIR__ . '/nz-hardening.php';
 require_once __DIR__ . '/nz-otp.php';
 require_once __DIR__ . '/nz-detail-enhance.php';
+require_once __DIR__ . '/nz-chat-enhance.php';
 require_once __DIR__ . '/nz-create-pending.php';
 require_once __DIR__ . '/nz-submit-server.php';
 
@@ -16,10 +17,14 @@ try {
         if ($action === 'request_otp') nzotp_request();
         if ($action === 'verify_otp') nzotp_verify();
     }
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && in_array($action, ['start_chat','send_message'], true)) {
+        nzchat_handle_post($action);
+    }
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $action === 'create_post') {
         nzss_handle_create();
     }
     nzc_prepare_request();
+    nzchat_mark_read();
 } catch (Throwable $e) {
     nzc_flash($e->getMessage(), 'error');
     $back = (string)($_SERVER['HTTP_REFERER'] ?? '/nz');
@@ -94,6 +99,7 @@ try {
 
         $html = nzd_enhance($html);
         $html = nzh_seo($html);
+        $html = nzchat_enhance_html($html);
         $installTag = '<script src="/nz-install-direct.js?v=20261019-6"></script>';
         $mediaTag = '<script src="/nz-media-client.js?v=20261019-2" defer></script>';
         $wizardTag = '<script src="/nz-submit-wizard.js?v=20261019-3" defer></script>';
