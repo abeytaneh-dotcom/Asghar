@@ -1,0 +1,40 @@
+name: Niyazestan Maintenance Key
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'WebSaza/nz-*.php'
+      - 'WebSaza/nz-storage.php'
+      - 'WebSaza/.htaccess'
+      - '.github/workflows/niyazestan-maintenance-key.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for site deployment
+        run: sleep 70
+
+      - name: Provision maintenance key on cPanel
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CPANEL_TOKEN"
+          curl -fsS --max-time 30 https://websaza.ir/nz >/dev/null
+          CRON_KEY=$(printf '%s' "$CPANEL_TOKEN" | sha256sum | awk '{print $1}')
+          RESPONSE=$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: cpanel vt6qdx8:$CPANEL_TOKEN" \
+            --request POST \
+            --data-urlencode "dir=public_html/.marketplace-data" \
+            --data-urlencode "file=cron.key" \
+            --data-urlencode "content=$CRON_KEY" \
+            "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
+          echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
+          curl -fsS --max-time 45 -H "X-Niyazestan-Cron: $CRON_KEY" https://websaza.ir/nz-lifecycle-cron.php | jq -e '.ok == true' >/dev/null
