@@ -32,8 +32,8 @@ RewriteRule ^nz-app\.php$ /nz [R=301,L,NE]
 RewriteCond %{THE_REQUEST} \s/+nz-v2\.php(?:[?\s]) [NC]
 RewriteRule ^nz-v2\.php$ /nz [R=301,L,NE]
 
-# Serve the short app URL without exposing the PHP filename.
-RewriteRule ^nz/?$ nz-v2.php [L,QSA]
+# Serve the short app URL through the licensed live-feed entrypoint.
+RewriteRule ^nz/?$ nz/index.php [L,QSA]
 
 ErrorDocument 404 /404.html
 
