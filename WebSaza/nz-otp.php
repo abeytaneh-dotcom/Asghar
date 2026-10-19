@@ -1,10 +1,30 @@
 <?php
 declare(strict_types=1);
 
+$nzotpLegacyPlatform = __DIR__.'/namayandegi/platform-v3.php';
+if (is_file($nzotpLegacyPlatform)) require_once $nzotpLegacyPlatform;
+
 function nzotp_env(string $key): string { return trim((string)getenv($key)); }
-function nzotp_ready(): bool {
+function nzotp_legacy_settings_file(): string { return __DIR__.'/namayandegi/_data/settings.json'; }
+function nzotp_legacy_settings(): array {
+    $file=nzotp_legacy_settings_file();
+    if (function_exists('ws_raw_read')) return ws_raw_read($file);
+    $raw=@file_get_contents($file); $data=json_decode($raw?:'',true); return is_array($data)?$data:[];
+}
+function nzotp_legacy_pattern(): string {
+    $env=nzotp_env('NIAZESTAN_OTP_PATTERN'); if($env!=='')return$env;
+    $c=nzotp_legacy_settings();
+    foreach(['niazestan_otp_pattern','sms_login_pattern','sms_recovery_pattern'] as$k){$v=trim((string)($c[$k]??''));if($v!=='')return$v;}
+    return'';
+}
+function nzotp_legacy_ready(): bool {
+    if(!function_exists('ws_sms_send_now')||!function_exists('ws_sms_key'))return false;
+    $c=nzotp_legacy_settings(); return nzotp_legacy_pattern()!=='' && ws_sms_key($c)!=='';
+}
+function nzotp_direct_ready(): bool {
     return nzotp_env('IPPANEL_API_KEY')!=='' && nzotp_env('IPPANEL_PATTERN_CODE')!=='' && nzotp_env('IPPANEL_FROM_NUMBER')!=='';
 }
+function nzotp_ready(): bool { return nzotp_legacy_ready() || nzotp_direct_ready(); }
 function nzotp_phone(string $phone): string {
     $p=preg_replace('/\D+/','',$phone)??'';
     if(str_starts_with($p,'98')&&strlen($p)===12)$p='0'.substr($p,2);
@@ -14,7 +34,12 @@ function nzotp_phone(string $phone): string {
 function nzotp_e164(string $phone): string { return '+98'.substr($phone,1); }
 
 function nzotp_send_pattern(string $phone, string $code): void {
-    if (!function_exists('curl_init')) throw new RuntimeException('امکان اتصال به سرویس پیامک روی سرور فعال نیست.');
+    if (nzotp_legacy_ready()) {
+        $result=ws_sms_send_now(nzotp_legacy_settings_file(),$phone,nzotp_legacy_pattern(),['code'=>$code]);
+        if(!empty($result['ok']))return;
+        throw new RuntimeException('ارسال کد ورود انجام نشد. کمی بعد دوباره تلاش کنید.');
+    }
+    if (!nzotp_direct_ready() || !function_exists('curl_init')) throw new RuntimeException('سرویس پیامک ورود هنوز روی سرور پیکربندی نشده است.');
     $paramKey=nzotp_env('IPPANEL_PATTERN_PARAM'); if($paramKey==='')$paramKey='code';
     $payload=[
         'sending_type'=>'pattern',
