@@ -6,30 +6,16 @@
   "lang": "fa",
   "dir": "rtl",
   "start_url": "/nz?source=pwa",
-  "scope": "/",
+  "scope": "/nz",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
   "prefer_related_applications": false,
+  "categories": ["shopping", "lifestyle", "business"],
   "icons": [
-    {
-      "src": "/niazestan-icon-192.php?v=20261019-1",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/niazestan-icon-512.php?v=20261019-1",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/niazestan-icon-512.php?v=20261019-1",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
+    {"src":"/niazestan-icon-192.php?v=20261019-1","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/niazestan-icon-512.php?v=20261019-1","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"/niazestan-icon-512.php?v=20261019-1","sizes":"512x512","type":"image/png","purpose":"maskable"}
   ]
 }
