@@ -22,7 +22,7 @@ jobs:
             if curl -fsS --max-time 12 https://websaza.ir/nz-draft-preview.js >/dev/null 2>&1 \
               && curl -fsS --max-time 12 https://websaza.ir/nz-taxonomy-client.js >/dev/null 2>&1 \
               && curl -fsS --max-time 12 https://websaza.ir/nz-chat-live.js >/dev/null 2>&1 \
-              && curl -fsS --max-time 12 https://websaza.ir/niazestan-sw.js >/dev/null 2>&1 \
+              && curl -fsS --max-time 12 https://websaza.ir/niazestan-sw.js | grep -F "const CACHE='niazestan-v7'" >/dev/null 2>&1 \
               && curl -fsS --max-time 12 https://websaza.ir/nz | grep -F 'nz-draft-preview.js?v=20261019-1' >/dev/null 2>&1; then
               echo "Current deployment is live."
               exit 0
@@ -53,7 +53,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in nz-draft-preview.js nz-taxonomy-client.js nz-chat-live.js niyazestan-sw.js; do
+          for f in nz-draft-preview.js nz-taxonomy-client.js nz-chat-live.js; do
             echo "Checking $f"
             curl -fsS --retry 6 --retry-all-errors --retry-delay 3 --max-time 25 "https://websaza.ir/$f" >/dev/null
           done
+          echo "Checking service worker content"
+          curl -fsS --retry 6 --retry-all-errors --retry-delay 3 --max-time 25 https://websaza.ir/niazestan-sw.js | grep -F "const CACHE='niazestan-v7'" >/dev/null
+          echo "Checking service worker MIME type"
+          curl -fsS -D /tmp/sw-headers --retry 6 --retry-all-errors --retry-delay 3 --max-time 25 https://websaza.ir/niazestan-sw.js -o /dev/null
+          grep -iE '^content-type:.*(application|text)/javascript' /tmp/sw-headers >/dev/null
