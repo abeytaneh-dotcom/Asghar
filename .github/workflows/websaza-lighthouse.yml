@@ -13,46 +13,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Wait for deployment
-        run: sleep 70
+        run: sleep 90
 
       - name: Run Lighthouse for WebSaza
         shell: bash
         run: |
           set -e
-          npx -y lighthouse@13.0.1 https://websaza.ir/ \
-            --only-categories=performance,accessibility,best-practices,seo \
-            --output=json --output=html \
-            --output-path="$GITHUB_WORKSPACE/websaza-lighthouse" \
-            --chrome-flags="--headless --no-sandbox --disable-gpu" \
-            --quiet
+          npx -y lighthouse@13.0.1 https://websaza.ir/ --only-categories=performance,accessibility,best-practices,seo --output=json --output=html --output-path="$GITHUB_WORKSPACE/websaza-lighthouse" --chrome-flags="--headless --no-sandbox --disable-gpu" --quiet
 
       - name: Run Lighthouse for Niyazestan
         shell: bash
         run: |
           set -e
-          npx -y lighthouse@13.0.1 https://websaza.ir/nz \
-            --only-categories=performance,accessibility,best-practices,seo \
-            --output=json --output=html \
-            --output-path="$GITHUB_WORKSPACE/niyazestan-lighthouse" \
-            --chrome-flags="--headless --no-sandbox --disable-gpu" \
-            --quiet
+          npx -y lighthouse@13.0.1 https://websaza.ir/nz --only-categories=performance,accessibility,best-practices,seo --output=json --output=html --output-path="$GITHUB_WORKSPACE/niyazestan-lighthouse" --chrome-flags="--headless --no-sandbox --disable-gpu" --quiet
 
-      - name: Print scores
+      - name: Print and enforce scores
         shell: bash
         run: |
           node - <<'NODE'
           const fs=require('fs');
-          for (const name of ['websaza','niyazestan']) {
+          let failed=false;
+          for(const name of ['websaza','niyazestan']){
             const r=JSON.parse(fs.readFileSync(`${name}-lighthouse.report.json`,'utf8'));
-            console.log(`\n${name.toUpperCase()}`);
-            for (const k of ['performance','accessibility','best-practices','seo']) console.log(`${k}: ${Math.round(r.categories[k].score*100)}`);
-            console.log('LCP:',r.audits['largest-contentful-paint'].displayValue);
-            console.log('CLS:',r.audits['cumulative-layout-shift'].displayValue);
-            console.log('TBT:',r.audits['total-blocking-time'].displayValue);
+            const s={};for(const k of ['performance','accessibility','best-practices','seo'])s[k]=Math.round(r.categories[k].score*100);
+            const lcp=r.audits['largest-contentful-paint'].numericValue,cls=r.audits['cumulative-layout-shift'].numericValue,tbt=r.audits['total-blocking-time'].numericValue;
+            console.log(name,s,{lcp,cls,tbt});
+            if(s.performance<80||s.accessibility<90||s['best-practices']<90||s.seo<90||lcp>4000||cls>0.10||tbt>600)failed=true;
           }
+          if(failed){console.error('Lighthouse quality budget failed');process.exit(1)}
           NODE
 
       - name: Upload Lighthouse reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: websaza-niyazestan-lighthouse
@@ -61,4 +53,4 @@ jobs:
             websaza-lighthouse.report.html
             niyazestan-lighthouse.report.json
             niyazestan-lighthouse.report.html
-          retention-days: 5
+          retention-days: 7
