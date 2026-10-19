@@ -1,5 +1,10 @@
 Options -Indexes -ExecCGI
 
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule !\.(?:jpe?g|png|webp|mp4|mov|webm)$ - [F,NC,L]
+</IfModule>
+
 <FilesMatch "\.(?:php\d*|phtml|phar|cgi|pl|py|sh|shtml|fcgi)$">
   Require all denied
 </FilesMatch>
@@ -7,6 +12,12 @@ Options -Indexes -ExecCGI
 <IfModule mod_mime.c>
   RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .phtml .phar .cgi .pl .py .sh
   RemoveType .php .php3 .php4 .php5 .php7 .php8 .phtml .phar
+  AddType image/jpeg .jpg .jpeg
+  AddType image/png .png
+  AddType image/webp .webp
+  AddType video/mp4 .mp4
+  AddType video/quicktime .mov
+  AddType video/webm .webm
 </IfModule>
 
 <IfModule mod_headers.c>
