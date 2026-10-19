@@ -20,7 +20,7 @@ jobs:
           set -euo pipefail
           test -n "$CPANEL_TOKEN"
           CRON_KEY=$(printf '%s' "$CPANEL_TOKEN" | sha256sum | awk '{print $1}')
-          BACKUP_KEY=$(printf 'niyazestan-backup|%s' "$CPANEL_TOKEN" | sha256sum | awk '{print $1}')
+          export BACKUP_KEY=$(printf 'niyazestan-backup|%s' "$CPANEL_TOKEN" | sha256sum | awk '{print $1}')
           curl -fsS --retry 3 --retry-delay 5 --max-time 60 \
             -H "X-Niyazestan-Cron: $CRON_KEY" \
             https://websaza.ir/nz-backup-export.php \
