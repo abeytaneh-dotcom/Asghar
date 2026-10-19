@@ -6,6 +6,7 @@ on:
     paths:
       - 'WebSaza/nz-*'
       - 'WebSaza/niazestan-*'
+      - 'WebSaza/marketplace-uploads/**'
       - 'WebSaza/.htaccess'
       - '.github/workflows/niyazestan-smoke.yml'
   workflow_dispatch:
@@ -13,52 +14,51 @@ on:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - name: Wait for current Niyazestan deployment
         shell: bash
         run: |
           set -euo pipefail
-          for i in $(seq 1 40); do
-            if curl -fsS --max-time 12 https://websaza.ir/nz-draft-preview.js >/dev/null 2>&1 \
-              && curl -fsS --max-time 12 https://websaza.ir/nz-taxonomy-client.js >/dev/null 2>&1 \
-              && curl -fsS --max-time 12 https://websaza.ir/nz-chat-live.js >/dev/null 2>&1 \
-              && curl -fsS --max-time 12 https://websaza.ir/niazestan-sw.js | grep -F "const CACHE='niazestan-v7'" >/dev/null 2>&1 \
-              && curl -fsS --max-time 12 https://websaza.ir/nz | grep -F 'nz-draft-preview.js?v=20261019-1' >/dev/null 2>&1; then
-              echo "Current deployment is live."
-              exit 0
+          for i in $(seq 1 50); do
+            if curl -fsS --max-time 12 https://websaza.ir/nz-geocode-proxy.js >/dev/null 2>&1 \
+              && curl -fsS --max-time 12 https://websaza.ir/nz-brand-model.js >/dev/null 2>&1 \
+              && curl -fsS --max-time 12 https://websaza.ir/niazestan-sw.js | grep -F "const CACHE='niazestan-v8'" >/dev/null 2>&1 \
+              && curl -fsS --max-time 12 https://websaza.ir/nz | grep -F 'nz-brand-model.js?v=20261019-3' >/dev/null 2>&1; then
+              echo "Current deployment is live."; exit 0
             fi
             sleep 10
           done
-          echo "Deployment did not become ready in time." >&2
-          exit 1
+          echo "Deployment did not become ready in time." >&2; exit 1
 
       - name: Check public application and security boundaries
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --retry 4 --retry-delay 3 --max-time 25 https://websaza.ir/nz | grep -F 'نیازستان' >/dev/null
-          curl -fsS --retry 4 --retry-delay 3 --max-time 25 'https://websaza.ir/nz?page=login' | grep -F 'ورود' >/dev/null
+          HOME_HTML=$(curl -fsS --retry 4 --retry-delay 3 --max-time 25 https://websaza.ir/nz)
+          grep -F 'نیازستان' <<<"$HOME_HTML" >/dev/null
+          grep -F 'nz-geocode-proxy.js?v=20261019-1' <<<"$HOME_HTML" >/dev/null
+          LOGIN_HTML=$(curl -fsS --retry 4 --retry-delay 3 --max-time 25 'https://websaza.ir/nz?page=login')
+          grep -F 'ورود / ثبت‌نام' <<<"$LOGIN_HTML" >/dev/null
           curl -fsS --retry 4 --retry-delay 3 --max-time 25 https://websaza.ir/nz-taxonomy.php | jq -e '.ok == true and (.categories|length) >= 10 and (.provinces|length) == 31' >/dev/null
           curl -fsS --retry 4 --retry-delay 3 --max-time 25 'https://websaza.ir/nz-models.php?subcategory=%D8%AE%D9%88%D8%AF%D8%B1%D9%88' | jq -e '.ok == true and (.brands|length) > 5' >/dev/null
+          curl -fsS --retry 4 --retry-delay 3 --max-time 25 'https://websaza.ir/nz-models.php?subcategory=%D8%AE%D9%88%D8%AF%D8%B1%D9%88&brand=%D8%A7%DB%8C%D8%B1%D8%A7%D9%86%20%D8%AE%D9%88%D8%AF%D8%B1%D9%88' | jq -e '.ok == true and (.models|length) > 5' >/dev/null
+          curl -fsS --retry 4 --retry-delay 3 --max-time 25 'https://websaza.ir/nz-geocode.php?lat=35.6892&lon=51.3890' | jq -e '.ok == true and (.address|type)=="object"' >/dev/null
           curl -fsS --retry 4 --retry-delay 3 --max-time 25 https://websaza.ir/nz-sitemap.xml | grep -F '<urlset' >/dev/null
           curl -fsS --retry 4 --retry-delay 3 --max-time 25 https://websaza.ir/nz-offline.html | grep -F 'اتصال اینترنت برقرار نیست' >/dev/null
-          code=$(curl -sS -o /tmp/cron.json -w '%{http_code}' --max-time 25 https://websaza.ir/nz-lifecycle-cron.php)
-          test "$code" = "403"
-          code=$(curl -sS -o /tmp/private -w '%{http_code}' --max-time 25 https://websaza.ir/.marketplace-data/data.json)
-          test "$code" = "404"
+          code=$(curl -sS -o /tmp/cron.json -w '%{http_code}' --max-time 25 https://websaza.ir/nz-lifecycle-cron.php); test "$code" = "403"
+          code=$(curl -sS -o /tmp/private -w '%{http_code}' --max-time 25 https://websaza.ir/.marketplace-data/data.json); test "$code" = "404"
           curl -fsSI --retry 4 --retry-delay 3 --max-time 25 'https://websaza.ir/nz?page=login' | grep -i 'cache-control:.*no-store' >/dev/null
+          curl -fsSI --retry 4 --retry-delay 3 --max-time 25 'https://websaza.ir/nz?page=notifications' | grep -i 'x-robots-tag:.*noindex' >/dev/null
           curl -fsSI --retry 4 --retry-delay 3 --max-time 25 'https://websaza.ir/nz?page=login' | grep -i 'content-security-policy:' >/dev/null
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 https://websaza.ir/marketplace-uploads/.htaccess); test "$code" = "403" -o "$code" = "404"
 
-      - name: Check static upgrade assets
+      - name: Check static upgrade assets and PWA
         shell: bash
         run: |
           set -euo pipefail
-          for f in nz-draft-preview.js nz-taxonomy-client.js nz-chat-live.js; do
-            echo "Checking $f"
-            curl -fsS --retry 6 --retry-all-errors --retry-delay 3 --max-time 25 "https://websaza.ir/$f" >/dev/null
-          done
-          echo "Checking service worker content"
-          curl -fsS --retry 6 --retry-all-errors --retry-delay 3 --max-time 25 https://websaza.ir/niazestan-sw.js | grep -F "const CACHE='niazestan-v7'" >/dev/null
-          echo "Checking service worker MIME type"
+          for f in nz-draft-preview.js nz-taxonomy-client.js nz-chat-live.js nz-brand-model.js nz-geocode-proxy.js; do curl -fsS --retry 6 --retry-all-errors --retry-delay 3 --max-time 25 "https://websaza.ir/$f" >/dev/null; done
+          curl -fsS --retry 6 --retry-all-errors --retry-delay 3 --max-time 25 https://websaza.ir/niazestan-sw.js | grep -F "const CACHE='niazestan-v8'" >/dev/null
           curl -fsS -D /tmp/sw-headers --retry 6 --retry-all-errors --retry-delay 3 --max-time 25 https://websaza.ir/niazestan-sw.js -o /dev/null
           grep -iE '^content-type:.*(application|text)/javascript' /tmp/sw-headers >/dev/null
+          curl -fsS --max-time 25 https://websaza.ir/nz-manifest.json | jq -e '.scope=="/nz" and .start_url=="/nz" and .display=="standalone"' >/dev/null
