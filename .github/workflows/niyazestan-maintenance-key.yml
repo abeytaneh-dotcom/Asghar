@@ -1,4 +1,4 @@
-name: Niyazestan Maintenance Key
+name: Niyazestan Maintenance
 
 on:
   push:
@@ -8,27 +8,38 @@ on:
       - 'WebSaza/nz-storage.php'
       - 'WebSaza/.htaccess'
       - '.github/workflows/niyazestan-maintenance-key.yml'
+  schedule:
+    - cron: '17 1 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: niyazestan-maintenance
+  cancel-in-progress: false
+
 jobs:
-  provision:
+  maintain:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for site deployment
-        run: sleep 70
+      - name: Wait for site deployment on push
+        if: github.event_name == 'push'
+        run: sleep 80
 
-      - name: Provision maintenance key on cPanel
+      - name: Provision maintenance key and run maintenance
         shell: bash
         env:
           CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+          NIAZESTAN_CRON_KEY: ${{ secrets.NIAZESTAN_CRON_KEY }}
         run: |
           set -euo pipefail
           test -n "$CPANEL_TOKEN"
-          curl -fsS --max-time 30 https://websaza.ir/nz >/dev/null
-          CRON_KEY=$(printf '%s' "$CPANEL_TOKEN" | sha256sum | awk '{print $1}')
+          CRON_KEY="$NIAZESTAN_CRON_KEY"
+          if [ -z "$CRON_KEY" ]; then
+            CRON_KEY=$(printf '%s' "$CPANEL_TOKEN" | sha256sum | awk '{print $1}')
+          fi
+          test ${#CRON_KEY} -ge 32
           RESPONSE=$(curl --fail-with-body --silent --show-error \
             -H "Authorization: cpanel vt6qdx8:$CPANEL_TOKEN" \
             --request POST \
@@ -37,4 +48,11 @@ jobs:
             --data-urlencode "content=$CRON_KEY" \
             "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
           echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
-          curl -fsS --max-time 45 -H "X-Niyazestan-Cron: $CRON_KEY" https://websaza.ir/nz-lifecycle-cron.php | jq -e '.ok == true' >/dev/null
+          curl -fsS --max-time 60 -H "X-Niyazestan-Cron: $CRON_KEY" https://websaza.ir/nz-lifecycle-cron.php | tee maintenance.json | jq -e '.ok == true and (.stats.integrity == "ok" or .stats.integrity == "unknown")' >/dev/null
+
+      - name: Upload maintenance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: niyazestan-maintenance-${{ github.run_id }}
+          path: maintenance.json
+          retention-days: 14
