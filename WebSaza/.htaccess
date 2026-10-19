@@ -31,9 +31,11 @@ RewriteCond %{THE_REQUEST} \s/+nz-app\.php(?:[?\s]) [NC]
 RewriteRule ^nz-app\.php$ /nz [R=301,L,NE]
 RewriteCond %{THE_REQUEST} \s/+nz-v2\.php(?:[?\s]) [NC]
 RewriteRule ^nz-v2\.php$ /nz [R=301,L,NE]
+RewriteCond %{THE_REQUEST} \s/+nz-entry\.php(?:[?\s]) [NC]
+RewriteRule ^nz-entry\.php$ /nz [R=301,L,NE]
 
-# Serve the short app URL through the licensed live-feed entrypoint.
-RewriteRule ^nz/?$ nz/index.php [L,QSA]
+# Serve the short app URL through a root-level entrypoint that is always deployed.
+RewriteRule ^nz/?$ nz-entry.php [L,QSA]
 
 ErrorDocument 404 /404.html
 
