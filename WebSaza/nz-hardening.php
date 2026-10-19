@@ -55,7 +55,7 @@ function nzh_meta_replace(string $html, string $name, string $content): string {
 
 function nzh_seo(string $html): string {
     $page=(string)($_GET['page']??'home'); $id=(string)($_GET['id']??'');
-    $private=in_array($page,['login','new','profile','myposts','chat','admin','support'],true);
+    $private=in_array($page,['login','new','profile','myposts','chat','admin','support','search','saved-searches'],true) || (!empty($_GET['q']) && $id==='');
     $robots=$private ? 'noindex,nofollow,noarchive' : 'index,follow,max-image-preview:large';
     $html=nzh_meta_replace($html,'robots',$robots);
 
@@ -68,7 +68,7 @@ function nzh_seo(string $html): string {
             $desc=mb_substr(trim(preg_replace('/\s+/u',' ',(string)($p['description']??''))??''),0,155);
             if (!empty($p['images'][0])) $image='https://websaza.ir/marketplace-uploads/'.rawurlencode(basename((string)$p['images'][0]));
             $schema=['@context'=>'https://schema.org','@type'=>'Product','name'=>(string)($p['title']??''),'description'=>$desc,'image'=>[$image],'category'=>trim((string)($p['category']??'').' / '.(string)($p['subcategory']??'')),'url'=>$canonical];
-            if ((int)($p['price']??0)>0) $schema['offers']=['@type'=>'Offer','price'=>(int)$p['price'],'priceCurrency'=>'IRR','availability'=>'https://schema.org/InStock','url'=>$canonical];
+            if ((int)($p['price']??0)>0) $schema['offers']=['@type'=>'Offer','price'=>(int)$p['price']*10,'priceCurrency'=>'IRR','availability'=>'https://schema.org/InStock','url'=>$canonical];
             break;
         }
     }
