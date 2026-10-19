@@ -1,0 +1,41 @@
+<?php
+declare(strict_types=1);
+
+function nzpm_find(array $db,string $id): ?array { foreach($db['posts']??[] as$p)if(($p['id']??'')===$id)return$p;return null; }
+function nzpm_owner(array $post,array $user): bool { return ($post['user_id']??'')===($user['id']??''); }
+function nzpm_back(string $id=''): never { nzc_redirect($id!==''?'/nz?page=myposts':'/nz?page=profile'); }
+function nzpm_handle_post(string $action): never {
+    nzc_session_open();$db=nzc_db_read();$user=nzc_require_user($db);if(!nzc_csrf_valid())throw new RuntimeException('درخواست نامعتبر است.');
+    $id=trim((string)($_POST['post_id']??''));$post=nzpm_find($db,$id);if(!$post||!nzpm_owner($post,$user))throw new RuntimeException('آگهی متعلق به این حساب نیست.');
+    if($action==='mark_sold'||$action==='archive_post'||$action==='restore_post'){
+        nzc_db_write(function(&$db)use($id,$action,$user){foreach($db['posts']as&$p){if(($p['id']??'')!==$id||($p['user_id']??'')!==$user['id'])continue;$now=nzc_now();if($action==='mark_sold'){$p['status']='sold';$p['sold_at']=$now;}elseif($action==='archive_post'){$p['status']='archived';$p['archived_at']=$now;}else{$exp=strtotime((string)($p['expires_at']??''));if(($p['review_status']??'')==='approved'&&($exp===false||$exp>time()))$p['status']='published';elseif(($p['review_status']??'')==='approved')$p['status']='expired';else$p['status']='pending';unset($p['sold_at'],$p['archived_at']);}$p['updated_at']=$now;break;}unset($p);});
+        nzc_audit($user,$action,'post',$id);nzc_flash($action==='mark_sold'?'آگهی به‌عنوان فروخته/انجام‌شده بسته شد.':($action==='archive_post'?'آگهی بایگانی شد.':'وضعیت آگهی بازگردانی شد.'));nzpm_back($id);
+    }
+    if($action==='update_post'){
+        $title=mb_substr(trim((string)($_POST['title']??'')),0,140);$desc=mb_substr(trim((string)($_POST['description']??'')),0,5000);$price=max(0,(int)($_POST['price']??0));if(mb_strlen($title)<5)throw new RuntimeException('عنوان آگهی حداقل ۵ حرف باشد.');if(mb_strlen($desc)<15)throw new RuntimeException('توضیحات را کامل‌تر بنویسید.');
+        $moderation=function_exists('nzm_scan_submission')?nzm_scan_submission($title,$desc,(array)($post['attributes']??[])):['flagged'=>false,'priority'=>'normal','reasons'=>[]];
+        nzc_db_write(function(&$db)use($id,$user,$title,$desc,$price,$moderation){foreach($db['posts']as&$p){if(($p['id']??'')!==$id||($p['user_id']??'')!==$user['id'])continue;$history=(array)($p['edit_history']??[]);$history[]=['title'=>$p['title']??'','description'=>$p['description']??'','price'=>$p['price']??0,'status'=>$p['status']??'','at'=>nzc_now()];$p['edit_history']=array_slice($history,-10);$p['title']=$title;$p['description']=$desc;$p['price']=$price;$p['status']='pending';$p['review_status']='pending';$p['review_priority']=!empty($moderation['flagged'])?'high':'normal';$p['moderation']=$moderation;$p['submitted_at']=nzc_now();$p['updated_at']=nzc_now();unset($p['reviewed_at'],$p['reviewed_by'],$p['rejection_reason']);nzc_support_message($db,(string)$user['id'],'ویرایش آگهی «'.$title.'» ثبت شد و برای بررسی مجدد مدیر ارسال شد. تا تأیید دوباره در نتایج عمومی نمایش داده نمی‌شود.');nzc_notify($db,(string)$user['id'],'ویرایش آگهی «'.$title.'» در انتظار تأیید مدیر است.');break;}unset($p);});
+        nzc_audit($user,'update_post','post',$id,['price'=>$price]);nzc_flash('ویرایش ذخیره شد و برای تأیید مجدد مدیر ارسال شد.','ok');nzpm_back($id);
+    }
+    throw new RuntimeException('عملیات آگهی معتبر نیست.');
+}
+function nzpm_edit_html(array $db,array $user,string $id): string {
+    $p=nzpm_find($db,$id);if(!$p||!nzpm_owner($p,$user))return'<main class="page page-narrow"><div class="surface"><h1>آگهی پیدا نشد</h1></div></main>';
+    $csrf=nzc_e($_SESSION['csrf']??'');return'<main class="page page-narrow"><div class="surface"><h1>ویرایش آگهی</h1><p class="lead">تغییر عنوان، توضیحات یا قیمت باعث بررسی دوباره توسط مدیر می‌شود.</p><form method="post"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="update_post"><input type="hidden" name="post_id" value="'.nzc_e($id).'"><div class="field"><label>عنوان</label><input name="title" maxlength="140" required value="'.nzc_e($p['title']??'').'"></div><div class="field"><label>توضیحات</label><textarea name="description" maxlength="5000" required>'.nzc_e($p['description']??'').'</textarea></div><div class="field"><label>قیمت (تومان)</label><input type="number" min="0" name="price" value="'.(int)($p['price']??0).'"></div><button class="btn primary" style="width:100%">ذخیره و ارسال برای بررسی</button></form></div></main>';
+}
+function nzpm_manage_cards(array $db,array $user): string {
+    $csrf=nzc_e($_SESSION['csrf']??'');$rows=array_values(array_filter($db['posts']??[],fn($p)=>($p['user_id']??'')===$user['id']&&($p['status']??'')!=='deleted'));if(!$rows)return'';usort($rows,fn($a,$b)=>strtotime($b['updated_at']??'now')<=>strtotime($a['updated_at']??'now'));$h='<section class="surface nzpm-box"><h2>مدیریت آگهی‌ها</h2>';
+    foreach($rows as$p){$id=(string)$p['id'];$status=(string)($p['status']??'pending');$h.='<article class="nzpm-row"><div><b>'.nzc_e($p['title']??'آگهی').'</b><small>'.nzc_e(nzc_status_fa($status)).'</small></div><div class="nzpm-actions"><a class="btn ghost" href="/nz?page=edit&id='.rawurlencode($id).'">ویرایش</a>';
+        if($status==='published')$h.='<form method="post"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="mark_sold"><input type="hidden" name="post_id" value="'.nzc_e($id).'"><button class="btn">فروخته/انجام شد</button></form><form method="post"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="archive_post"><input type="hidden" name="post_id" value="'.nzc_e($id).'"><button class="btn ghost">بایگانی</button></form>';
+        elseif(in_array($status,['sold','archived'],true))$h.='<form method="post"><input type="hidden" name="csrf" value="'.$csrf.'"><input type="hidden" name="action" value="restore_post"><input type="hidden" name="post_id" value="'.nzc_e($id).'"><button class="btn primary">بازگردانی</button></form>';
+        $h.='</div></article>';}
+    return$h.'</section>';
+}
+function nzpm_enhance(string $html): string {
+    nzc_session_open();$db=nzc_db_read();$user=nzc_current_user($db);if(!$user)return$html;$page=(string)($_GET['page']??'home');
+    if($page==='edit'&&!empty($_GET['id'])&&function_exists('nzd_replace_main'))$html=nzd_replace_main($html,nzpm_edit_html($db,$user,(string)$_GET['id']));
+    if($page==='myposts'){$cards=nzpm_manage_cards($db,$user);if($cards!=='')$html=str_replace('<main class="page">','<main class="page">'.$cards,$html);}
+    $id=trim((string)($_GET['id']??''));if($id!==''){$p=nzpm_find($db,$id);if($p&&nzpm_owner($p,$user)&&str_contains($html,'<section class="detail-info">')){$html=str_replace('<section class="detail-info">','<section class="detail-info"><div class="nzpm-detail-actions"><a class="btn ghost" href="/nz?page=edit&id='.rawurlencode($id).'">ویرایش آگهی</a></div>',$html);}}
+    $css='<style id="nzpm-style">.nzpm-box{margin-bottom:14px}.nzpm-box h2{margin-top:0}.nzpm-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #eceef1}.nzpm-row small{display:block;color:#747b84;margin-top:4px}.nzpm-actions{display:flex;gap:6px;flex-wrap:wrap}.nzpm-actions form{margin:0}.nzpm-detail-actions{margin-bottom:8px}@media(max-width:680px){.nzpm-row{align-items:stretch;flex-direction:column}.nzpm-actions{display:grid;grid-template-columns:1fr 1fr}.nzpm-actions .btn,.nzpm-actions form,.nzpm-actions button{width:100%}}</style>';
+    return str_replace('</head>',$css.'</head>',$html);
+}
