@@ -28,13 +28,19 @@ function nzauth_fixed_phone_from_env(): string {
         $phone=function_exists('nzotp_phone')?nzotp_phone($raw):(preg_replace('/\D+/','',$raw)??'');
         if(nzauth_phone_is_fixed($phone))return$phone;
     }
+    $file=nzstore_dir().'/admin-phone.secret';
+    if(is_file($file)){
+        $raw=trim((string)@file_get_contents($file));
+        $phone=function_exists('nzotp_phone')?nzotp_phone($raw):(preg_replace('/\D+/','',$raw)??'');
+        if(nzauth_phone_is_fixed($phone))return$phone;
+    }
     return'';
 }
 function nzauth_resolve_fixed_identity(): array {
     nzc_session_open();$db=nzc_db_read();$u=nzauth_find_fixed_user($db);
     if($u)return[$u,nzauth_phone($u)];
     $phone=nzauth_fixed_phone_from_env();
-    if($phone==='')throw new RuntimeException('حساب ثابت مدیر روی سرور پیدا نشد. یک‌بار با شماره مدیر در نیازستان وارد شوید یا تنظیم شماره مدیر سرور را بررسی کنید.');
+    if($phone==='')throw new RuntimeException('شماره ثابت مدیر هنوز روی سرور تنظیم نشده است.');
     $uid=nzc_db_write(function(&$db)use($phone){
         foreach($db['users']??[]as&$row){
             $candidate=function_exists('nzotp_phone')?nzotp_phone((string)($row['phone']??'')):(preg_replace('/\D+/','',(string)($row['phone']??''))??'');
