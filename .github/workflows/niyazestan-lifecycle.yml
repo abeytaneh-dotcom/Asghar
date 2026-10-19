@@ -12,9 +12,16 @@ jobs:
   lifecycle:
     runs-on: ubuntu-latest
     steps:
-      - name: Run Niyazestan lifecycle maintenance
+      - name: Run authenticated Niyazestan maintenance
         shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
         run: |
           set -euo pipefail
-          RESPONSE=$(curl -fsS --retry 3 --retry-delay 5 --max-time 30 https://websaza.ir/nz-lifecycle-cron.php)
+          test -n "$CPANEL_TOKEN"
+          CRON_KEY=$(printf '%s' "$CPANEL_TOKEN" | sha256sum | awk '{print $1}')
+          RESPONSE=$(curl -fsS --retry 3 --retry-delay 5 --max-time 45 \
+            -H "X-Niyazestan-Cron: $CRON_KEY" \
+            https://websaza.ir/nz-lifecycle-cron.php)
           echo "$RESPONSE" | jq -e '.ok == true' >/dev/null
+          echo "$RESPONSE" | jq -c '.stats'
