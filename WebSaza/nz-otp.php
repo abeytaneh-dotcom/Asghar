@@ -15,17 +15,18 @@ function nzotp_e164(string $phone): string { return '+98'.substr($phone,1); }
 
 function nzotp_send_pattern(string $phone, string $code): void {
     if (!function_exists('curl_init')) throw new RuntimeException('امکان اتصال به سرویس پیامک روی سرور فعال نیست.');
+    $paramKey=nzotp_env('IPPANEL_PATTERN_PARAM'); if($paramKey==='')$paramKey='code';
     $payload=[
         'sending_type'=>'pattern',
         'from_number'=>nzotp_env('IPPANEL_FROM_NUMBER'),
         'code'=>nzotp_env('IPPANEL_PATTERN_CODE'),
         'recipients'=>[nzotp_e164($phone)],
-        'params'=>[nzotp_env('IPPANEL_PATTERN_PARAM') ?: 'code'=>$code],
+        'params'=>[$paramKey=>$code],
     ];
     $ch=curl_init('https://edge.ippanel.com/v1/api/send');
     curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>8,CURLOPT_TIMEOUT=>15,CURLOPT_HTTPHEADER=>['Content-Type: application/json','Authorization: '.nzotp_env('IPPANEL_API_KEY')],CURLOPT_POSTFIELDS=>json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)]);
-    $raw=curl_exec($ch); $err=curl_error($ch); $status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE); curl_close($ch);
-    if ($raw===false || $status<200 || $status>=300) throw new RuntimeException('ارسال کد ورود انجام نشد. کمی بعد دوباره تلاش کنید.'.($err!==''?'':'') );
+    $raw=curl_exec($ch); $status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE); curl_close($ch);
+    if ($raw===false || $status<200 || $status>=300) throw new RuntimeException('ارسال کد ورود انجام نشد. کمی بعد دوباره تلاش کنید.');
     $json=json_decode((string)$raw,true);
     if (is_array($json) && isset($json['meta']['status']) && !$json['meta']['status']) throw new RuntimeException('سرویس پیامک ارسال کد را نپذیرفت.');
 }
