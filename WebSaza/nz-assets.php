@@ -10,7 +10,7 @@ function nzassets_version(string $file): string {
 function nzassets_rewrite(string $html): string {
     $files=[
         'nz-manifest.json','niazestan-icon-180.php','niazestan-icon-192.php','niazestan-icon-512.php',
-        'nz-install-direct.js','nz-media-client.js','nz-geocode-proxy.js','nz-submit-wizard.js','nz-location-privacy.js',
+        'nz-install-direct.js','nz-media-client.js','nz-geocode-proxy.js','nz-submit-wizard.js','nz-location-privacy.js','nz-live-map.js',
         'nz-taxonomy-client.js','nz-spec-lite.js','nz-brand-model.js','nz-image-moderation.js','nz-draft-preview.js','nz-chat-live.js','nz-a11y.js'
     ];
     foreach($files as$file){
