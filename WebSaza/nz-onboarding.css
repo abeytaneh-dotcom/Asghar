@@ -1,6 +1,6 @@
 /* Niazestan first-entry spotlight tour */
-body.nz-tour-lock{overflow:hidden!important;touch-action:none}
-.nz-tour-blocker{position:fixed;inset:0;z-index:99980;background:transparent;cursor:default}
+body.nz-tour-lock{overscroll-behavior:none!important}
+.nz-tour-blocker{position:fixed;inset:0;z-index:99980;background:transparent;cursor:default;touch-action:none}
 .nz-tour-focus{position:fixed;z-index:99990;pointer-events:none;border-radius:18px;box-shadow:0 0 0 9999px rgba(12,15,20,.72),0 0 0 4px rgba(255,255,255,.98),0 14px 45px rgba(0,0,0,.24);transition:top .38s cubic-bezier(.2,.8,.2,1),left .38s cubic-bezier(.2,.8,.2,1),width .38s cubic-bezier(.2,.8,.2,1),height .38s cubic-bezier(.2,.8,.2,1),border-radius .25s ease;will-change:top,left,width,height}
 .nz-tour-focus:after{content:'';position:absolute;inset:-7px;border:2px solid rgba(255,255,255,.5);border-radius:inherit;animation:nzTourPulse 1.65s ease-in-out infinite}
 @keyframes nzTourPulse{0%,100%{opacity:.28;transform:scale(.985)}50%{opacity:.9;transform:scale(1.015)}}
