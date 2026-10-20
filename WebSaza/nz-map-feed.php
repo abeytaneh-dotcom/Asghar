@@ -16,6 +16,40 @@ function nzmap_float(string $key, ?float $fallback = null): ?float {
 function nzmap_text(string $key, int $max = 80): string {
     return mb_substr(trim((string)($_GET[$key] ?? '')), 0, $max);
 }
+function nzmap_norm_city(string $city): string {
+    $city = strtr(trim($city), ['ي'=>'ی','ى'=>'ی','ك'=>'ک','ۀ'=>'ه','ة'=>'ه']);
+    return preg_replace('/[\x{200c}\x{200d}\s\-_]+/u', '', $city) ?? $city;
+}
+function nzmap_city_center(string $city): ?array {
+    static $centers = [
+        'تهران'=>[35.6892,51.3890], 'مشهد'=>[36.2605,59.6168], 'اصفهان'=>[32.6546,51.6680],
+        'کرج'=>[35.8400,50.9391], 'شیراز'=>[29.5918,52.5837], 'تبریز'=>[38.0800,46.2919],
+        'اهواز'=>[31.3183,48.6706], 'قم'=>[34.6416,50.8746], 'رشت'=>[37.2808,49.5832],
+        'کرمانشاه'=>[34.3142,47.0650], 'ارومیه'=>[37.5527,45.0761], 'کرمان'=>[30.2839,57.0834],
+        'یزد'=>[31.8974,54.3569], 'بندرعباس'=>[27.1832,56.2666], 'بندر عباس'=>[27.1832,56.2666],
+        'اراک'=>[34.0917,49.6892], 'اردبیل'=>[38.2498,48.2933], 'ایلام'=>[33.6374,46.4227],
+        'بجنورد'=>[37.4747,57.3290], 'بیرجند'=>[32.8663,59.2211], 'بوشهر'=>[28.9234,50.8203],
+        'شهرکرد'=>[32.3256,50.8644], 'زنجان'=>[36.6769,48.4963], 'سمنان'=>[35.5769,53.3921],
+        'سنندج'=>[35.3219,46.9862], 'قزوین'=>[36.2688,50.0041], 'گرگان'=>[36.8427,54.4439],
+        'خرمآباد'=>[33.4878,48.3558], 'خرم آباد'=>[33.4878,48.3558], 'ساری'=>[36.5633,53.0601],
+        'یاسوج'=>[30.6682,51.5880]
+    ];
+    $wanted = nzmap_norm_city($city);
+    foreach ($centers as $name => $coords) if (nzmap_norm_city($name) === $wanted) return $coords;
+    return null;
+}
+function nzmap_approx_coords(array $post): ?array {
+    $center = nzmap_city_center((string)($post['city'] ?? ''));
+    if (!$center) return null;
+    $key = (string)($post['id'] ?? '') . '|' . (string)($post['title'] ?? '') . '|' . (string)($post['district'] ?? '');
+    $seed = (int)hexdec(substr(hash('sha256', $key), 0, 8));
+    $angle = (($seed % 360) / 180) * M_PI;
+    $radius = 0.003 + (($seed % 1000) / 1000) * 0.009;
+    return [
+        $center[0] + sin($angle) * $radius,
+        $center[1] + cos($angle) * $radius * 1.15,
+    ];
+}
 function nzmap_images(array $post): array {
     $result = [];
     foreach ((array)($post['images'] ?? []) as $candidate) {
@@ -29,10 +63,6 @@ function nzmap_images(array $post): array {
         if ($candidate !== '' && str_starts_with($candidate, '/')) $result[] = $candidate;
     }
     return array_values(array_unique($result));
-}
-function nzmap_image(array $post): string {
-    $images = nzmap_images($post);
-    return (string)($images[0] ?? '');
 }
 function nzmap_matches_text(array $post, string $q): bool {
     if ($q === '') return true;
@@ -60,14 +90,25 @@ try {
     $db = nzc_db_read();$rows = [];$total = 0;$focusRow = null;
     foreach (($db['posts'] ?? []) as $post) {
         if (($post['status'] ?? '') !== 'published') continue;
-        if (!isset($post['latitude'],$post['longitude']) || !is_numeric($post['latitude']) || !is_numeric($post['longitude'])) continue;
-        $lat=(float)$post['latitude'];$lng=(float)$post['longitude'];
-        if ($lat < 24.0 || $lat > 40.0 || $lng < 43.0 || $lng > 64.0) continue;
         if ($city !== '' && $city !== 'همه' && trim((string)($post['city'] ?? '')) !== $city) continue;
         if ($category !== '' && $category !== 'همه' && trim((string)($post['category'] ?? '')) !== $category) continue;
         if (!nzmap_matches_text($post,$q)) continue;
 
-        $mode=(string)($post['location_mode'] ?? 'approx');
+        $synthetic = false;
+        if (isset($post['latitude'],$post['longitude']) && is_numeric($post['latitude']) && is_numeric($post['longitude'])) {
+            $lat=(float)$post['latitude'];$lng=(float)$post['longitude'];
+            if ($lat < 24.0 || $lat > 40.0 || $lng < 43.0 || $lng > 64.0) {
+                $fallback = nzmap_approx_coords($post);
+                if (!$fallback) continue;
+                [$lat,$lng] = $fallback;$synthetic = true;
+            }
+        } else {
+            $fallback = nzmap_approx_coords($post);
+            if (!$fallback) continue;
+            [$lat,$lng] = $fallback;$synthetic = true;
+        }
+
+        $mode=$synthetic ? 'approx' : (string)($post['location_mode'] ?? 'approx');
         $images=nzmap_images($post);
         $row=[
             'id'=>(string)($post['id'] ?? ''),
@@ -79,6 +120,7 @@ try {
             'latitude'=>$lat,
             'longitude'=>$lng,
             'location_mode'=>$mode==='exact'?'exact':'approx',
+            'location_source'=>$synthetic?'city_approx':'post',
             'category'=>mb_substr((string)($post['category'] ?? ''),0,80),
             'featured'=>!empty($post['featured']),
             'created_at'=>(string)($post['created_at'] ?? $post['published_at'] ?? ''),
