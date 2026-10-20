@@ -12,15 +12,23 @@ function nzux_output_filter(string $html): string {
     if ($html === '') return $html;
 
     $css = '<link rel="stylesheet" href="/nz-zero-friction.css?v=20261020">';
-    $tourCss = '<link rel="stylesheet" href="/nz-onboarding.css?v=20261020b">';
     $js  = '<script src="/nz-zero-friction.js?v=20261020" defer></script>';
     $fix = '<script src="/nz-zero-friction-fixes.js?v=20261020" defer></script>';
-    $tourJs = '<script src="/nz-onboarding.js?v=20261020c" defer></script>';
+
+    $tourCssPath = __DIR__ . '/nz-onboarding.css';
+    $tourJsPath  = __DIR__ . '/nz-onboarding.js';
+    $tourCssRaw  = is_file($tourCssPath) ? (string)file_get_contents($tourCssPath) : '';
+    $tourJsRaw   = is_file($tourJsPath) ? (string)file_get_contents($tourJsPath) : '';
+    $forceTour   = ((string)($_GET['tour'] ?? '') === '1');
+    $tourCss = $tourCssRaw !== '' ? '<style id="nz-onboarding-inline-css">'.$tourCssRaw.'</style>' : '';
+    $tourJs = $tourJsRaw !== ''
+        ? '<script id="nz-onboarding-inline-js">'.($forceTour ? 'window.__NZ_TOUR_FORCE__=true;' : '').$tourJsRaw.'</script>'
+        : '';
 
     if (!str_contains($html, '/nz-zero-friction.css')) {
         $html = str_replace('</head>', $css."\n</head>", $html);
     }
-    if (!str_contains($html, '/nz-onboarding.css')) {
+    if ($tourCss !== '' && !str_contains($html, 'nz-onboarding-inline-css')) {
         $html = str_replace('</head>', $tourCss."\n</head>", $html);
     }
     if (!str_contains($html, '/nz-zero-friction.js')) {
@@ -29,7 +37,7 @@ function nzux_output_filter(string $html): string {
     if (!str_contains($html, '/nz-zero-friction-fixes.js')) {
         $html = str_replace('</body>', $fix."\n</body>", $html);
     }
-    if (!str_contains($html, '/nz-onboarding.js')) {
+    if ($tourJs !== '' && !str_contains($html, 'nz-onboarding-inline-js')) {
         $html = str_replace('</body>', $tourJs."\n</body>", $html);
     }
     return $html;
