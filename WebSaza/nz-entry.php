@@ -3,6 +3,13 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/nz-external-feeds.php';
 require_once __DIR__ . '/nz-zero-friction.php';
+require_once __DIR__ . '/nz-legacy-sync.php';
+
+// Newer Niazestan modules write to SQLite while the legacy renderer still
+// reads data.json. Refresh the compatibility snapshot before rendering so a
+// successful OTP login is visible immediately on the redirected request.
+nzlegacy_sync_snapshot();
+
 nzext_maybe_sync();
 ob_start('nzux_output_filter');
 require __DIR__ . '/nz-v2.php';
