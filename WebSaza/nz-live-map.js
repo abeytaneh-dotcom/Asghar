@@ -82,7 +82,7 @@ async function initLiveMap(){
   const search=qs('#nzMapSearch',root);search.value=params.get('q')||'';
   let L;try{L=await loadLeaflet();}catch(_){qs('#nzMapCount',root).textContent='بارگذاری نقشه انجام نشد';return;}
   const start=currentCityCenter();const map=L.map('nzLiveMap',{zoomControl:false,attributionControl:true,preferCanvas:true,minZoom:5,maxZoom:19}).setView([start[0],start[1]],start[2]);addSimpleTiles(L,map);
-  const markerLayer=L.layerGroup().addTo(map);let items=[];let selected='';let timer=0;let aborter=null;let touchStartX=0;
+  const markerLayer=L.layerGroup().addTo(map);let items=[];let selected='';let timer=0;let aborter=null;let touchStartX=0;let markerTapLockUntil=0;
 
   function endpoint(extra={}){
     const b=map.getBounds();const u=new URL('/nz-map-feed.php',location.origin);
@@ -105,8 +105,8 @@ async function initLiveMap(){
   function clusterItems(){const z=map.getZoom();if(z>=15)return items.map(p=>[p]);const groups=new Map();const cell=z<=9?68:z<=11?56:z<=13?44:32;items.forEach(p=>{const pt=map.latLngToContainerPoint([p.latitude,p.longitude]);const key=Math.round(pt.x/cell)+'|'+Math.round(pt.y/cell);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p);});return Array.from(groups.values());}
   function renderMarkers(){
     markerLayer.clearLayers();clusterItems().forEach(group=>{const lat=group.reduce((s,p)=>s+Number(p.latitude),0)/group.length;const lng=group.reduce((s,p)=>s+Number(p.longitude),0)/group.length;
-      if(group.length>1){const html='<div class="nz-map-cluster">'+new Intl.NumberFormat('fa-IR').format(group.length)+'</div>';const icon=L.divIcon({className:'',html,iconSize:[38,38],iconAnchor:[19,19]});const m=L.marker([lat,lng],{icon,keyboard:true,title:group.length+' آگهی'}).addTo(markerLayer);m.on('click',()=>map.setView([lat,lng],Math.min(map.getZoom()+2,15),{animate:true}));return;}
-      const p=group[0];const active=selected===p.id;const html='<div class="nz-map-pin-wrap"><div class="nz-map-pin '+(active?'selected':'')+'"></div></div>';const icon=L.divIcon({className:'',html,iconSize:[30,38],iconAnchor:[15,34]});const m=L.marker([lat,lng],{icon,keyboard:true,zIndexOffset:active?700:0,title:p.title||'آگهی'}).addTo(markerLayer);m.on('click',e=>{L.DomEvent.stopPropagation(e);selectItem(p);});
+      if(group.length>1){const html='<div class="nz-map-cluster">'+new Intl.NumberFormat('fa-IR').format(group.length)+'</div>';const icon=L.divIcon({className:'',html,iconSize:[38,38],iconAnchor:[19,19]});const m=L.marker([lat,lng],{icon,keyboard:true,bubblingMouseEvents:false,title:group.length+' آگهی'}).addTo(markerLayer);m.on('click',()=>{markerTapLockUntil=Date.now()+500;map.setView([lat,lng],Math.min(map.getZoom()+2,15),{animate:true});});return;}
+      const p=group[0];const active=selected===p.id;const html='<div class="nz-map-pin-wrap"><div class="nz-map-pin '+(active?'selected':'')+'"></div></div>';const icon=L.divIcon({className:'',html,iconSize:[30,38],iconAnchor:[15,34]});const m=L.marker([lat,lng],{icon,keyboard:true,bubblingMouseEvents:false,zIndexOffset:active?700:0,title:p.title||'آگهی'}).addTo(markerLayer);m.on('click',()=>{markerTapLockUntil=Date.now()+500;selectItem(p);});
     });
   }
   async function loadViewport(){
@@ -114,7 +114,7 @@ async function initLiveMap(){
     try{const r=await fetch(endpoint(),{credentials:'same-origin',signal:aborter.signal,headers:{Accept:'application/json'}});const data=await r.json();if(!r.ok||!data.ok)throw new Error(data.error||'feed');items=Array.isArray(data.items)?data.items:[];if(selected&&!items.some(p=>p.id===selected)){selected='';renderPreview();}renderMarkers();renderCount(Number(data.total||items.length),!!data.limited);}catch(e){if(e.name!=='AbortError'){items=[];selected='';renderMarkers();renderPreview();renderCount(0,false);}}finally{qs('#nzMapLoading',root).classList.remove('show');}
   }
   function queueLoad(ms=220){clearTimeout(timer);timer=setTimeout(loadViewport,ms);}
-  map.on('moveend zoomend',()=>queueLoad());map.on('click',()=>{if(selected){selected='';renderMarkers();renderPreview();}});search.addEventListener('input',()=>queueLoad(350));
+  map.on('moveend zoomend',()=>queueLoad());map.on('click',()=>{if(Date.now()<markerTapLockUntil)return;if(selected){selected='';renderMarkers();renderPreview();}});search.addEventListener('input',()=>queueLoad(350));
   qs('.nz-map-locate',root).onclick=()=>{if(!navigator.geolocation)return;navigator.geolocation.getCurrentPosition(pos=>map.setView([pos.coords.latitude,pos.coords.longitude],15),()=>{}, {enableHighAccuracy:true,timeout:8000,maximumAge:30000});};
   const focus=params.get('focus');if(focus){try{const u=new URL('/nz-map-feed.php',location.origin);u.searchParams.set('id',focus);const r=await fetch(u,{credentials:'same-origin',headers:{Accept:'application/json'}});const d=await r.json();if(d&&d.focus){selected=d.focus.id;map.setView([d.focus.latitude,d.focus.longitude],16);}}catch(_){}}
   await loadViewport();if(selected){const p=selectedItem();if(p)selectItem(p);}setTimeout(()=>map.invalidateSize(),100);
