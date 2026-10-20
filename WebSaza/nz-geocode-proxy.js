@@ -1,6 +1,84 @@
 (()=>{
 'use strict';
 
+/* Keep the mobile header controls in separate columns so Install never covers City. */
+const headerFixCss=`
+@media (max-width:760px){
+  .mobile-head .mobile-row{
+    display:grid!important;
+    grid-template-columns:auto minmax(0,1fr) minmax(100px,128px)!important;
+    align-items:center!important;
+    column-gap:7px!important;
+  }
+  .mobile-head .mobile-brand{
+    grid-column:1!important;
+    grid-row:1!important;
+    justify-self:start!important;
+    min-width:0!important;
+  }
+  .mobile-head .install-mini{
+    position:static!important;
+    left:auto!important;
+    top:auto!important;
+    transform:none!important;
+    grid-column:2!important;
+    grid-row:1!important;
+    justify-self:center!important;
+    width:max-content!important;
+    max-width:100%!important;
+    min-width:0!important;
+    height:34px!important;
+    min-height:44px!important;
+    padding:0 10px!important;
+    font-size:12px!important;
+    gap:4px!important;
+    z-index:2!important;
+  }
+  .mobile-head .install-mini:active{transform:scale(.96)!important}
+  .mobile-head .nz-mobile-city-top{
+    grid-column:3!important;
+    grid-row:1!important;
+    justify-self:stretch!important;
+    margin:0!important;
+    width:100%!important;
+    max-width:128px!important;
+    min-width:0!important;
+    overflow:hidden!important;
+    padding-inline:9px!important;
+  }
+  .mobile-head .nz-mobile-city-top span{
+    display:block!important;
+    min-width:0!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+}
+@media (max-width:380px){
+  .mobile-head .mobile-row{
+    grid-template-columns:auto minmax(0,1fr) minmax(92px,112px)!important;
+    column-gap:5px!important;
+  }
+  .mobile-head .install-mini{
+    padding:0 7px!important;
+    font-size:11px!important;
+    gap:3px!important;
+  }
+  .mobile-head .install-mini svg{width:14px!important;height:14px!important}
+  .mobile-head .nz-mobile-city-top{
+    max-width:112px!important;
+    padding-inline:7px!important;
+    font-size:11.5px!important;
+  }
+}
+`;
+if(!document.getElementById('nzMobileHeaderLayoutFix')){
+  const style=document.createElement('style');
+  style.id='nzMobileHeaderLayoutFix';
+  style.textContent=headerFixCss;
+  (document.head||document.documentElement).appendChild(style);
+}
+
 /* Keep reverse geocoding on our own origin. */
 const nativeFetch=window.fetch.bind(window);
 window.fetch=(input,init)=>{
