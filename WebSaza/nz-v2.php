@@ -66,7 +66,7 @@ try {
                 foreach (($detailPost['attributes'] ?? []) as $label => $value) {if ((string)$value === '') continue;$extraSpecs .= '<div class="spec"><span>'.nzc_e($label).'</span><b>'.nzc_e($value).'</b></div>';}
                 if ($extraSpecs !== '') $html = str_replace('<div class="spec"><span>بازدید</span>', $extraSpecs.'<div class="spec"><span>بازدید</span>', $html);
                 if (isset($detailPost['latitude'], $detailPost['longitude']) && is_numeric($detailPost['latitude']) && is_numeric($detailPost['longitude'])) {
-                    $lat = (float)$detailPost['latitude'];$lng = (float)$detailPost['longitude'];$mode = (($detailPost['location_mode'] ?? '') === 'approx') ? 'موقعیت حدودی' : 'موقعیت دقیق';$address = trim(implode('، ', array_filter([(string)($detailPost['province'] ?? ''),(string)($detailPost['city'] ?? ''),(string)($detailPost['district'] ?? ''),(string)($detailPost['street'] ?? '')])));$mapUrl = 'https://www.openstreetmap.org/?mlat='.rawurlencode((string)$lat).'&mlon='.rawurlencode((string)$lng).'#map=16/'.rawurlencode((string)$lat).'/'.rawurlencode((string)$lng);$locationCard = '<div class="surface" style="margin-bottom:14px"><h3 style="margin-top:0">موقعیت آگهی</h3><div class="subtle" style="line-height:1.9;margin-bottom:10px">'.nzc_e($address).' · '.nzc_e($mode).'</div><a class="btn ghost" href="'.nzc_e($mapUrl).'" target="_blank" rel="noopener">مشاهده روی نقشه</a></div>';$html = str_replace('<div class="surface"><h3 style="margin-top:0">توضیحات</h3>', $locationCard.'<div class="surface"><h3 style="margin-top:0">توضیحات</h3>', $html);
+                    $lat = (float)$detailPost['latitude'];$lng = (float)$detailPost['longitude'];$mode = (($detailPost['location_mode'] ?? '') === 'approx') ? 'موقعیت حدودی' : 'موقعیت دقیق';$address = trim(implode('، ', array_filter([(string)($detailPost['province'] ?? ''),(string)($detailPost['city'] ?? ''),(string)($detailPost['district'] ?? ''),(string)($detailPost['street'] ?? '')])));$mapUrl = '/nz?page=map&focus='.rawurlencode($postId);$locationCard = '<div class="surface" style="margin-bottom:14px"><h3 style="margin-top:0">موقعیت آگهی</h3><div class="subtle" style="line-height:1.9;margin-bottom:10px">'.nzc_e($address).' · '.nzc_e($mode).'</div><a class="btn ghost" href="'.nzc_e($mapUrl).'">مشاهده روی نقشه زنده</a></div>';$html = str_replace('<div class="surface"><h3 style="margin-top:0">توضیحات</h3>', $locationCard.'<div class="surface"><h3 style="margin-top:0">توضیحات</h3>', $html);
                 }
             }
         }
@@ -77,6 +77,7 @@ try {
         $mediaTag = '<script src="/nz-media-client.js?v=0" defer></script>';
         $geoTag = '<script src="/nz-geocode-proxy.js?v=0"></script>';
         $wizardTag = '<script src="/nz-submit-wizard.js?v=0" defer></script>';
+        $liveMapTag = '<script src="/nz-live-map.js?v=0" defer></script>';
         $locationPrivacyTag = '<script src="/nz-location-privacy.js?v=0" defer></script>';
         $taxonomyTag = '<script src="/nz-taxonomy-client.js?v=0" defer></script>';
         $specTag = '<script src="/nz-spec-lite.js?v=0" defer></script>';
@@ -84,7 +85,7 @@ try {
         $moderationTag = '<script src="/nz-image-moderation.js?v=0" defer></script>';
         $draftTag = '<script src="/nz-draft-preview.js?v=0" defer></script>';
         $a11yTag = '<script src="/nz-a11y.js?v=0" defer></script>';
-        $html = str_replace('</head>', $installTag."\n".$geoTag."\n</head>", $html);$html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n".$locationPrivacyTag."\n".$taxonomyTag."\n".$specTag."\n".$brandModelTag."\n".$moderationTag."\n".$draftTag."\n".$a11yTag."\n</body>", $html);$html=nzassets_rewrite($html);echo $html;
+        $html = str_replace('</head>', $installTag."\n".$geoTag."\n</head>", $html);$html = str_replace('</body>', $mediaTag."\n".$wizardTag."\n".$liveMapTag."\n".$locationPrivacyTag."\n".$taxonomyTag."\n".$specTag."\n".$brandModelTag."\n".$moderationTag."\n".$draftTag."\n".$a11yTag."\n</body>", $html);$html=nzassets_rewrite($html);echo $html;
     }
 } catch (Throwable $e) {
     if (ob_get_level() > 0) ob_end_clean();if (function_exists('flash')) {flash($e->getMessage(), 'error');header('Location: /nz?page=new');exit;}nzc_flash($e->getMessage(), 'error');http_response_code(400);header('Content-Type: text/html; charset=utf-8');echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:560px;margin:60px auto;padding:20px"><h2>خطا در بارگذاری</h2><p>'.htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8').'</p><a href="/nz?page=new">بازگشت به ثبت آگهی</a></div>';
