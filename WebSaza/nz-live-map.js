@@ -30,13 +30,18 @@ style.textContent=`
 .nz-map-filter-select{appearance:auto;max-width:165px}
 .nz-map-live{height:34px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:999px;background:rgba(255,255,255,.94);box-shadow:0 4px 18px rgba(30,42,55,.10);font-size:11px;font-weight:800;color:#676d75;margin-inline-start:auto}
 .nz-map-live i{width:8px;height:8px;border-radius:50%;background:#1ca95b;box-shadow:0 0 0 4px rgba(28,169,91,.14)}
-.nz-map-marker{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:#d84049;color:#fff;border:5px solid rgba(216,64,73,.30);background-clip:padding-box;box-shadow:0 5px 14px rgba(129,26,32,.28);font:900 12px Tahoma,Arial,sans-serif;transition:.15s transform}
-.nz-map-marker.single{width:30px;height:30px;border-width:4px;font-size:0}.nz-map-marker.single::after{content:'';width:9px;height:9px;border-radius:50%;background:#fff}
-.nz-map-marker.selected{transform:scale(1.18);background:#9f1620}
-.nz-map-sheet{position:absolute;z-index:820;left:0;right:0;bottom:0;height:30dvh;min-height:170px;max-height:62dvh;background:#fff;border-radius:22px 22px 0 0;box-shadow:0 -10px 32px rgba(30,38,48,.16);display:flex;flex-direction:column;transition:height .22s ease;overflow:hidden}
-.nz-map-sheet.expanded{height:58dvh}.nz-map-handle{width:52px;height:5px;border-radius:999px;background:#b9bdc3;margin:9px auto 4px;cursor:pointer;flex:none}.nz-map-sheet-head{padding:7px 16px 10px;font-weight:950;font-size:15px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none}.nz-map-sheet-head small{font-size:10px;font-weight:700;color:#8a9098}.nz-map-list{overflow:auto;padding:0 14px 18px;overscroll-behavior:contain}.nz-map-card{display:grid;grid-template-columns:minmax(0,1fr) 102px;gap:12px;padding:12px 0;border-top:1px solid #eceef1;text-decoration:none;color:inherit;min-height:116px}.nz-map-card:first-child{border-top:0}.nz-map-card.selected{background:#fff8f8}.nz-map-card-body{min-width:0;display:flex;flex-direction:column;text-align:right}.nz-map-card-title{font-size:14px;line-height:1.75;font-weight:900;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.nz-map-card-price{margin-top:auto;font-size:12px;font-weight:850;color:#4b5159}.nz-map-card-loc{font-size:10.5px;color:#858c94;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nz-map-card-media{width:102px;height:102px;border-radius:12px;overflow:hidden;background:#eef0f2;display:grid;place-items:center;color:#9ca2aa}.nz-map-card-media img{width:100%;height:100%;object-fit:cover}.nz-map-empty{padding:26px 10px;text-align:center;color:#7d848c;font-size:12px;line-height:2}.nz-map-loading{position:absolute;z-index:850;top:116px;left:50%;transform:translateX(-50%);padding:7px 12px;border-radius:999px;background:rgba(34,38,43,.85);color:#fff;font-size:10px;display:none}.nz-map-loading.show{display:block}
+.nz-map-marker{position:relative;min-width:58px;height:34px;padding:0 10px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#f4515b;color:#17191c;border:2px solid rgba(180,35,44,.12);box-shadow:0 4px 12px rgba(98,22,27,.24);font:900 11.5px Tahoma,Arial,sans-serif;white-space:nowrap;transition:.16s transform,.16s background,.16s color,.16s box-shadow;box-sizing:border-box}
+.nz-map-marker::after{content:'';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);border-left:7px solid transparent;border-right:7px solid transparent;border-top:8px solid #f4515b;transition:border-top-color .16s}
+.nz-map-marker.selected{transform:scale(1.06);background:#fff;color:#17191c;border-color:#e3e6ea;box-shadow:0 6px 18px rgba(20,24,29,.22);z-index:3}.nz-map-marker.selected::after{border-top-color:#fff}
+.nz-map-cluster{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:#ef535c;color:#17191c;border:7px solid rgba(239,83,92,.28);background-clip:padding-box;box-shadow:0 5px 14px rgba(129,26,32,.26);font:900 12px Tahoma,Arial,sans-serif}
+.nz-map-preview-rail{position:absolute;z-index:830;left:0;right:0;bottom:92px;display:flex;justify-content:center;padding:0 38px;pointer-events:none;transform:translateY(14px);opacity:0;transition:.18s ease}.nz-map-preview-rail.show{transform:none;opacity:1}
+.nz-map-preview-card{pointer-events:auto;width:min(82vw,520px);max-height:320px;background:#fff;border:1px solid rgba(31,37,44,.10);border-radius:15px;box-shadow:0 14px 36px rgba(26,32,40,.26);overflow:hidden;color:#1f2328;text-decoration:none;touch-action:pan-y;user-select:none}
+.nz-map-preview-media{display:flex;gap:8px;padding:10px 10px 0;height:138px}.nz-map-preview-media>div{flex:1;min-width:0;border-radius:11px;overflow:hidden;background:#e9ecef;display:grid;place-items:center;color:#89919a;font-size:11px}.nz-map-preview-media img{width:100%;height:100%;object-fit:cover;display:block}
+.nz-map-preview-body{padding:10px 13px 13px}.nz-map-preview-title{font-size:14px;line-height:1.85;font-weight:950;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nz-map-preview-price{font-size:13px;font-weight:900;margin-top:7px}.nz-map-preview-meta{display:flex;align-items:center;gap:6px;margin-top:8px;overflow:hidden}.nz-map-preview-meta span{height:26px;padding:0 8px;border-radius:7px;background:#f2f3f5;display:inline-flex;align-items:center;font-size:10px;color:#646b74;white-space:nowrap}.nz-map-preview-loc{margin-top:8px;font-size:11px;color:#6f7680;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nz-map-preview-side{position:absolute;top:50%;transform:translateY(-50%);width:20px;height:128px;background:rgba(255,255,255,.88);border-radius:10px;box-shadow:0 8px 20px rgba(24,30,38,.15);opacity:.72}.nz-map-preview-side.prev{right:8px}.nz-map-preview-side.next{left:8px}
+.nz-map-sheet{position:absolute;z-index:820;left:0;right:0;bottom:0;height:78px;background:#fff;border-radius:22px 22px 0 0;box-shadow:0 -10px 32px rgba(30,38,48,.16);display:flex;flex-direction:column;overflow:hidden}.nz-map-handle{width:52px;height:5px;border-radius:999px;background:#b9bdc3;margin:9px auto 4px;flex:none}.nz-map-sheet-head{padding:7px 16px 12px;font-weight:950;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;flex:none}.nz-map-sheet-head small{font-size:10px;font-weight:700;color:#8a9098}.nz-map-empty{padding:26px 10px;text-align:center;color:#7d848c;font-size:12px;line-height:2}.nz-map-loading{position:absolute;z-index:850;top:116px;left:50%;transform:translateX(-50%);padding:7px 12px;border-radius:999px;background:rgba(34,38,43,.85);color:#fff;font-size:10px;display:none}.nz-map-loading.show{display:block}
 .nz-edit-map-modal{position:fixed;inset:0;z-index:1000;background:rgba(16,20,25,.55);display:none;align-items:flex-end;justify-content:center}.nz-edit-map-modal.show{display:flex}.nz-edit-map-card{width:min(100%,600px);height:min(82dvh,720px);background:#fff;border-radius:22px 22px 0 0;display:flex;flex-direction:column;overflow:hidden}.nz-edit-map-head{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #eceef1}.nz-edit-map-head b{font-size:15px}.nz-edit-map-close{width:38px;height:38px;border:0;border-radius:10px;background:#f1f2f4;font-size:22px}.nz-edit-map-area{position:relative;flex:1;min-height:280px}.nz-edit-map-canvas{position:absolute;inset:0}.nz-edit-map-pin{position:absolute;z-index:500;left:50%;top:50%;transform:translate(-50%,-100%);font-size:38px;filter:drop-shadow(0 3px 4px rgba(0,0,0,.25));pointer-events:none}.nz-edit-map-foot{padding:12px 14px calc(12px + env(safe-area-inset-bottom));border-top:1px solid #eceef1}.nz-edit-mode{display:flex;gap:8px;margin-bottom:10px}.nz-edit-mode label{flex:1;border:1px solid #e1e4e8;border-radius:12px;padding:9px;font-size:11px;line-height:1.7}.nz-edit-map-save{width:100%;height:44px;border:0;border-radius:12px;background:#b4232c;color:#fff;font:900 13px Tahoma,Arial,sans-serif}.nzpm-location-summary{margin:6px 0 10px;padding:10px 12px;background:#f7f8f9;border:1px solid #eceef1;border-radius:12px;font-size:11px;line-height:1.9;color:#656c74}.nzpm-location-btn{width:100%;margin-bottom:14px}
-@media(min-width:761px){.nz-live-map-root{bottom:0}.nz-map-launch{bottom:24px}.nz-map-sheet{left:18px;right:auto;bottom:18px;width:390px;height:52vh;border-radius:20px}.nz-map-sheet.expanded{height:72vh}.nz-map-top{right:18px;left:auto;width:min(640px,calc(100vw - 36px))}.nz-edit-map-card{border-radius:22px;margin-bottom:3vh}}
+@media(min-width:761px){.nz-live-map-root{bottom:0}.nz-map-launch{bottom:24px}.nz-map-sheet{left:18px;right:auto;bottom:18px;width:390px;height:78px;border-radius:20px}.nz-map-preview-rail{left:428px;right:18px;bottom:30px;padding:0;align-items:flex-end}.nz-map-preview-card{width:min(520px,calc(100vw - 500px))}.nz-map-preview-side{display:none}.nz-map-top{right:18px;left:auto;width:min(640px,calc(100vw - 36px))}.nz-edit-map-card{border-radius:22px;margin-bottom:3vh}}
 body.nz-map-page{overflow:hidden!important}.nz-map-page .mobile-nav{z-index:950!important}
 `;
 document.head.appendChild(style);
@@ -68,6 +73,13 @@ function rewriteDetailMapLink(){
   qsa('a[href*="openstreetmap.org"]').forEach(a=>{a.href=mapUrl({focus:id});a.removeAttribute('target');a.removeAttribute('rel');});
 }
 function fmtPrice(n){const v=Number(n||0);return v>0?new Intl.NumberFormat('fa-IR').format(v)+' تومان':'توافقی';}
+function fmtMarkerPrice(n){
+  const v=Number(n||0);if(!Number.isFinite(v)||v<=0)return'توافقی';
+  if(v>=1e9){const x=Math.round(v/1e8)/10;return new Intl.NumberFormat('fa-IR',{maximumFractionDigits:1}).format(x)+' میلیارد';}
+  if(v>=1e6){const x=Math.round(v/1e5)/10;return new Intl.NumberFormat('fa-IR',{maximumFractionDigits:1}).format(x)+' م';}
+  if(v>=1e3){const x=Math.round(v/1e3);return new Intl.NumberFormat('fa-IR').format(x)+' ه';}
+  return new Intl.NumberFormat('fa-IR').format(v);
+}
 function currentCityCenter(){
   const c=params.get('city')||'';if(cityCenters[c])return cityCenters[c];
   const lat=Number(params.get('lat')),lon=Number(params.get('lon'));if(Number.isFinite(lat)&&Number.isFinite(lon)&&lat>=24&&lat<=40&&lon>=43&&lon<=64)return[lat,lon,13];
@@ -83,19 +95,19 @@ async function initLiveMap(){
       <div class="nz-map-chiprow"><button type="button" class="nz-map-chip" id="nzMapCity"></button><select id="nzMapCategory" class="nz-map-filter-select" aria-label="دسته‌بندی"><option value="">همه دسته‌ها</option><option>املاک</option><option>وسایل نقلیه</option><option>کالای دیجیتال</option><option>خانه و آشپزخانه</option><option>خدمات</option></select><span class="nz-map-live"><i></i>زنده</span></div>
     </div>
     <div id="nzMapLoading" class="nz-map-loading">در حال بروزرسانی…</div>
-    <section id="nzMapSheet" class="nz-map-sheet"><div class="nz-map-handle" aria-label="باز و بسته کردن فهرست"></div><div class="nz-map-sheet-head"><span id="nzMapCount">آگهی‌های این محدوده</span><small id="nzMapLimit"></small></div><div id="nzMapList" class="nz-map-list"></div></section>`;
+    <div id="nzMapPreview" class="nz-map-preview-rail" aria-live="polite"></div>
+    <section class="nz-map-sheet"><div class="nz-map-handle"></div><div class="nz-map-sheet-head"><span id="nzMapCount">آگهی‌های این محدوده</span><small id="nzMapLimit"></small></div></section>`;
   document.body.appendChild(root);
   qs('.nz-map-back',root).onclick=()=>history.length>1?history.back():location.assign('/nz');
   const cityLabel=params.get('city')||'همه شهرها';qs('#nzMapCity',root).textContent=cityLabel;
   const category=params.get('category')||'';const catSelect=qs('#nzMapCategory',root);if(category&&!Array.from(catSelect.options).some(o=>o.value===category)){const o=document.createElement('option');o.value=category;o.textContent=category;catSelect.appendChild(o);}catSelect.value=category;
   const search=qs('#nzMapSearch',root);search.value=params.get('q')||'';
-  const sheet=qs('#nzMapSheet',root);qs('.nz-map-handle',sheet).onclick=()=>sheet.classList.toggle('expanded');
 
-  let L;try{L=await loadLeaflet();}catch(_){qs('#nzMapList',root).innerHTML='<div class="nz-map-empty">بارگذاری نقشه انجام نشد. اتصال اینترنت را بررسی کنید.</div>';return;}
+  let L;try{L=await loadLeaflet();}catch(_){qs('#nzMapCount',root).textContent='بارگذاری نقشه انجام نشد';return;}
   const start=currentCityCenter();const map=L.map('nzLiveMap',{zoomControl:false,attributionControl:true,preferCanvas:true}).setView([start[0],start[1]],start[2]);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
   L.control.zoom({position:'bottomright'}).addTo(map);
-  const markerLayer=L.layerGroup().addTo(map);let items=[];let selected='';let timer=0;let aborter=null;let firstFocus=true;
+  const markerLayer=L.layerGroup().addTo(map);let items=[];let selected='';let timer=0;let aborter=null;let firstFocus=true;let touchStartX=0;
 
   function selectedCategory(){return catSelect.value||'';}
   function endpoint(extra={}){
@@ -104,39 +116,55 @@ async function initLiveMap(){
     const c=params.get('city')||'';if(c)u.searchParams.set('city',c);if(selectedCategory())u.searchParams.set('category',selectedCategory());if(search.value.trim())u.searchParams.set('q',search.value.trim());
     Object.entries(extra).forEach(([k,v])=>{if(v)u.searchParams.set(k,String(v));});return u;
   }
-  function renderList(total,limited){
-    const list=qs('#nzMapList',root);list.replaceChildren();qs('#nzMapCount',root).textContent=new Intl.NumberFormat('fa-IR').format(total)+' آگهی در این محدوده';qs('#nzMapLimit',root).textContent=limited?'نمایش نزدیک‌ترین نتایج':'';
-    if(!items.length){const e=document.createElement('div');e.className='nz-map-empty';e.textContent='در این بخش از نقشه آگهی دارای موقعیت ثبت‌شده پیدا نشد. نقشه را جابه‌جا کنید یا فیلتر را تغییر دهید.';list.appendChild(e);return;}
-    items.slice(0,120).forEach(p=>{
-      const a=document.createElement('a');a.className='nz-map-card'+(selected===p.id?' selected':'');a.href='/nz?id='+encodeURIComponent(p.id);a.dataset.id=p.id;
-      const body=document.createElement('div');body.className='nz-map-card-body';const title=document.createElement('div');title.className='nz-map-card-title';title.textContent=p.title||'آگهی';const price=document.createElement('div');price.className='nz-map-card-price';price.textContent=fmtPrice(p.price);const loc=document.createElement('div');loc.className='nz-map-card-loc';loc.textContent=[p.city,p.district].filter(Boolean).join('، ')||'موقعیت روی نقشه';body.append(title,price,loc);
-      const media=document.createElement('div');media.className='nz-map-card-media';if(p.image){const img=document.createElement('img');img.loading='lazy';img.alt='';img.src=p.image;media.appendChild(img);}else media.textContent='آگهی';a.append(body,media);list.appendChild(a);
-    });
+  function renderCount(total,limited){
+    qs('#nzMapCount',root).textContent=new Intl.NumberFormat('fa-IR').format(total)+' آگهی در این محدوده';
+    qs('#nzMapLimit',root).textContent=limited?'نمایش نزدیک‌ترین نتایج':'';
+  }
+  function selectedItem(){return items.find(p=>p.id===selected)||null;}
+  function itemIndex(){return Math.max(0,items.findIndex(p=>p.id===selected));}
+  function renderPreview(){
+    const rail=qs('#nzMapPreview',root);rail.replaceChildren();const p=selectedItem();
+    if(!p){rail.classList.remove('show');return;}
+    const card=document.createElement('a');card.className='nz-map-preview-card';card.href='/nz?id='+encodeURIComponent(p.id);card.dataset.id=p.id;
+    const media=document.createElement('div');media.className='nz-map-preview-media';const imgs=(Array.isArray(p.images)?p.images:[]).filter(Boolean).slice(0,2);if(!imgs.length&&p.image)imgs.push(p.image);
+    if(imgs.length){imgs.forEach(src=>{const wrap=document.createElement('div');const img=document.createElement('img');img.src=src;img.alt='';img.loading='eager';wrap.appendChild(img);media.appendChild(wrap);});if(imgs.length===1){const ph=document.createElement('div');ph.textContent=p.category||'آگهی';media.appendChild(ph);}}
+    else{const ph=document.createElement('div');ph.textContent='بدون تصویر';media.appendChild(ph);}
+    const body=document.createElement('div');body.className='nz-map-preview-body';const title=document.createElement('div');title.className='nz-map-preview-title';title.textContent=p.title||'آگهی';const price=document.createElement('div');price.className='nz-map-preview-price';price.textContent=fmtPrice(p.price);const meta=document.createElement('div');meta.className='nz-map-preview-meta';[p.category,p.featured?'ویژه':''].filter(Boolean).forEach(t=>{const s=document.createElement('span');s.textContent=t;meta.appendChild(s);});const loc=document.createElement('div');loc.className='nz-map-preview-loc';loc.textContent=[p.city,p.district].filter(Boolean).join('، ')||'موقعیت روی نقشه';body.append(title,price,meta,loc);card.append(media,body);
+    card.addEventListener('touchstart',e=>{touchStartX=e.changedTouches[0]?.clientX||0;},{passive:true});card.addEventListener('touchend',e=>{const x=e.changedTouches[0]?.clientX||0;const dx=x-touchStartX;if(Math.abs(dx)>55){e.preventDefault();selectRelative(dx>0?-1:1);}}, {passive:false});
+    const prev=document.createElement('div');prev.className='nz-map-preview-side prev';const next=document.createElement('div');next.className='nz-map-preview-side next';rail.append(prev,card,next);rail.classList.add('show');
+  }
+  function selectItem(p,{pan=false}={}){
+    if(!p)return;selected=p.id;renderMarkers();renderPreview();if(pan)map.panTo([p.latitude,p.longitude],{animate:true,duration:.25});
+  }
+  function selectRelative(step){
+    if(!items.length)return;const idx=itemIndex();let next=idx+step;if(next<0)next=items.length-1;if(next>=items.length)next=0;selectItem(items[next],{pan:true});
   }
   function clusterItems(){
-    const groups=new Map();const cell=72;
+    const groups=new Map();const cell=82;
     items.forEach(p=>{const pt=map.latLngToContainerPoint([p.latitude,p.longitude]);const key=Math.round(pt.x/cell)+'|'+Math.round(pt.y/cell);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p);});return Array.from(groups.values());
   }
   function renderMarkers(){
     markerLayer.clearLayers();clusterItems().forEach(group=>{
-      const lat=group.reduce((s,p)=>s+Number(p.latitude),0)/group.length;const lng=group.reduce((s,p)=>s+Number(p.longitude),0)/group.length;const one=group.length===1;const active=one&&selected===group[0].id;
-      const html='<div class="nz-map-marker '+(one?'single ':'')+(active?'selected':'')+'">'+(one?'':new Intl.NumberFormat('fa-IR').format(group.length))+'</div>';
-      const icon=L.divIcon({className:'',html,iconSize:one?[30,30]:[48,48],iconAnchor:one?[15,15]:[24,24]});const m=L.marker([lat,lng],{icon,keyboard:true}).addTo(markerLayer);
-      m.on('click',()=>{if(group.length>1){map.setView([lat,lng],Math.min(map.getZoom()+2,18));return;}selected=group[0].id;renderMarkers();renderList(items.length,false);sheet.classList.add('expanded');requestAnimationFrame(()=>{const el=qs('.nz-map-card[data-id="'+CSS.escape(selected)+'"]',root);if(el)el.scrollIntoView({block:'nearest',behavior:'smooth'});});});
+      const lat=group.reduce((s,p)=>s+Number(p.latitude),0)/group.length;const lng=group.reduce((s,p)=>s+Number(p.longitude),0)/group.length;
+      if(group.length>1){const html='<div class="nz-map-cluster">'+new Intl.NumberFormat('fa-IR').format(group.length)+'</div>';const icon=L.divIcon({className:'',html,iconSize:[48,48],iconAnchor:[24,24]});const m=L.marker([lat,lng],{icon,keyboard:true}).addTo(markerLayer);m.on('click',()=>map.setView([lat,lng],Math.min(map.getZoom()+2,18)));return;}
+      const p=group[0];const active=selected===p.id;const label=fmtMarkerPrice(p.price);const width=Math.max(58,Math.min(104,42+label.length*6));const html='<div class="nz-map-marker '+(active?'selected':'')+'">'+label+'</div>';const icon=L.divIcon({className:'',html,iconSize:[width,42],iconAnchor:[Math.round(width/2),39]});const m=L.marker([lat,lng],{icon,keyboard:true,zIndexOffset:active?700:0}).addTo(markerLayer);m.on('click',()=>selectItem(p));
     });
   }
   async function loadViewport(){
     if(aborter)aborter.abort();aborter=new AbortController();qs('#nzMapLoading',root).classList.add('show');
-    try{const r=await fetch(endpoint(),{credentials:'same-origin',signal:aborter.signal,headers:{Accept:'application/json'}});const data=await r.json();if(!r.ok||!data.ok)throw new Error(data.error||'feed');items=Array.isArray(data.items)?data.items:[];renderMarkers();renderList(Number(data.total||items.length),!!data.limited);}catch(e){if(e.name!=='AbortError'){items=[];renderMarkers();renderList(0,false);}}finally{qs('#nzMapLoading',root).classList.remove('show');}
+    try{
+      const r=await fetch(endpoint(),{credentials:'same-origin',signal:aborter.signal,headers:{Accept:'application/json'}});const data=await r.json();if(!r.ok||!data.ok)throw new Error(data.error||'feed');items=Array.isArray(data.items)?data.items:[];if(selected&&!items.some(p=>p.id===selected)){selected='';renderPreview();}renderMarkers();renderCount(Number(data.total||items.length),!!data.limited);
+    }catch(e){if(e.name!=='AbortError'){items=[];selected='';renderMarkers();renderPreview();renderCount(0,false);}}
+    finally{qs('#nzMapLoading',root).classList.remove('show');}
   }
   function queueLoad(ms=220){clearTimeout(timer);timer=setTimeout(loadViewport,ms);}
-  map.on('moveend zoomend',()=>queueLoad());search.addEventListener('input',()=>queueLoad(350));catSelect.addEventListener('change',()=>queueLoad(50));
+  map.on('moveend zoomend',()=>queueLoad());map.on('click',()=>{if(selected){selected='';renderMarkers();renderPreview();}});search.addEventListener('input',()=>queueLoad(350));catSelect.addEventListener('change',()=>{selected='';renderPreview();queueLoad(50);});
   qs('.nz-map-locate',root).onclick=()=>{if(!navigator.geolocation)return;navigator.geolocation.getCurrentPosition(pos=>{map.setView([pos.coords.latitude,pos.coords.longitude],15);},()=>{}, {enableHighAccuracy:true,timeout:8000,maximumAge:30000});};
   qs('#nzMapCity',root).onclick=()=>{const u=new URL('/nz',location.origin);if(params.get('city'))u.searchParams.set('city',params.get('city'));location.assign(u.pathname+u.search);};
 
   const focus=params.get('focus');
   if(focus&&firstFocus){firstFocus=false;try{const u=new URL('/nz-map-feed.php',location.origin);u.searchParams.set('id',focus);const r=await fetch(u,{credentials:'same-origin',headers:{Accept:'application/json'}});const d=await r.json();if(d&&d.focus){selected=d.focus.id;map.setView([d.focus.latitude,d.focus.longitude],16);}}catch(_){} }
-  await loadViewport();setTimeout(()=>map.invalidateSize(),100);
+  await loadViewport();if(selected){const p=selectedItem();if(p)selectItem(p);}setTimeout(()=>map.invalidateSize(),100);
 }
 
 function initEditLocation(){
