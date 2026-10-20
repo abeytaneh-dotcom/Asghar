@@ -16,12 +16,23 @@ function nzmap_float(string $key, ?float $fallback = null): ?float {
 function nzmap_text(string $key, int $max = 80): string {
     return mb_substr(trim((string)($_GET[$key] ?? '')), 0, $max);
 }
+function nzmap_images(array $post): array {
+    $result = [];
+    foreach ((array)($post['images'] ?? []) as $candidate) {
+        $name = basename(trim((string)$candidate));
+        if ($name === '' || $name === '.' || $name === '..') continue;
+        $result[] = '/marketplace-uploads/' . rawurlencode($name);
+        if (count($result) >= 3) break;
+    }
+    if (!$result) {
+        $candidate = trim((string)($post['image'] ?? ''));
+        if ($candidate !== '' && str_starts_with($candidate, '/')) $result[] = $candidate;
+    }
+    return array_values(array_unique($result));
+}
 function nzmap_image(array $post): string {
-    $images = (array)($post['images'] ?? []);
-    if (!empty($images[0])) return '/marketplace-uploads/' . rawurlencode(basename((string)$images[0]));
-    $candidate = trim((string)($post['image'] ?? ''));
-    if ($candidate !== '' && str_starts_with($candidate, '/')) return $candidate;
-    return '';
+    $images = nzmap_images($post);
+    return (string)($images[0] ?? '');
 }
 function nzmap_matches_text(array $post, string $q): bool {
     if ($q === '') return true;
@@ -57,6 +68,7 @@ try {
         if (!nzmap_matches_text($post,$q)) continue;
 
         $mode=(string)($post['location_mode'] ?? 'approx');
+        $images=nzmap_images($post);
         $row=[
             'id'=>(string)($post['id'] ?? ''),
             'title'=>mb_substr((string)($post['title'] ?? 'آگهی'),0,160),
@@ -70,7 +82,8 @@ try {
             'category'=>mb_substr((string)($post['category'] ?? ''),0,80),
             'featured'=>!empty($post['featured']),
             'created_at'=>(string)($post['created_at'] ?? $post['published_at'] ?? ''),
-            'image'=>nzmap_image($post),
+            'image'=>(string)($images[0] ?? ''),
+            'images'=>$images,
         ];
         if ($focus !== '' && $row['id'] === $focus) $focusRow = $row;
         if ($lat < $minLat || $lat > $maxLat || $lng < $minLng || $lng > $maxLng) continue;
