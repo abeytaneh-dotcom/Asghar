@@ -15,7 +15,7 @@ function nzux_output_filter(string $html): string {
     $tourCss = '<link rel="stylesheet" href="/nz-onboarding.css?v=20261020b">';
     $js  = '<script src="/nz-zero-friction.js?v=20261020" defer></script>';
     $fix = '<script src="/nz-zero-friction-fixes.js?v=20261020" defer></script>';
-    $tourJs = '<script src="/nz-onboarding.js?v=20261020b" defer></script>';
+    $tourJs = '<script src="/nz-onboarding.js?v=20261020c" defer></script>';
 
     if (!str_contains($html, '/nz-zero-friction.css')) {
         $html = str_replace('</head>', $css."\n</head>", $html);
