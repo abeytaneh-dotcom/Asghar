@@ -1,0 +1,49 @@
+name: WebSaza Tehran Preflight
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/websaza-tehran-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+    steps:
+      - name: Check target and domain
+        shell: bash
+        run: |
+          set -u
+          OUT="$RUNNER_TEMP/preflight.txt"
+          : > "$OUT"
+          if test -z "${CPANEL_TOKEN:-}"; then echo 'secret=missing' >> "$OUT"; exit 0; fi
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          BASE="https://${CPANEL_HOST}:2083"
+          DOMAIN_JSON="$RUNNER_TEMP/domain.json"
+          curl -sS --connect-timeout 15 --max-time 45 -H "$AUTH" --get --data-urlencode 'domain=websaza.ir' "${BASE}/execute/DomainInfo/single_domain_data" -o "$DOMAIN_JSON" || true
+          DSTATUS=$(jq -r '.result.status // .status // 0' "$DOMAIN_JSON" 2>/dev/null || echo 0)
+          DOCROOT=$(jq -r '(.result.data // .data // {}) | .documentroot // .document_root // ""' "$DOMAIN_JSON" 2>/dev/null || true)
+          printf 'domain_status=%s\ndocroot=%s\n' "$DSTATUS" "$DOCROOT" >> "$OUT"
+          LIST_JSON="$RUNNER_TEMP/list.json"
+          HTTP=$(curl -sS --connect-timeout 15 --max-time 45 -o "$LIST_JSON" -w '%{http_code}' -H "$AUTH" --get --data-urlencode 'dir=public_html/tehran' --data-urlencode 'show_hidden=1' "${BASE}/execute/Fileman/list_files" 2>/dev/null || true)
+          LSTATUS=$(jq -r '.result.status // .status // 0' "$LIST_JSON" 2>/dev/null || echo 0)
+          COUNT=$(jq -r '(.result.data // .data // []) | length' "$LIST_JSON" 2>/dev/null || echo 0)
+          ERR=$(jq -r '.result.errors[0] // .errors[0] // ""' "$LIST_JSON" 2>/dev/null || true)
+          printf 'target_http=%s\ntarget_status=%s\ntarget_count=%s\ntarget_error=%s\n' "$HTTP" "$LSTATUS" "$COUNT" "$ERR" >> "$OUT"
+          cat "$OUT"
+      - name: Upload sanitized result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: websaza-tehran-preflight-${{ github.run_number }}
+          path: ${{ runner.temp }}/preflight.txt
+          retention-days: 1
