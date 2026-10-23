@@ -1,0 +1,42 @@
+name: Patch Tehran Camera UI Once
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/patch-tehran-camera-ui.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+          fetch-depth: 0
+      - name: Patch admin camera controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/admin.php')
+          s=p.read_text(encoding='utf-8')
+          old='<section id="add" class="panel product-entry"><div class="sectionhead"><div><h2>📷 اسکن و ثبت سریع محصول</h2><p>بارکد را بگیر، اسم ساده بنویس، عکس را انتخاب کن و قیمت را ثبت کن.</p></div><button type="button" class="btn" id="scan">باز کردن دوربین</button></div>'
+          new='<section id="add" class="panel product-entry"><div class="sectionhead"><div><h2>📷 اسکن و ثبت سریع محصول</h2><p>بارکد را بگیر، اسم ساده بنویس، عکس را انتخاب کن و قیمت را ثبت کن.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="scan">اسکن زنده</button><label for="barcode_photo" class="btn pale" style="cursor:pointer">📷 عکس بارکد</label><input type="file" id="barcode_photo" accept="image/*" capture="environment" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"></div></div>'
+          if old not in s:
+              raise SystemExit('camera header target not found')
+          s=s.replace(old,new,1)
+          s=s.replace('<video id="video" playsinline></video><div id="scanmsg" class="scan-status">برای اسکن، سایت باید با HTTPS باز شود.</div>', '<video id="video" playsinline></video><div id="scanmsg" class="scan-status">دو روش دارید: اسکن زنده یا عکس بارکد.</div>',1)
+          s=s.replace('<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script><script src="assets/admin.js"></script>', '<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script><script src="assets/admin.js?v=20261024-camera-v5"></script>',1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          php -l TehranSupermarket/admin.php
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/admin.php
+          git commit -m 'Add native barcode photo button and bust scanner cache'
+          git push origin HEAD:websaza-hosting
