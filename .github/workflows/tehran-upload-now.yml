@@ -1,0 +1,67 @@
+name: Upload Tehran Supermarket Now
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/tehran-upload-now.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Validate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          find TehranSupermarket -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          node --check TehranSupermarket/assets/admin.js
+      - name: Upload files
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          save_file(){
+            local src="$1"
+            local dir="$2"
+            local file="$3"
+            local out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 \
+              -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" \
+              --data-urlencode "file=${file}" \
+              --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          while IFS= read -r -d '' src; do
+            rel="${src#TehranSupermarket/}"
+            sub="$(dirname "$rel")"
+            file="$(basename "$rel")"
+            dir="$TARGET_DIR"
+            [ "$sub" = '.' ] || dir="$TARGET_DIR/$sub"
+            echo "Uploading $rel"
+            save_file "$src" "$dir" "$file"
+          done < <(find TehranSupermarket -type f -print0)
+      - name: Verify installer is live
+        shell: bash
+        run: |
+          set -euo pipefail
+          CODE=$(curl -sS -L --max-time 30 -o "$RUNNER_TEMP/install.html" -w '%{http_code}' 'https://websaza.ir/tehran/install.php')
+          test "$CODE" = '200'
+          grep -Fq 'نصب سوپرمارکت طهران' "$RUNNER_TEMP/install.html"
+          echo 'TEHRAN_FILES_LIVE=1'
