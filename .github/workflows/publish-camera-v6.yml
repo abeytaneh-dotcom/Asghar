@@ -1,0 +1,76 @@
+name: Publish Tehran Camera v6
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/publish-camera-v6.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+          fetch-depth: 0
+      - name: Bust scanner cache and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/admin.php')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('assets/admin.js?v=20261024-camera-v5','assets/admin.js?v=20261024-camera-v6')
+          s=s.replace('assets/admin.js?v=20261024-camera-v5.1','assets/admin.js?v=20261024-camera-v6')
+          if 'assets/admin.js?v=20261024-camera-v6' not in s:
+              s=s.replace('assets/admin.js"></script>','assets/admin.js?v=20261024-camera-v6"></script>')
+          p.write_text(s,encoding='utf-8')
+          PY
+          php -l TehranSupermarket/admin.php
+          node --check TehranSupermarket/assets/admin.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/admin.php
+          if ! git diff --cached --quiet; then
+            git commit -m 'Bust Tehran scanner cache for camera-v6'
+            git push origin HEAD:websaza-hosting
+          fi
+      - name: Upload camera v6 directly to cPanel
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          save_file(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 \
+              -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" \
+              --data-urlencode "file=${file}" \
+              --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          save_file TehranSupermarket/admin.php "$TARGET_DIR" admin.php
+          save_file TehranSupermarket/assets/admin.js "$TARGET_DIR/assets" admin.js
+      - name: Verify live v6
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML="$RUNNER_TEMP/admin.html"
+          curl -sS -L --max-time 30 'https://websaza.ir/tehran/admin.php' -o "$HTML"
+          grep -Fq 'camera-v6' TehranSupermarket/assets/admin.js
+          grep -Fq 'camera-v6' TehranSupermarket/admin.php
+          echo 'CAMERA_V6_PUBLISHED=1'
