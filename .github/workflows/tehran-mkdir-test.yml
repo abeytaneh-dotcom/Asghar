@@ -1,0 +1,68 @@
+name: Tehran mkdir test
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/tehran-mkdir-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mkdir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+    steps:
+      - name: Create Tehran directories with API2
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CPANEL_TOKEN:-}"
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          call_mkdir(){
+            local parent="$1" name="$2" out="$RUNNER_TEMP/mkdir-$(echo "$name" | tr '/' '_').json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 \
+              -H "$AUTH" \
+              -H 'Content-Type: application/x-www-form-urlencoded' \
+              --request POST \
+              --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
+              --data-urlencode 'cpanel_jsonapi_apiversion=2' \
+              --data-urlencode 'cpanel_jsonapi_module=Fileman' \
+              --data-urlencode 'cpanel_jsonapi_func=mkdir' \
+              --data-urlencode "path=${parent}" \
+              --data-urlencode "name=${name}" \
+              --data-urlencode 'permissions=0755' \
+              "${BASE}/json-api/cpanel" -o "$out"
+            if jq -e '.cpanelresult.event.result == 1' "$out" >/dev/null 2>&1; then
+              echo "created_or_ok: ${parent}/${name}"
+              return 0
+            fi
+            # If it already exists, confirm via Fileman rather than failing.
+            local full="${parent}/${name}" check="$RUNNER_TEMP/check-$(echo "$name" | tr '/' '_').json"
+            curl -sS --fail-with-body -H "$AUTH" --get \
+              --data-urlencode "dir=${full#/home/${CPANEL_USER}/}" \
+              --data-urlencode 'show_hidden=1' \
+              "${BASE}/execute/Fileman/list_files" -o "$check" || true
+            test "$(jq -r '.result.status // .status // 0' "$check" 2>/dev/null || echo 0)" = '1'
+            echo "already_exists: $full"
+          }
+          ROOT="/home/${CPANEL_USER}/public_html"
+          call_mkdir "$ROOT" tehran
+          call_mkdir "$ROOT/tehran" assets
+          call_mkdir "$ROOT/tehran" storage
+          call_mkdir "$ROOT/tehran" uploads
+          call_mkdir "$ROOT/tehran/uploads" products
+          VERIFY="$RUNNER_TEMP/verify.json"
+          curl -sS --fail-with-body -H "$AUTH" --get \
+            --data-urlencode 'dir=public_html/tehran' \
+            --data-urlencode 'show_hidden=1' \
+            "${BASE}/execute/Fileman/list_files" -o "$VERIFY"
+          test "$(jq -r '.result.status // .status // 0' "$VERIFY")" = '1'
+          echo 'TEHRAN_DIRS_READY=1'
