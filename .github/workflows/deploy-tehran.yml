@@ -1,0 +1,102 @@
+name: Deploy Tehran Supermarket
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'TehranSupermarket/**'
+      - '.github/workflows/deploy-tehran.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-tehran-live
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Validate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CPANEL_TOKEN:-}"
+          find TehranSupermarket -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          node --check TehranSupermarket/assets/admin.js
+      - name: Ensure target directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          mkdir_cp(){
+            local parent="$1"
+            local name="$2"
+            local out="$RUNNER_TEMP/mkdir.json"
+            curl -sS --connect-timeout 15 --max-time 60 -H "$AUTH" \
+              -H 'Content-Type: application/x-www-form-urlencoded' --request POST \
+              --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
+              --data-urlencode 'cpanel_jsonapi_apiversion=2' \
+              --data-urlencode 'cpanel_jsonapi_module=Fileman' \
+              --data-urlencode 'cpanel_jsonapi_func=mkdir' \
+              --data-urlencode "path=${parent}" --data-urlencode "name=${name}" \
+              --data-urlencode 'permissions=0755' \
+              "${BASE}/json-api/cpanel" -o "$out" || true
+          }
+          ROOT="/home/${CPANEL_USER}/public_html"
+          mkdir_cp "$ROOT" tehran
+          mkdir_cp "$ROOT/tehran" assets
+          mkdir_cp "$ROOT/tehran" storage
+          mkdir_cp "$ROOT/tehran" uploads
+          mkdir_cp "$ROOT/tehran/uploads" products
+          VERIFY="$RUNNER_TEMP/verify.json"
+          curl -sS --fail-with-body -H "$AUTH" --get \
+            --data-urlencode 'dir=public_html/tehran' --data-urlencode 'show_hidden=1' \
+            "${BASE}/execute/Fileman/list_files" -o "$VERIFY"
+          test "$(jq -r '.result.status // .status // 0' "$VERIFY")" = '1'
+      - name: Upload application updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          save_file(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 \
+              -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" \
+              --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          while IFS= read -r -d '' src; do
+            rel="${src#TehranSupermarket/}"
+            [ "$rel" = 'install.php' ] && continue
+            sub="$(dirname "$rel")"; file="$(basename "$rel")"; dir="$TARGET_DIR"
+            [ "$sub" = '.' ] || dir="$TARGET_DIR/$sub"
+            save_file "$src" "$dir" "$file"
+          done < <(find TehranSupermarket -type f -print0)
+      - name: Verify production stays installed
+        shell: bash
+        run: |
+          set -euo pipefail
+          HCODE=$(curl -sS -L --max-time 30 -o "$RUNNER_TEMP/home.html" -w '%{http_code}' "${PUBLIC_URL}/")
+          ACODE=$(curl -sS -L --max-time 30 -o "$RUNNER_TEMP/admin.html" -w '%{http_code}' "${PUBLIC_URL}/admin.php")
+          ICODE=$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "${PUBLIC_URL}/install.php")
+          test "$HCODE" = '200'; test "$ACODE" = '200'; test "$ICODE" = '403'
+          grep -Fq 'سوپرمارکت طهران' "$RUNNER_TEMP/home.html"
+          grep -Fq 'پنل مدیریت سوپرمارکت طهران' "$RUNNER_TEMP/admin.html"
+          echo "DEPLOY_OK home=$HCODE admin=$ACODE installer=$ICODE"
