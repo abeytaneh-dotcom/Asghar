@@ -1,0 +1,116 @@
+name: Initialize Tehran Supermarket Database
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/tehran-db-init.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  initialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - name: Create MySQL database and user
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          DB_NAME="${CPANEL_USER}_tehran26"
+          DB_USER="${CPANEL_USER}_thr26"
+          DB_PASS="$(openssl rand -hex 24)"
+          echo "::add-mask::$DB_PASS"
+          printf '%s' "$DB_NAME" > "$RUNNER_TEMP/db-name"
+          printf '%s' "$DB_USER" > "$RUNNER_TEMP/db-user"
+          printf '%s' "$DB_PASS" > "$RUNNER_TEMP/db-pass"
+          call_uapi(){
+            local endpoint="$1"
+            local out="$2"
+            shift 2
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 \
+              -H "$AUTH" --get "$@" "${BASE}/execute/${endpoint}" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          call_uapi Mysql/create_database "$RUNNER_TEMP/create-db.json" --data-urlencode "name=$DB_NAME"
+          call_uapi Mysql/create_user "$RUNNER_TEMP/create-user.json" --data-urlencode "name=$DB_USER" --data-urlencode "password=$DB_PASS"
+
+          GRANT="$RUNNER_TEMP/grant.json"
+          curl -sS --fail-with-body --connect-timeout 15 --max-time 60 \
+            -H "$AUTH" --get \
+            --data-urlencode "user=$DB_USER" \
+            --data-urlencode "database=$DB_NAME" \
+            --data-urlencode 'privileges=ALL PRIVILEGES' \
+            "${BASE}/execute/Mysql/set_privileges_on_database" -o "$GRANT" || true
+          if [ "$(jq -r '.result.status // .status // 0' "$GRANT" 2>/dev/null || echo 0)" != '1' ]; then
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 \
+              -H "$AUTH" -H 'Content-Type: application/x-www-form-urlencoded' --request POST \
+              --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
+              --data-urlencode 'cpanel_jsonapi_apiversion=2' \
+              --data-urlencode 'cpanel_jsonapi_module=MysqlFE' \
+              --data-urlencode 'cpanel_jsonapi_func=setdbuserprivileges' \
+              --data-urlencode "db=$DB_NAME" \
+              --data-urlencode "dbuser=$DB_USER" \
+              --data-urlencode 'privileges=ALL PRIVILEGES' \
+              "${BASE}/json-api/cpanel" -o "$GRANT"
+            test "$(jq -r '.cpanelresult.event.result // 0' "$GRANT")" = '1'
+          fi
+          call_uapi Mysql/get_privileges_on_database "$RUNNER_TEMP/priv-check.json" --data-urlencode "user=$DB_USER" --data-urlencode "database=$DB_NAME"
+          echo 'DATABASE_READY=1'
+
+      - name: Initialize tables and admin
+        shell: bash
+        run: |
+          set -euo pipefail
+          DB_NAME="$(cat "$RUNNER_TEMP/db-name")"
+          DB_USER="$(cat "$RUNNER_TEMP/db-user")"
+          DB_PASS="$(cat "$RUNNER_TEMP/db-pass")"
+          echo "::add-mask::$DB_PASS"
+          ADMIN_HASH='$2y$12$vkl4jDhqDV0dkXUDZ3kK8.98GD0JwRGePp0qWPVKmDoegMyXw2Uz2'
+          OUT="$RUNNER_TEMP/install-result.html"
+          CODE=$(curl -sS --fail-with-body --max-time 60 -o "$OUT" -w '%{http_code}' \
+            --data-urlencode 'db_host=localhost' \
+            --data-urlencode "db_name=$DB_NAME" \
+            --data-urlencode "db_user=$DB_USER" \
+            --data-urlencode "db_pass=$DB_PASS" \
+            --data-urlencode 'admin_user=admin' \
+            --data-urlencode "admin_hash=$ADMIN_HASH" \
+            --data-urlencode 'delivery_fee=0' \
+            "${PUBLIC_URL}/install.php")
+          test "$CODE" = '200'
+          grep -Fq 'پیکربندی اولیه انجام شده' "$OUT"
+          echo 'APPLICATION_INITIALIZED=1'
+
+      - name: Disable installer and verify live site
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          printf '%s\n' "<?php http_response_code(403); exit('Installer disabled');" > "$RUNNER_TEMP/install-disabled.php"
+          OUT="$RUNNER_TEMP/lock.json"
+          curl -sS --fail-with-body -H "$AUTH" --request POST \
+            --data-urlencode "dir=${TARGET_DIR}" \
+            --data-urlencode 'file=install.php' \
+            --data-urlencode "content@$RUNNER_TEMP/install-disabled.php" \
+            "${BASE}/execute/Fileman/save_file_content" -o "$OUT"
+          test "$(jq -r '.result.status // .status // 0' "$OUT")" = '1'
+          HCODE=$(curl -sS -L --max-time 30 -o "$RUNNER_TEMP/home.html" -w '%{http_code}' "${PUBLIC_URL}/")
+          ACODE=$(curl -sS -L --max-time 30 -o "$RUNNER_TEMP/admin.html" -w '%{http_code}' "${PUBLIC_URL}/admin.php")
+          ICODE=$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "${PUBLIC_URL}/install.php")
+          test "$HCODE" = '200'
+          test "$ACODE" = '200'
+          test "$ICODE" = '403'
+          grep -Fq 'سوپرمارکت طهران' "$RUNNER_TEMP/home.html"
+          grep -Fq 'پنل مدیریت سوپرمارکت طهران' "$RUNNER_TEMP/admin.html"
+          echo "LIVE_OK home=$HCODE admin=$ACODE installer=$ICODE"
