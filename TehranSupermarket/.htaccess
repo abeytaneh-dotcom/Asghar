@@ -1,4 +1,4 @@
-# delivery-map-picker-v7-blue-current-location
+# delivery-map-picker-v8-map-share-link
 Options -Indexes
 DirectoryIndex index.php
 <FilesMatch "^(config\.php|install\.lock\.php|admin_auth\.php|backup_cli\.php|backup_lib\.php|store_lib\.php|sms_lib\.php|coupon_lib\.php|README\.txt)$">
