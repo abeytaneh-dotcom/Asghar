@@ -1,0 +1,36 @@
+name: Inspect WebSaza DNS
+
+on:
+  push:
+    branches: [niazestan-cloud]
+    paths:
+      - '.github/workflows/inspect-websaza-dns.yml'
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+    steps:
+      - name: Read DNS records from cPanel
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        shell: bash
+        run: |
+          set -u
+          auth="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          echo '--- UAPI DNS parse_zone ---'
+          curl --silent --show-error -H "$auth" --get \
+            --data-urlencode "zone=websaza.ir" \
+            "https://${CPANEL_HOST}:2083/execute/DNS/parse_zone" | jq '.' || true
+
+          echo '--- API2 ZoneEdit fetchzone ---'
+          curl --silent --show-error -H "$auth" --get \
+            --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
+            --data-urlencode "cpanel_jsonapi_apiversion=2" \
+            --data-urlencode "cpanel_jsonapi_module=ZoneEdit" \
+            --data-urlencode "cpanel_jsonapi_func=fetchzone" \
+            --data-urlencode "domain=websaza.ir" \
+            "https://${CPANEL_HOST}:2083/json-api/cpanel" | jq '.' || true
