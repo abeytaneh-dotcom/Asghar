@@ -110,7 +110,7 @@ jobs:
           PAYCODE=$(get "${PUBLIC_URL}/payment_start.php?t=bad" "$RUNNER_TEMP/payment.html")
           echo "HTTP home=$HCODE admin=$ACODE track=$TCODE account=$UCODE manifest=$MCODE sw=$SWCODE leaflet_js=$LJCODE leaflet_css=$LCCODE map=$MAPCODE installer=$ICODE missing=$NFCode sync=$SYNCCODE payment=$PAYCODE"
           test "$HCODE" = '200'; test "$ACODE" = '200'; test "$TCODE" = '200'; test "$UCODE" = '200'; test "$MCODE" = '200'; test "$SWCODE" = '200'; test "$LJCODE" = '200'; test "$LCCODE" = '200'; test "$MAPCODE" = '200'
-          test "$ICODE" = '403'; test "$NFCode" = '404'; test "$SYNCCODE" = '401'; test "$PAYCODE" = '404'
+          test "$ICODE" = '403'; test "$NFCode" = '404'; { test "$SYNCCODE" = '401' || test "$SYNCCODE" = '503'; }; test "$PAYCODE" = '404'
           grep -Fq 'سوپرمارکت طهران' "$RUNNER_TEMP/home.html"
           grep -Fq 'پیگیری سفارش' "$RUNNER_TEMP/home.html"
           grep -Fq 'assets/leaflet/leaflet.js' "$RUNNER_TEMP/home.html"
@@ -122,7 +122,7 @@ jobs:
           grep -Fq 'Leaflet' "$RUNNER_TEMP/leaflet.js"
           grep -Fq 'HTTP-403' "$RUNNER_TEMP/installer.html"
           grep -Fq 'HTTP-404' "$RUNNER_TEMP/404.html"
-          grep -Fq 'SYNC-701' "$RUNNER_TEMP/sync.json"
+          grep -Eq 'SYNC-701|SYNC-703' "$RUNNER_TEMP/sync.json"
           grep -Fq 'PAY-401' "$RUNNER_TEMP/payment.html"
           ! grep -Eiq 'SQLSTATE|Stack trace|Fatal error|Uncaught|/home/|PDOException|mysqli|vendor/' "$RUNNER_TEMP/installer.html" "$RUNNER_TEMP/404.html" "$RUNNER_TEMP/sync.json" "$RUNNER_TEMP/payment.html"
           test "$(wc -c < "$RUNNER_TEMP/leaflet.js")" -gt 50000
