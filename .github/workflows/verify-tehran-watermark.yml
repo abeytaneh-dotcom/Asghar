@@ -26,3 +26,4 @@ jobs:
           grep -Fq 'body::after' /tmp/style.css
           grep -Fq 'تستی — جهت سفارش تماس بگیرید — websaza.ir' /tmp/style.css
           echo "WATERMARK_LIVE_OK bytes=$(wc -c < /tmp/style.css)"
+# trigger-live-verification
