@@ -1,0 +1,216 @@
+name: Deploy Niazestan to niazestan.ir
+
+on:
+  push:
+    branches: [niazestan-cloud]
+    paths:
+      - 'WebSaza/**'
+      - '.github/workflows/deploy-niazestan-domain.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-niazestan-domain
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      TARGET_DOMAIN: niazestan.ir
+      TARGET_DIR: public_html/niazestan.ir
+    steps:
+      - name: Checkout cloud branch
+        uses: actions/checkout@v4
+
+      - name: Validate Niazestan PHP and JS
+        shell: bash
+        run: |
+          set -euo pipefail
+          find WebSaza -maxdepth 1 -type f -name 'nz*.php' -print0 | xargs -0 -r -n1 php -l
+          for f in WebSaza/nz-*.js; do
+            [ -f "$f" ] || continue
+            node --check "$f"
+          done
+
+      - name: Verify cPanel token
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CPANEL_TOKEN"
+          R=$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+            "https://${CPANEL_HOST}:2083/execute/DomainInfo/list_domains")
+          echo "$R" | jq -e '.result.status == 1' >/dev/null
+
+      - name: Provision niazestan.ir as an addon domain if needed
+        id: provision
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          DOMAINS=$(curl --fail-with-body --silent --show-error -H "$auth" \
+            "https://${CPANEL_HOST}:2083/execute/DomainInfo/list_domains")
+          if echo "$DOMAINS" | jq -e '.. | strings | select(. == "niazestan.ir")' >/dev/null; then
+            echo "Domain already exists in cPanel."
+            echo "created=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Creating addon domain ${TARGET_DOMAIN} with document root ${TARGET_DIR}"
+          ADD=$(curl --fail-with-body --silent --show-error -H "$auth" --get \
+            --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
+            --data-urlencode "cpanel_jsonapi_apiversion=2" \
+            --data-urlencode "cpanel_jsonapi_module=AddonDomain" \
+            --data-urlencode "cpanel_jsonapi_func=addaddondomain" \
+            --data-urlencode "dir=${TARGET_DIR}" \
+            --data-urlencode "newdomain=${TARGET_DOMAIN}" \
+            --data-urlencode "subdomain=niazestan" \
+            --data-urlencode "ftp_is_optional=1" \
+            "https://${CPANEL_HOST}:2083/json-api/cpanel")
+          echo "$ADD" | jq '.'
+          echo "$ADD" | jq -e '.cpanelresult.event.result == 1' >/dev/null
+          echo "created=1" >> "$GITHUB_OUTPUT"
+
+      - name: Copy existing Niazestan data on first provisioning
+        if: steps.provision.outputs.created == '1'
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          api2_copy(){
+            src="$1"; dst="$2"
+            echo "Copying $src -> $dst"
+            R=$(curl --silent --show-error -H "$auth" --get \
+              --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
+              --data-urlencode "cpanel_jsonapi_apiversion=2" \
+              --data-urlencode "cpanel_jsonapi_module=Fileman" \
+              --data-urlencode "cpanel_jsonapi_func=fileop" \
+              --data-urlencode "op=copy" \
+              --data-urlencode "sourcefiles=$src" \
+              --data-urlencode "destfiles=$dst" \
+              --data-urlencode "doubledecode=1" \
+              "https://${CPANEL_HOST}:2083/json-api/cpanel" || true)
+            echo "$R" | jq '.' || true
+          }
+          # Preserve current users, ads, chats and uploaded media from websaza.ir/nz.
+          api2_copy "public_html/.marketplace-data" "$TARGET_DIR"
+          api2_copy "public_html/marketplace-uploads" "$TARGET_DIR"
+
+      - name: Build standalone Niazestan release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .niazestan-release
+          mkdir -p .niazestan-release
+
+          # Core web-server files.
+          cp WebSaza/.htaccess .niazestan-release/.htaccess
+          cp WebSaza/.user.ini .niazestan-release/.user.ini
+          cp WebSaza/404.html .niazestan-release/404.html
+
+          # Niazestan application files. Keep the app isolated from unrelated WebSaza pages.
+          find WebSaza -maxdepth 1 -type f \( \
+            -name 'nz*' -o \
+            -name 'niazestan*' -o \
+            -name 'niyazestan*' -o \
+            -name 'marketplace*' \
+          \) -print0 | while IFS= read -r -d '' f; do cp "$f" .niazestan-release/; done
+
+          if [ -d WebSaza/marketplace-uploads ]; then
+            mkdir -p .niazestan-release/marketplace-uploads
+            [ ! -f WebSaza/marketplace-uploads/.htaccess ] || cp WebSaza/marketplace-uploads/.htaccess .niazestan-release/marketplace-uploads/.htaccess
+          fi
+
+          # Never package live state from Git. Runtime data stays on the hosting disk.
+          rm -rf .niazestan-release/.marketplace-data
+          (cd .niazestan-release && zip -qr ../niazestan-release.zip .)
+          test -s niazestan-release.zip
+          unzip -l niazestan-release.zip | head -80
+
+      - name: Upload and extract release on cPanel
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          UP=$(curl --fail-with-body --silent --show-error -H "$auth" \
+            -F "file-1=@niazestan-release.zip;filename=.niazestan-release.zip" \
+            -F "dir=${TARGET_DIR}" \
+            -F "overwrite=1" \
+            "https://${CPANEL_HOST}:2083/execute/Fileman/upload_files")
+          echo "$UP" | jq -e '.result.status == 1' >/dev/null
+
+          EX=$(curl --fail-with-body --silent --show-error -H "$auth" --get \
+            --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
+            --data-urlencode "cpanel_jsonapi_apiversion=2" \
+            --data-urlencode "cpanel_jsonapi_module=Fileman" \
+            --data-urlencode "cpanel_jsonapi_func=fileop" \
+            --data-urlencode "op=extract" \
+            --data-urlencode "sourcefiles=${TARGET_DIR}/.niazestan-release.zip" \
+            --data-urlencode "doubledecode=1" \
+            "https://${CPANEL_HOST}:2083/json-api/cpanel")
+          echo "$EX" | jq '.'
+          echo "$EX" | jq -e '.cpanelresult.event.result == 1' >/dev/null
+
+      - name: Write release marker
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          RELEASE=$(jq -nc --arg sha "$GITHUB_SHA" --arg deployed_at "$(date -u +%FT%TZ)" --arg domain "$TARGET_DOMAIN" '{sha:$sha,deployed_at:$deployed_at,domain:$domain}')
+          R=$(curl --fail-with-body --silent --show-error -H "$auth" --request POST \
+            --data-urlencode "dir=${TARGET_DIR}" \
+            --data-urlencode "file=.niazestan-release.json" \
+            --data-urlencode "content=$RELEASE" \
+            "https://${CPANEL_HOST}:2083/execute/Fileman/save_file_content")
+          echo "$R" | jq -e '.result.status == 1' >/dev/null
+
+      - name: Start AutoSSL check
+        continue-on-error: true
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+            "https://${CPANEL_HOST}:2083/execute/SSL/start_autossl_check" | jq '.'
+
+      - name: Verify cPanel domain configuration
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          R=$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+            "https://${CPANEL_HOST}:2083/execute/DomainInfo/list_domains?return_https_redirects_status=1")
+          echo "$R" | jq '.'
+          echo "$R" | jq -e '.. | strings | select(. == "niazestan.ir")' >/dev/null
+
+      - name: Verify public site when DNS is already active
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in 1 2 3; do
+            if HTML=$(curl -fsSL --connect-timeout 8 --max-time 20 "https://niazestan.ir/nz" 2>/dev/null); then
+              grep -F 'نیازستان' <<<"$HTML" >/dev/null
+              echo "niazestan.ir is live."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Hosting deployment is complete; public verification is waiting for DNS/AutoSSL propagation."
+          exit 1
