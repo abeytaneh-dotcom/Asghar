@@ -1,0 +1,107 @@
+<?php
+declare(strict_types=1);
+
+// Central safe error layer. Never expose exception/SQL/path/token details to users.
+@ini_set('display_errors','0');
+@ini_set('display_startup_errors','0');
+@ini_set('html_errors','0');
+@ini_set('log_errors','1');
+@ini_set('expose_php','0');
+
+function ts_error_catalog(): array {
+    return [
+        'SYS-100'=>['خطای موقت سرویس','بخشی از سرویس فعلاً پاسخ نمی‌دهد.','صفحه را تازه کنید و دوباره امتحان کنید. اگر تکرار شد، همین کد خطا را به پشتیبانی بدهید.'],
+        'SYS-101'=>['اختلال ارتباط داخلی','ارتباط داخلی سرویس برقرار نشد.','چند لحظه بعد دوباره امتحان کنید. اگر ادامه داشت، کد خطا را به پشتیبانی بدهید.'],
+        'REQ-101'=>['درخواست نامعتبر','درخواست قابل پردازش نیست.','به صفحه قبل برگردید، صفحه را تازه کنید و دوباره اقدام کنید.'],
+        'REQ-102'=>['نشست منقضی شده','زمان نشست شما تمام شده یا صفحه قدیمی است.','صفحه را تازه کنید و دوباره وارد شوید یا عملیات را از نو انجام دهید.'],
+        'AUTH-101'=>['ورود ناموفق','نام کاربری یا رمز عبور درست نیست.','اطلاعات ورود را بررسی کنید و دوباره امتحان کنید.'],
+        'AUTH-102'=>['ورود موقتاً قفل است','به دلیل چند تلاش ناموفق، ورود موقتاً متوقف شده است.','۱۵ دقیقه بعد دوباره امتحان کنید.'],
+        'AUTH-103'=>['حساب غیرفعال است','این حساب اجازه ورود ندارد.','با مدیر اصلی فروشگاه تماس بگیرید.'],
+        'AUTH-104'=>['دسترسی کافی نیست','این حساب اجازه انجام این کار را ندارد.','با حساب دارای دسترسی مناسب وارد شوید یا از مدیر اصلی بخواهید دسترسی را بررسی کند.'],
+        'SHOP-201'=>['فروشگاه بسته است','در حال حاضر سفارش جدید پذیرفته نمی‌شود.','در ساعت کاری فروشگاه دوباره سفارش را ثبت کنید.'],
+        'SHOP-202'=>['سبد خرید خالی است','کالایی برای ثبت سفارش وجود ندارد.','حداقل یک کالا به سبد خرید اضافه کنید.'],
+        'SHOP-203'=>['موجودی یا قیمت تغییر کرده','یکی از کالاهای سبد با اطلاعات جدید فروشگاه هماهنگ نیست.','سبد خرید را تازه کنید و تعداد یا کالای موردنظر را دوباره انتخاب کنید.'],
+        'SHOP-204'=>['محدوده ارسال نامعتبر است','محدوده انتخاب‌شده در حال حاضر قابل استفاده نیست.','یک محدوده ارسال معتبر انتخاب کنید و دوباره ادامه دهید.'],
+        'SHOP-205'=>['حداقل خرید کامل نشده','مبلغ سبد برای محدوده انتخابی کافی نیست.','چند کالا به سبد اضافه کنید تا حداقل خرید تکمیل شود.'],
+        'SHOP-206'=>['کد تخفیف قابل استفاده نیست','کد تخفیف معتبر نیست یا شرایط استفاده از آن کامل نشده است.','کد را بررسی کنید یا بدون کد تخفیف ادامه دهید.'],
+        'SHOP-207'=>['ثبت سفارش کامل نشد','سفارش نهایی نشد و نیاز به تلاش دوباره دارد.','سبد و اطلاعات تحویل را بررسی کنید و دوباره ثبت سفارش را بزنید.'],
+        'IMG-301'=>['عکس دریافت نشد','فایل تصویری برای بارگذاری دریافت نشد.','یک عکس انتخاب کنید و دوباره ارسال کنید.'],
+        'IMG-302'=>['آپلود عکس ناقص ماند','ارسال فایل کامل نشده است.','اتصال اینترنت را بررسی کنید و دوباره عکس را بارگذاری کنید.'],
+        'IMG-303'=>['حجم عکس بیش از حد مجاز است','فایل انتخابی خیلی بزرگ است.','عکس کوچک‌تری انتخاب کنید یا قبل از ارسال حجم آن را کم کنید.'],
+        'IMG-304'=>['فرمت عکس قابل پردازش نیست','نوع یا محتوای این فایل برای پردازش مناسب نیست.','عکس را با فرمت JPG، PNG یا WebP ذخیره و دوباره ارسال کنید.'],
+        'IMG-305'=>['پردازش عکس انجام نشد','سرور نتوانست عکس را آماده کند.','یک عکس دیگر امتحان کنید. اگر تکرار شد، کد خطا را به پشتیبانی بدهید.'],
+        'PAY-401'=>['سفارش معتبر نیست','سفارشی برای شروع پرداخت پیدا نشد.','از صفحه پیگیری همان سفارش دوباره وارد پرداخت شوید.'],
+        'PAY-402'=>['پرداخت لغو یا کامل نشده','پرداخت نهایی نشده است.','در صورت کسر نشدن وجه، دوباره از صفحه سفارش پرداخت را شروع کنید.'],
+        'PAY-403'=>['پرداخت آنلاین فعال نیست','درگاه آنلاین در حال حاضر آماده استفاده نیست.','پرداخت در محل را انتخاب کنید یا بعداً دوباره امتحان کنید.'],
+        'PAY-404'=>['ارتباط با درگاه برقرار نشد','درگاه پرداخت در این لحظه پاسخ مناسب نداده است.','چند دقیقه بعد دوباره از صفحه سفارش پرداخت را شروع کنید.'],
+        'PAY-405'=>['تأیید پرداخت انجام نشد','نتیجه پرداخت هنوز با اطمینان تأیید نشده است.','پرداخت را تکرار نکنید؛ ابتدا وضعیت سفارش را بررسی کنید و در صورت ادامه مشکل کد خطا را به پشتیبانی بدهید.'],
+        'SMS-501'=>['شماره موبایل نامعتبر است','شماره واردشده برای ارسال تست صحیح نیست.','شماره را به شکل 09xxxxxxxxx وارد کنید.'],
+        'SMS-502'=>['تنظیمات پیامک کامل نیست','سرویس پیامک هنوز آماده ارسال نیست.','توکن سرویس و شماره ارسال‌کننده را در تنظیمات بررسی کنید.'],
+        'SMS-503'=>['ارسال پیامک انجام نشد','پیام به سرویس ارسال نشد.','تنظیمات پیامک و اعتبار پنل را بررسی کرده و دوباره تست کنید.'],
+        'LOC-601'=>['موقعیت قابل دریافت نیست','موقعیت فعلی دستگاه دریافت نشد.','اجازه Location را فعال کنید یا محل تحویل را دستی روی نقشه مشخص کنید.'],
+        'SYNC-701'=>['ارتباط همگام‌سازی تأیید نشد','درخواست همگام‌سازی قابل تأیید نیست.','تنظیمات اتصال نرم‌افزار فروشگاه را بررسی کنید.'],
+        'SYNC-702'=>['اطلاعات همگام‌سازی معتبر نیست','داده دریافتی قابل پردازش نیست.','تنظیمات همگام‌سازی و اطلاعات کالا یا سفارش را بررسی کنید.'],
+        'SYNC-703'=>['همگام‌سازی موقتاً در دسترس نیست','ارتباط همگام‌سازی فعلاً آماده نیست.','اتصال اینترنت و وضعیت نرم‌افزار فروشگاه را بررسی کنید و دوباره تلاش کنید.'],
+        'ERR-999'=>['خطای پیش‌بینی‌نشده','عملیات به دلیل یک خطای موقت کامل نشد.','دوباره امتحان کنید. اگر تکرار شد، همین کد خطا را به پشتیبانی بدهید.'],
+    ];
+}
+
+function ts_error_info(string $code): array {
+    $all=ts_error_catalog();
+    return $all[$code]??$all['ERR-999'];
+}
+function ts_error_text(string $code): string {
+    [$title,$message,$fix]=ts_error_info($code);
+    return 'کد خطا: '.$code.' — '.$title.' | '.$message.' راه‌حل: '.$fix;
+}
+function ts_error_payload(string $code,array $extra=[]): array {
+    [$title,$message,$fix]=ts_error_info($code);
+    return ['ok'=>false,'code'=>$code,'error'=>$title,'message'=>$message,'help'=>$fix]+$extra;
+}
+function ts_log_internal(Throwable $e,string $code='ERR-999'): void {
+    $ref='R'.date('ymdHis').'-'.substr(hash('sha256',$e->getMessage().'|'.$e->getFile().'|'.$e->getLine()),0,8);
+    error_log("[$code][$ref] ".get_class($e).': '.$e->getMessage().' @ '.$e->getFile().':'.$e->getLine());
+}
+function ts_json_fail(string $code,int $status=400,array $extra=[]): never {
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo json_encode(ts_error_payload($code,$extra),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    exit;
+}
+function ts_html_fail(string $code,int $status=400,string $back=''): never {
+    http_response_code($status);
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-store');
+    [$title,$message,$fix]=ts_error_info($code);
+    $h=static fn($v)=>htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');
+    $backHtml=$back!==''?'<a href="'.$h($back).'" style="display:inline-block;margin-top:14px;padding:10px 14px;border-radius:10px;background:#11823b;color:#fff;text-decoration:none">بازگشت</a>':'';
+    echo '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'.$h($title).'</title></head><body style="font-family:Tahoma,Arial,sans-serif;background:#f6f8f6;color:#183425;margin:0"><main style="max-width:620px;margin:8vh auto;padding:18px"><section style="background:#fff;border:1px solid #e1e9e3;border-radius:18px;padding:20px"><div style="font-size:12px;color:#6d7a71">کد خطا: <b>'.$h($code).'</b></div><h2>'.$h($title).'</h2><p>'.$h($message).'</p><div style="background:#f1f7f2;border-radius:12px;padding:12px"><b>راه‌حل:</b> '.$h($fix).'</div>'.$backHtml.'</section></main></body></html>';
+    exit;
+}
+function ts_script_wants_json(): bool {
+    $name=strtolower(basename((string)($_SERVER['SCRIPT_NAME']??'')));
+    if(str_contains($name,'api')||in_array($name,['image_upload.php','push_subscribe.php','push_public.php','admin_alert.php'],true))return true;
+    return str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT']??'')),'application/json');
+}
+
+set_exception_handler(function(Throwable $e): void {
+    ts_log_internal($e,'ERR-999');
+    if(ts_script_wants_json()) ts_json_fail('ERR-999',500);
+    ts_html_fail('ERR-999',500,'index.php');
+});
+
+register_shutdown_function(function(): void {
+    $e=error_get_last();
+    if(!$e||!in_array($e['type']??0,[E_ERROR,E_PARSE,E_CORE_ERROR,E_COMPILE_ERROR,E_USER_ERROR,E_RECOVERABLE_ERROR],true))return;
+    error_log('[ERR-999][FATAL] '.($e['message']??'').' @ '.($e['file']??'').':'.($e['line']??0));
+    if(headers_sent())return;
+    if(ts_script_wants_json()){
+        http_response_code(500);header('Content-Type: application/json; charset=utf-8');header('Cache-Control:no-store');
+        echo json_encode(ts_error_payload('ERR-999'),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    }else{
+        http_response_code(500);header('Content-Type:text/html; charset=utf-8');header('Cache-Control:no-store');
+        [$t,$m,$f]=ts_error_info('ERR-999');
+        echo '<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:Tahoma,Arial,sans-serif;padding:24px"><h2>'.htmlspecialchars($t).'</h2><p>کد خطا: ERR-999</p><p>'.htmlspecialchars($m).'</p><p><b>راه‌حل:</b> '.htmlspecialchars($f).'</p></body></html>';
+    }
+});
