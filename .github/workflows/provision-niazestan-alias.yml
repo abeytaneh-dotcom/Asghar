@@ -1,0 +1,46 @@
+name: Provision niazestan.ir alias
+
+on:
+  push:
+    branches: [niazestan-cloud]
+    paths:
+      - '.github/workflows/provision-niazestan-alias.yml'
+  workflow_dispatch:
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+    steps:
+      - name: Create parked-domain alias when missing
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+
+          LIST=$(curl --fail-with-body --silent --show-error -H "$auth" --get \
+            --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
+            --data-urlencode "cpanel_jsonapi_apiversion=2" \
+            --data-urlencode "cpanel_jsonapi_module=Park" \
+            --data-urlencode "cpanel_jsonapi_func=listparkeddomains" \
+            "https://${CPANEL_HOST}:2083/json-api/cpanel")
+          echo "$LIST" | jq '.'
+          if echo "$LIST" | jq -e '.cpanelresult.data[]? | select(.domain == "niazestan.ir")' >/dev/null; then
+            echo 'niazestan.ir is already an alias.'
+            exit 0
+          fi
+
+          PARK=$(curl --fail-with-body --silent --show-error -H "$auth" --get \
+            --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
+            --data-urlencode "cpanel_jsonapi_apiversion=2" \
+            --data-urlencode "cpanel_jsonapi_module=Park" \
+            --data-urlencode "cpanel_jsonapi_func=park" \
+            --data-urlencode "domain=niazestan.ir" \
+            --data-urlencode "disallowdot=0" \
+            "https://${CPANEL_HOST}:2083/json-api/cpanel")
+          echo "$PARK" | jq '.'
+          echo "$PARK" | jq -e '.cpanelresult.data[0].result == 1' >/dev/null
