@@ -1,0 +1,85 @@
+name: Patch Tehran One Tap Location
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-tehran-one-tap-location.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Simplify delivery location UX
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/shop.php')
+          s=p.read_text()
+
+          # Add compact one-tap styles and hide advanced picker until needed.
+          old_css=".locbox{display:block;background:#f7faf7;border:1px solid #dce9df;border-radius:16px;padding:12px}"
+          new_css=".locbox{display:block;background:#f7faf7;border:1px solid #dce9df;border-radius:16px;padding:12px}.locprimary{display:grid;gap:10px}.locprimary .btn{width:100%;font-size:16px;padding:14px}.locadvanced{display:none;margin-top:10px}.locbox.advanced .locadvanced{display:block}.locbox.advanced .delivery-map{display:block}.locbox:not(.advanced) .delivery-map{display:none}.locmanualtoggle{background:transparent;border:0;color:#11823b;font:inherit;font-weight:700;padding:4px 0;cursor:pointer}.locsuccess{background:#e7f7eb;color:#17602e;border-radius:12px;padding:11px 12px;font-size:13px;line-height:1.8}"
+          if old_css not in s:
+              raise SystemExit('locbox css not found')
+          s=s.replace(old_css,new_css,1)
+
+          old_head="<div class=\"lochead\"><div><b>📍 لوکیشن تحویل روی نقشه</b><span class=\"muted\">روی خیابان یا کوچه موردنظر بزنید؛ لازم نیست لوکیشن فعلی خودتان باشد.</span></div></div><div id=\"deliveryMap\" class=\"delivery-map\" aria-label=\"نقشه انتخاب محل تحویل\"></div><div class=\"locactions\"><button type=\"button\" class=\"btn pale\" id=\"getLocation\">موقعیت فعلی من</button><button type=\"button\" class=\"btn\" id=\"saveMapLocation\">ثبت این نقطه</button><button type=\"button\" class=\"btn pale\" id=\"clearLocation\">پاک کردن لوکیشن</button></div>"
+          new_head="<div class=\"locprimary\"><div><b>📍 موقعیت تحویل</b><div class=\"muted\">با یک لمس موقعیت را ثبت کنید.</div></div><button type=\"button\" class=\"btn\" id=\"getLocation\">📍 ثبت موقعیت تحویل</button><button type=\"button\" class=\"locmanualtoggle\" id=\"toggleManualLocation\">انتخاب یا تغییر دستی روی نقشه</button></div><div class=\"locadvanced\" id=\"manualLocationPanel\"><div class=\"lochead\"><div><b>انتخاب دستی محل تحویل</b><span class=\"muted\">روی کوچه یا خیابان بزنید یا سنجاق قرمز را جابه‌جا کنید.</span></div></div><div id=\"deliveryMap\" class=\"delivery-map\" aria-label=\"نقشه انتخاب محل تحویل\"></div><div class=\"locactions\"><button type=\"button\" class=\"btn\" id=\"saveMapLocation\">ثبت این نقطه</button><button type=\"button\" class=\"btn pale\" id=\"clearLocation\">پاک کردن لوکیشن</button></div>"
+          if old_head not in s:
+              raise SystemExit('location header block not found')
+          s=s.replace(old_head,new_head,1)
+
+          # Close advanced wrapper immediately before status box.
+          marker='<div id="locationStatus" class="locstatus">'
+          if marker not in s:
+              raise SystemExit('status marker not found')
+          s=s.replace(marker,'</div>'+marker,1)
+
+          # Add toggle element to JS lookup.
+          old_lookup="geoBtn=document.getElementById('getLocation'),saveBtn=document.getElementById('saveMapLocation'),clearBtn=document.getElementById('clearLocation'),st=document.getElementById('locationStatus')"
+          new_lookup="geoBtn=document.getElementById('getLocation'),saveBtn=document.getElementById('saveMapLocation'),clearBtn=document.getElementById('clearLocation'),toggleManual=document.getElementById('toggleManualLocation'),locbox=mapEl?mapEl.closest('.locbox'):null,st=document.getElementById('locationStatus')"
+          if old_lookup not in s:
+              raise SystemExit('js lookup block not found')
+          s=s.replace(old_lookup,new_lookup,1)
+
+          # Make manual picker revealable.
+          inject_after="const marker=L.marker(home,{draggable:true,icon}).addTo(map);"
+          inject="const marker=L.marker(home,{draggable:true,icon}).addTo(map);function openManualPicker(){if(locbox)locbox.classList.add('advanced');setTimeout(()=>{map.invalidateSize(true);baseTiles.redraw();},120);}if(toggleManual)toggleManual.addEventListener('click',()=>{openManualPicker();});"
+          if inject_after not in s:
+              raise SystemExit('marker block not found')
+          s=s.replace(inject_after,inject,1)
+
+          # Auto-save good geolocation. If inaccurate, reveal manual picker instead of pretending success.
+          old_good="if(acc<=120){choose(lat,lng,acc,true);st.className='locstatus ok';st.textContent='✅ موقعیت فعلی گوشی پیدا شد · دقت حدود '+acc.toLocaleString('fa-IR')+' متر. سنجاق قرمز روی همین نقطه قرار گرفت؛ اگر درست است «ثبت این نقطه» را بزنید.';}else{"
+          new_good="if(acc<=120){choose(lat,lng,acc,true);la.value=lat.toFixed(7);ln.value=lng.toFixed(7);ac.value=acc;st.className='locstatus ok';st.textContent='✅ موقعیت تحویل با دقت حدود '+acc.toLocaleString('fa-IR')+' متر ثبت شد.';geoBtn.textContent='✅ موقعیت ثبت شد';}else{openManualPicker();"
+          if old_good not in s:
+              raise SystemExit('good geolocation block not found')
+          s=s.replace(old_good,new_good,1)
+
+          # Rewrite poor accuracy message to a simple fallback.
+          old_warn="st.className='locstatus warn';st.textContent='⚠️ مرورگر فقط موقعیت تقریبی با دقت حدود '+acc.toLocaleString('fa-IR')+' متر داده است. نقطه آبی محدوده تقریبی گوشی است؛ سنجاق قرمزِ محل تحویل دست‌نخورده ماند. برای آدرس دقیق، سنجاق قرمز را دستی روی محل درست بگذارید یا «موقعیت دقیق» Chrome را فعال کنید.';"
+          new_warn="st.className='locstatus warn';st.textContent='موقعیت گوشی تقریبی است (حدود '+acc.toLocaleString('fa-IR')+' متر). نقشه برای انتخاب دقیق باز شد؛ فقط نقطه تحویل را روی نقشه بزنید.';"
+          if old_warn in s:
+              s=s.replace(old_warn,new_warn,1)
+
+          # On geolocation error, reveal manual picker automatically.
+          s=s.replace("function showGeoError(err){geoBtn.disabled=false;","function showGeoError(err){openManualPicker();geoBtn.disabled=false;",1)
+
+          # Initial status should be minimal.
+          s=s.replace("پین را روی محل تحویل بگذارید و «ثبت این نقطه» را بزنید.","برای ثبت خودکار، دکمه «ثبت موقعیت تحویل» را بزنید.",1)
+
+          p.write_text(s)
+          PY
+          php -l TehranSupermarket/shop.php
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/shop.php
+          git commit -m 'Simplify Tehran delivery location to one tap' || exit 0
+          git push origin HEAD:websaza-hosting
