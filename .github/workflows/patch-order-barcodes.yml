@@ -1,3 +1,4 @@
+# trigger-2026-10-24
 name: Patch Order Barcodes
 
 on:
@@ -26,7 +27,6 @@ jobs:
 
           root=Path('TehranSupermarket')
 
-          # 1) schema.php: add barcode snapshot column to order_items for existing installs.
           p=root/'schema.php'
           s=p.read_text()
           marker="    if ($alters) {\n        $pdo->exec('ALTER TABLE products '.implode(', ', $alters));\n    }\n"
@@ -34,8 +34,6 @@ jobs:
         $pdo->exec('ALTER TABLE products '.implode(', ', $alters));
     }
 
-    // Keep a barcode snapshot on each ordered line so old orders remain scannable
-    // even if the product barcode is edited later.
     try {
         $orderColumns = [];
         foreach ($pdo->query('SHOW COLUMNS FROM order_items')->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -45,7 +43,6 @@ jobs:
             $pdo->exec("ALTER TABLE order_items ADD COLUMN barcode VARCHAR(100) NULL AFTER product_name");
         }
     } catch (Throwable $e) {
-        // Fresh installs may not have order_items yet; installer creates it later.
     }
 """
           if 'orderColumns' not in s:
@@ -53,7 +50,6 @@ jobs:
               s=s.replace(marker,add)
               p.write_text(s)
 
-          # 2) index.php: snapshot barcode into every new order item.
           p=root/'index.php'
           s=p.read_text()
           s=s.replace("SELECT id,name,price,stock,active FROM products WHERE id=? FOR UPDATE","SELECT id,name,barcode,price,stock,active FROM products WHERE id=? FOR UPDATE")
@@ -62,21 +58,18 @@ jobs:
           s=s.replace("$ins->execute([$orderId,$it['id'],$it['name'],$it['price'],$it['qty']]);","$ins->execute([$orderId,$it['id'],$it['name'],$it['barcode']!==''?$it['barcode']:null,$it['price'],$it['qty']]);")
           p.write_text(s)
 
-          # 3) admin.php: show snapshot barcode, falling back to current product barcode for old orders.
           p=root/'admin.php'
           s=p.read_text()
           old='SELECT order_id,product_id,product_name,unit_price,quantity FROM order_items WHERE order_id IN ($ph) ORDER BY id ASC'
           new='SELECT oi.order_id,oi.product_id,oi.product_name,COALESCE(NULLIF(oi.barcode,\'\'),p.barcode) AS barcode,oi.unit_price,oi.quantity FROM order_items oi LEFT JOIN products p ON p.id=oi.product_id WHERE oi.order_id IN ($ph) ORDER BY oi.id ASC'
           if old in s:
               s=s.replace(old,new)
-
           old_item="<div class=\"order-item\"><b><?=e($it['product_name'])?></b><span><?=number_format((int)$it['quantity'])?> عدد × <?=number_format((int)$it['unit_price'])?> تومان</span><strong><?=number_format((int)$it['quantity']*(int)$it['unit_price'])?> تومان</strong></div>"
           new_item="""<div class=\"order-item\"><b><?=e($it['product_name'])?></b><span><?=number_format((int)$it['quantity'])?> عدد × <?=number_format((int)$it['unit_price'])?> تومان</span><strong><?=number_format((int)$it['quantity']*(int)$it['unit_price'])?> تومان</strong><?php if(!empty($it['barcode'])):?><div class=\"order-barcode-box\"><span>بارکد: <code><?=e($it['barcode'])?></code></span><svg class=\"order-barcode\" data-barcode=\"<?=e($it['barcode'])?>\"></svg></div><?php else:?><small class=\"muted block\">بارکد ثبت نشده</small><?php endif;?></div>"""
           if old_item in s:
               s=s.replace(old_item,new_item)
           elif 'order-barcode-box' not in s:
               raise SystemExit('order item markup marker not found')
-
           old_scripts='<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script><script src="assets/admin.js?v=20261024-camera-v6"></script>'
           new_scripts='''<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script><script>document.querySelectorAll('.order-barcode').forEach(function(el){var v=el.dataset.barcode||'';if(v&&window.JsBarcode){try{JsBarcode(el,v,{format:'CODE128',height:38,width:1.45,margin:4,displayValue:false});}catch(e){}}});</script><script src="assets/admin.js?v=20261024-camera-v6"></script>'''
           if old_scripts in s:
@@ -85,7 +78,6 @@ jobs:
               raise SystemExit('script marker not found')
           p.write_text(s)
 
-          # 4) style compactly for mobile order picking/scanning.
           p=root/'assets/style.css'
           s=p.read_text()
           css="""
@@ -95,7 +87,6 @@ jobs:
               s+='\n'+css
               p.write_text(s)
 
-          # 5) installer consistency for any future fresh install.
           p=root/'install.php'
           s=p.read_text()
           s=s.replace('product_name VARCHAR(190) NOT NULL,unit_price BIGINT UNSIGNED NOT NULL','product_name VARCHAR(190) NOT NULL,barcode VARCHAR(100) NULL,unit_price BIGINT UNSIGNED NOT NULL')
