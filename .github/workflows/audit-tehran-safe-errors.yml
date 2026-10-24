@@ -1,4 +1,3 @@
-# frontend + backend error-surface audit
 name: Audit Tehran Safe Errors
 on:
   push:
@@ -9,15 +8,19 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: websaza-hosting
-      - name: Scan error surfaces
+      - name: Probe safe error tokens only
         shell: bash
         run: |
-          echo '=== PHP raw exception/detail surfaces ==='
-          grep -RniE 'getMessage\(|->getMessage|\$e->|\$x->' TehranSupermarket --include='*.php' || true
-          echo '=== PHP direct error exits ==='
-          grep -RniE "exit\(|die\(|'error'=>|\"error\"=>|http_response_code\((4|5)" TehranSupermarket --include='*.php' || true
-          echo '=== JS raw exception surfaces ==='
-          grep -RniE '(^|[^A-Za-z])(err|error|e)\.message|console\.error|alert\(|throw new Error|\.catch\(' TehranSupermarket/assets TehranSupermarket --include='*.js' --include='*.php' || true
+          set -u
+          BASE='https://websaza.ir/tehran'
+          probe(){
+            local name="$1" url="$2" expected="$3" out="/tmp/$1.out"
+            code=$(curl -sS -L --max-time 30 -o "$out" -w '%{http_code}' "$url" || true)
+            if grep -Eq "$expected" "$out"; then token=yes; else token=no; fi
+            if grep -Eiq 'SQLSTATE|Stack trace|Fatal error|Uncaught|/home/|PDOException|mysqli|vendor/' "$out"; then leak=yes; else leak=no; fi
+            echo "$name http=$code safe_token=$token technical_leak=$leak"
+          }
+          probe installer "$BASE/install.php" 'HTTP-403'
+          probe missing "$BASE/__safe_error_probe_missing_404" 'HTTP-404'
+          probe sync "$BASE/pyramid_api.php?action=status" 'SYNC-701|SYNC-703'
+          probe payment "$BASE/payment_start.php?t=bad" 'PAY-401'
