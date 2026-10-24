@@ -3,10 +3,12 @@ DirectoryIndex index.html
 
 RewriteEngine On
 
-# Canonical protocol and host.
-RewriteCond %{HTTPS} !=on [OR]
-RewriteCond %{HTTP_HOST} !^websaza\.ir$ [NC]
-RewriteRule ^ https://websaza.ir%{REQUEST_URI} [R=301,L,NE]
+# Canonicalize only the public www hostname. Railway preview domains stay usable.
+RewriteCond %{HTTP_HOST} ^www\.niazestan\.ir$ [NC]
+RewriteRule ^ https://niazestan.ir%{REQUEST_URI} [R=301,L,NE]
+
+# The standalone Niazestan domain opens the marketplace directly.
+RewriteRule ^$ /nz [R=302,L]
 
 # Never expose internal data, backups or database files.
 RewriteRule ^\.marketplace-data(?:/|$) - [R=404,L]
