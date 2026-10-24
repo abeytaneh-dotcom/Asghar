@@ -1,12 +1,13 @@
 <?php
 declare(strict_types=1);
-session_start();
+ini_set('session.cookie_httponly','1');ini_set('session.cookie_samesite','Strict');if(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')ini_set('session.cookie_secure','1');session_start();
 date_default_timezone_set('Asia/Tehran');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 function respond(array $data,int $status=200): never { http_response_code($status); echo json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); exit; }
 if(empty($_SESSION['admin_id'])) respond(['ok'=>false,'error'=>'ابتدا وارد پنل مدیریت شوید.'],401);
+if(!in_array((string)($_SESSION['admin_role']??''),['owner','manager'],true)) respond(['ok'=>false,'error'=>'این حساب اجازه مدیریت تصاویر محصول را ندارد.'],403);
 if($_SERVER['REQUEST_METHOD']!=='POST') respond(['ok'=>false,'error'=>'درخواست نامعتبر است.'],405);
 if(!hash_equals((string)($_SESSION['csrf']??''),(string)($_POST['csrf']??''))) respond(['ok'=>false,'error'=>'نشست مدیریت منقضی شده؛ صفحه را تازه کنید.'],419);
 if(empty($_FILES['image_file'])) respond(['ok'=>false,'error'=>'فایل تصویری دریافت نشد.'],422);

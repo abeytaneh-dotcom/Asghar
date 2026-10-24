@@ -1,8 +1,8 @@
 <?php
-declare(strict_types=1);session_start();date_default_timezone_set('Asia/Tehran');
+declare(strict_types=1);ini_set('session.cookie_httponly','1');ini_set('session.cookie_samesite','Strict');if(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')ini_set('session.cookie_secure','1');session_start();date_default_timezone_set('Asia/Tehran');
 if(!file_exists(__DIR__.'/config.php')){header('Location:install.php');exit;}$c=require __DIR__.'/config.php';
-try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);require_once __DIR__.'/store_lib.php';}catch(Throwable $e){exit('اتصال پایگاه داده برقرار نیست.');}
-if(empty($_SESSION['admin_id'])){header('Location:admin.php');exit;}
+try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);require_once __DIR__.'/admin_auth.php';ts_admin_schema($pdo);require_once __DIR__.'/backup_lib.php';ts_schedule_auto_backup($pdo);require_once __DIR__.'/store_lib.php';}catch(Throwable $e){exit('اتصال پایگاه داده برقرار نیست.');}
+$currentAdmin=ts_require_roles($pdo,['owner','manager']);
 function e($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}function token(){if(empty($_SESSION['csrf']))$_SESSION['csrf']=bin2hex(random_bytes(24));return $_SESSION['csrf'];}
 $msg='';$err='';
 if((int)$pdo->query('SELECT COUNT(*) FROM delivery_zones')->fetchColumn()===0){$st=$pdo->prepare('INSERT INTO delivery_zones(name,fee,min_order,eta,active,sort_order) VALUES(?,?,?,?,1,0)');$st->execute(['بهارستان',(int)($c['delivery_fee']??0),0,'ارسال در اولین زمان ممکن']);}

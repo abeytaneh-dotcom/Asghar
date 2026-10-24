@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-session_start();date_default_timezone_set('Asia/Tehran');
+ini_set('session.cookie_httponly','1');ini_set('session.cookie_samesite','Strict');if(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')ini_set('session.cookie_secure','1');session_start();date_default_timezone_set('Asia/Tehran');
 if(!file_exists(__DIR__.'/config.php')){header('Location: install.php');exit;}
 $c=require __DIR__.'/config.php';
-try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);}catch(Throwable $e){exit('اتصال پایگاه داده برقرار نیست.');}
+try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);require_once __DIR__.'/admin_auth.php';ts_admin_schema($pdo);require_once __DIR__.'/backup_lib.php';ts_schedule_auto_backup($pdo);}catch(Throwable $e){exit('اتصال پایگاه داده برقرار نیست.');}
 function e($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
 function token(){if(empty($_SESSION['csrf']))$_SESSION['csrf']=bin2hex(random_bytes(24));return $_SESSION['csrf'];}
 function admin(){return !empty($_SESSION['admin_id']);}
@@ -35,12 +35,13 @@ function store_remote_image(string $url): ?string {
     if($ok===false||$tooBig||$code<200||$code>=300)return null;return store_image_bytes($data);
 }
 $cats=['میوه و سبزی','لبنیات و صبحانه','نوشیدنی','تنقلات و شیرینی','خانه و شوینده','گوشت و مرغ','مواد غذایی','کنسرو و غذای آماده','بهداشت شخصی','کودک','سایر'];$err='';$msg='';
-if(isset($_POST['logout'])){session_destroy();header('Location: admin.php');exit;}
+if(isset($_POST['logout'])){ts_audit($pdo,'logout');session_destroy();header('Location: admin.php');exit;}
+$currentAdmin=null;if(admin()){$currentAdmin=ts_admin_current($pdo);if(!$currentAdmin){header('Location: admin.php');exit;}if(($currentAdmin['role']??'')==='staff'){if($_SERVER['REQUEST_METHOD']==='POST'){http_response_code(403);exit('دسترسی این حساب فقط به سفارش‌ها محدود است.');}header('Location: admin_orders.php');exit;}}
 if($_SERVER['REQUEST_METHOD']==='POST'){
  if(!hash_equals($_SESSION['csrf']??'',$_POST['csrf']??'')){http_response_code(419);exit('درخواست نامعتبر');}
  if(($_POST['action']??'')==='login'){
-  $st=$pdo->prepare('SELECT id,password_hash FROM admins WHERE username=?');$st->execute([trim($_POST['username']??'')]);$a=$st->fetch();
-  if($a&&password_verify($_POST['password']??'',$a['password_hash'])){session_regenerate_id(true);$_SESSION['admin_id']=$a['id'];header('Location: admin.php');exit;}else{$err='نام کاربری یا رمز عبور نادرست است.';}
+  [$ok,$loginErr,$role]=ts_login($pdo,trim((string)($_POST['username']??'')),(string)($_POST['password']??''));
+  if($ok){header('Location: '.($role==='staff'?'admin_orders.php':'admin.php'));exit;}else{$err=$loginErr;}
  }
  if(admin()&&($_POST['action']??'')==='save_product'){
   $id=max(0,(int)($_POST['product_id']??0));$name=trim($_POST['name']??'');$barcode=trim($_POST['barcode']??'');$brand=trim($_POST['brand']??'');$qty=trim($_POST['quantity_label']??'');
@@ -99,7 +100,7 @@ if($orders){
 }
 $revenue=(int)$pdo->query("SELECT COALESCE(SUM(total),0) FROM orders WHERE status<>'cancelled' AND payment_status='paid'")->fetchColumn();
 $labels=['new'=>'جدید','confirmed'=>'تأیید شده','preparing'=>'در حال آماده‌سازی','ready'=>'آماده پیک','out'=>'در مسیر','delivered'=>'تحویل شده','cancelled'=>'لغو شده'];
-?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>پنل مدیریت | سوپرمارکت طهران</title><link rel="stylesheet" href="assets/style.css?v=20261024-admin-v2"></head><body><header class="top"><a class="brand" href="index.php"><span class="logo">🛒</span><span><b>مدیریت سوپرمارکت طهران</b><small>ثبت سریع با دوربین و انتخاب تصویر</small></span></a><form method="post"><input type="hidden" name="csrf" value="<?=e(token())?>"><button class="btn pale" name="logout" value="1">خروج</button></form></header><main><nav class="nav"><a href="index.php">مشاهده فروشگاه</a><a href="#add">📷 ثبت محصول</a><a href="#products-list">کالاها</a><a href="admin_orders.php">🧺 جمع‌آوری سفارش</a><a href="admin_store.php">⚙️ فروشگاه و ارسال</a><a href="admin_discounts.php">💸 تخفیف‌ها</a><a href="pyramid.php">🔄 پیرامید</a></nav><?php if($err):?><div class="notice"><?=e($err)?></div><?php endif;?><?php if($msg):?><div class="success"><?=e($msg)?></div><?php endif;?><div class="stats"><div class="stat"><b><?=number_format(count($products))?></b><span>محصولات فعال اخیر</span></div><div class="stat"><b><?=number_format(count($orders))?></b><span>سفارش‌های اخیر</span></div><div class="stat"><b><?=number_format($revenue)?></b><span>تومان فروش پرداخت‌شده</span></div></div>
+?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>پنل مدیریت | سوپرمارکت طهران</title><link rel="stylesheet" href="assets/style.css?v=20261024-admin-v2"></head><body><header class="top"><a class="brand" href="index.php"><span class="logo">🛒</span><span><b>مدیریت سوپرمارکت طهران</b><small>ثبت سریع با دوربین و انتخاب تصویر</small></span></a><form method="post"><input type="hidden" name="csrf" value="<?=e(token())?>"><button class="btn pale" name="logout" value="1">خروج</button></form></header><main><nav class="nav"><a href="index.php">مشاهده فروشگاه</a><a href="#add">📷 ثبت محصول</a><a href="#products-list">کالاها</a><a href="admin_orders.php">🧺 جمع‌آوری سفارش</a><a href="admin_store.php">⚙️ فروشگاه و ارسال</a><a href="admin_discounts.php">💸 تخفیف‌ها</a><?php if(($currentAdmin['role']??'')==='owner'):?><a href="pyramid.php">🔄 پیرامید</a><a href="admin_users.php">🔐 امنیت و کاربران</a><?php endif;?></nav><?php if($err):?><div class="notice"><?=e($err)?></div><?php endif;?><?php if($msg):?><div class="success"><?=e($msg)?></div><?php endif;?><div class="stats"><div class="stat"><b><?=number_format(count($products))?></b><span>محصولات فعال اخیر</span></div><div class="stat"><b><?=number_format(count($orders))?></b><span>سفارش‌های اخیر</span></div><div class="stat"><b><?=number_format($revenue)?></b><span>تومان فروش پرداخت‌شده</span></div></div>
 <section id="add" class="panel product-entry"><div class="sectionhead"><div><h2><?=$editProduct?'✏️ ویرایش محصول':'📷 اسکن و ثبت سریع محصول'?></h2><p><?=$editProduct?'اطلاعات محصول را تغییر بده و ذخیره کن.':'بارکد را بگیر، اسم ساده بنویس، عکس را انتخاب کن و قیمت را ثبت کن.'?></p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="scan">اسکن زنده</button><label for="barcode_photo" class="btn pale" style="cursor:pointer">📷 عکس بارکد</label><input type="file" id="barcode_photo" accept="image/*" capture="environment" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"></div></div>
 <?php if($editProduct):?><div class="edit-banner">در حال ویرایش: <b><?=e($editProduct['name'])?></b> <a href="admin.php#add">لغو ویرایش</a></div><?php endif;?>
 <video id="video" playsinline></video><div id="scanmsg" class="scan-status">دو روش دارید: اسکن زنده یا عکس بارکد.</div>

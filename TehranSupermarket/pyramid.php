@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
-session_start();date_default_timezone_set('Asia/Tehran');
+ini_set('session.cookie_httponly','1');ini_set('session.cookie_samesite','Strict');if(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')ini_set('session.cookie_secure','1');session_start();date_default_timezone_set('Asia/Tehran');
 if(!file_exists(__DIR__.'/config.php')){header('Location: install.php');exit;}
 $c=require __DIR__.'/config.php';
-try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);}catch(Throwable $e){exit('اتصال پایگاه داده برقرار نیست.');}
-if(empty($_SESSION['admin_id'])){header('Location: admin.php');exit;}
+try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);require_once __DIR__.'/admin_auth.php';ts_admin_schema($pdo);require_once __DIR__.'/backup_lib.php';ts_schedule_auto_backup($pdo);}catch(Throwable $e){exit('اتصال پایگاه داده برقرار نیست.');}
+$currentAdmin=ts_require_roles($pdo,['owner']);
 function e($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
 function x($v){return htmlspecialchars((string)$v,ENT_QUOTES|ENT_XML1,'UTF-8');}
 function sync_key(): string {
