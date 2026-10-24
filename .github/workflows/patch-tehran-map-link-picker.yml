@@ -1,0 +1,57 @@
+name: Patch Tehran Map Link Picker
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-tehran-map-link-picker.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Add Google Maps and Neshan link picker
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/shop.php')
+          s=p.read_text()
+          old_html='''<div class="locactions"><button type="button" class="btn pale" id="getLocation">موقعیت فعلی من</button><button type="button" class="btn" id="saveMapLocation">ثبت این نقطه</button><button type="button" class="btn pale" id="clearLocation">پاک کردن لوکیشن</button></div><div id="locationStatus" class="locstatus">پین را روی محل تحویل بگذارید و «ثبت این نقطه» را بزنید.</div>'''
+          new_html='''<div class="locactions"><button type="button" class="btn pale" id="getLocation">موقعیت فعلی من</button><button type="button" class="btn" id="saveMapLocation">ثبت این نقطه</button><button type="button" class="btn pale" id="clearLocation">پاک کردن لوکیشن</button></div><div class="mapshare"><input type="url" id="mapShareUrl" placeholder="لینک Google Maps / نشان را اینجا بچسبانید"><button type="button" class="btn pale" id="resolveMapShare">ثبت از لینک نقشه</button></div><div id="locationStatus" class="locstatus">پین را روی محل تحویل بگذارید و «ثبت این نقطه» را بزنید.</div>'''
+          if old_html not in s:
+              raise SystemExit('location actions html not found')
+          s=s.replace(old_html,new_html,1)
+          old_css=".locstatus{font-size:12px;line-height:1.8;margin-top:9px;padding:9px 11px;background:#fff;border-radius:10px;color:#617068}"
+          new_css=".mapshare{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:9px}.mapshare input{min-width:0;border:1px solid #dce9df;border-radius:10px;padding:10px 11px;font:inherit;background:#fff}.locstatus{font-size:12px;line-height:1.8;margin-top:9px;padding:9px 11px;background:#fff;border-radius:10px;color:#617068}"
+          if old_css not in s:
+              raise SystemExit('locstatus css not found')
+          s=s.replace(old_css,new_css,1)
+          old_mobile="@media(max-width:520px){.lochead{display:block}.locactions{display:grid;grid-template-columns:1fr 1fr}.locactions .btn:last-child{grid-column:1/-1}.delivery-map{height:260px}}"
+          new_mobile="@media(max-width:520px){.lochead{display:block}.locactions{display:grid;grid-template-columns:1fr 1fr}.locactions .btn:last-child{grid-column:1/-1}.mapshare{grid-template-columns:1fr}.mapshare .btn{width:100%}.delivery-map{height:260px}}"
+          if old_mobile in s:
+              s=s.replace(old_mobile,new_mobile,1)
+          old_const="const mapEl=document.getElementById('deliveryMap'),geoBtn=document.getElementById('getLocation'),saveBtn=document.getElementById('saveMapLocation'),clearBtn=document.getElementById('clearLocation'),st=document.getElementById('locationStatus'),la=document.getElementById('delivery_lat'),ln=document.getElementById('delivery_lng'),ac=document.getElementById('delivery_accuracy');"
+          new_const="const mapEl=document.getElementById('deliveryMap'),geoBtn=document.getElementById('getLocation'),saveBtn=document.getElementById('saveMapLocation'),clearBtn=document.getElementById('clearLocation'),linkInput=document.getElementById('mapShareUrl'),linkBtn=document.getElementById('resolveMapShare'),st=document.getElementById('locationStatus'),la=document.getElementById('delivery_lat'),ln=document.getElementById('delivery_lng'),ac=document.getElementById('delivery_accuracy');"
+          if old_const not in s:
+              raise SystemExit('map const block not found')
+          s=s.replace(old_const,new_const,1)
+          anchor="let accuracyCircle=null,currentMarker=null;"
+          handler="""if(linkBtn&&linkInput){linkBtn.addEventListener('click',async()=>{const url=linkInput.value.trim();if(!url){st.className='locstatus warn';st.textContent='لینک Google Maps یا نشان را وارد کنید.';return;}linkBtn.disabled=true;const oldText=linkBtn.textContent;linkBtn.textContent='در حال خواندن لینک…';st.className='locstatus';st.textContent='در حال استخراج مختصات از لینک نقشه…';try{const body=new URLSearchParams({url});const r=await fetch('location_resolve.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:body.toString(),cache:'no-store'});const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||'مختصات پیدا نشد.');choose(Number(j.lat),Number(j.lng),null,true);reloadMapTiles();st.className='locstatus ok';st.textContent='✅ لوکیشن از لینک نقشه خوانده شد. سنجاق قرمز را بررسی کنید و بعد «ثبت این نقطه» را بزنید.';}catch(e){st.className='locstatus warn';st.textContent=e&&e.message?e.message:'خواندن لینک نقشه انجام نشد.';}finally{linkBtn.disabled=false;linkBtn.textContent=oldText;}});}let accuracyCircle=null,currentMarker=null;"""
+          if anchor not in s:
+              raise SystemExit('accuracy anchor not found')
+          s=s.replace(anchor,handler,1)
+          p.write_text(s)
+          PY
+          php -l TehranSupermarket/shop.php
+          php -l TehranSupermarket/location_resolve.php
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/shop.php TehranSupermarket/location_resolve.php
+          git commit -m 'Add Google Maps and Neshan location link picker' || exit 0
+          git push origin HEAD:websaza-hosting
