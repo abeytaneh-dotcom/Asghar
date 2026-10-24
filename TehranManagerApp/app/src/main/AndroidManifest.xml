@@ -9,8 +9,8 @@
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
         android:label="مدیریت سوپرمارکت طهران"
-        android:icon="@drawable/ic_launcher"
-        android:roundIcon="@drawable/ic_launcher"
+        android:icon="@drawable/tehran_app_icon"
+        android:roundIcon="@drawable/tehran_app_icon"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
