@@ -1,4 +1,4 @@
-# second-pass audit after safe-error rollout
+# frontend + backend error-surface audit
 name: Audit Tehran Safe Errors
 on:
   push:
@@ -15,9 +15,9 @@ jobs:
       - name: Scan error surfaces
         shell: bash
         run: |
-          echo '=== getMessage / raw exception output ==='
+          echo '=== PHP raw exception/detail surfaces ==='
           grep -RniE 'getMessage\(|->getMessage|\$e->|\$x->' TehranSupermarket --include='*.php' || true
-          echo '=== direct exits / error responses ==='
+          echo '=== PHP direct error exits ==='
           grep -RniE "exit\(|die\(|'error'=>|\"error\"=>|http_response_code\((4|5)" TehranSupermarket --include='*.php' || true
-          echo '=== catches ==='
-          grep -RniE 'catch\s*\(' TehranSupermarket --include='*.php' || true
+          echo '=== JS raw exception surfaces ==='
+          grep -RniE '(^|[^A-Za-z])(err|error|e)\.message|console\.error|alert\(|throw new Error|\.catch\(' TehranSupermarket/assets TehranSupermarket --include='*.js' --include='*.php' || true
