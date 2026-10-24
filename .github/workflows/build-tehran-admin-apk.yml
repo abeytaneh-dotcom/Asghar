@@ -1,0 +1,84 @@
+name: Build Tehran Manager APK
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'TehranAdminApp/app/**'
+      - 'TehranAdminApp/build.gradle'
+      - 'TehranAdminApp/settings.gradle'
+      - '.github/workflows/build-tehran-admin-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        working-directory: TehranAdminApp
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle :app:assembleRelease --no-daemon
+          test -s app/build/outputs/apk/release/app-release.apk
+
+      - name: Prepare release file
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p TehranAdminApp/releases
+          cp TehranAdminApp/app/build/outputs/apk/release/app-release.apk TehranAdminApp/releases/Tehran-Manager.apk
+          SHA=$(sha256sum TehranAdminApp/releases/Tehran-Manager.apk | awk '{print $1}')
+          SIZE=$(stat -c%s TehranAdminApp/releases/Tehran-Manager.apk)
+          printf 'version=1.0.0\nsha256=%s\nbytes=%s\nbuilt_at=%s\n' "$SHA" "$SIZE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > TehranAdminApp/releases/release-info.txt
+          unzip -t TehranAdminApp/releases/Tehran-Manager.apk >/dev/null
+
+      - name: Publish APK to branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'abeytaneh-dotcom'
+          git config user.email 'abeytaneh@gmail.com'
+          git add TehranAdminApp/releases/Tehran-Manager.apk TehranAdminApp/releases/release-info.txt
+          if git diff --cached --quiet; then
+            echo 'APK unchanged.'
+            exit 0
+          fi
+          git commit -m 'Publish Tehran manager APK v1.0.0'
+          git push origin HEAD:websaza-hosting
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tehran-Manager-APK
+          path: TehranAdminApp/releases/Tehran-Manager.apk
+          if-no-files-found: error
+          retention-days: 30
