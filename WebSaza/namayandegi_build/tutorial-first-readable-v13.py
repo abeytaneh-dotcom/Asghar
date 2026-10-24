@@ -103,12 +103,21 @@ js = r'''
     if(!training)return;
     var landing=document.querySelector('.joinLanding');
     var top=document.querySelector('.joinLanding .joinTop');
+    var register=document.getElementById('join-register');
     if(!landing)return;
+
+    /* First visible content: visual tutorial, immediately after the compact top bar. */
     if(top){
       if(top.nextElementSibling!==training) top.insertAdjacentElement('afterend',training);
     }else if(landing.firstElementChild!==training){
       landing.insertAdjacentElement('afterbegin',training);
     }
+
+    /* Second content: registration panel. All marketing/explanatory sections follow it. */
+    if(register && training.nextElementSibling!==register){
+      training.insertAdjacentElement('afterend',register);
+    }
+
     var slides=training.querySelectorAll('[data-ts-slide]');
     for(var i=0;i<slides.length;i++){
       slides[i].style.opacity='1';
