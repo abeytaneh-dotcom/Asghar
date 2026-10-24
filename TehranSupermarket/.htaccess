@@ -1,4 +1,4 @@
-# delivery-map-picker-v9-one-tap-location
+# delivery-map-picker-v10-resilient-map-and-no-html-cache
 Options -Indexes
 DirectoryIndex index.php
 <FilesMatch "^(config\.php|install\.lock\.php|admin_auth\.php|backup_cli\.php|backup_lib\.php|store_lib\.php|sms_lib\.php|coupon_lib\.php|README\.txt)$">
@@ -16,7 +16,7 @@ DirectoryIndex index.php
   Header always set Pragma "no-cache"
   Header always set Expires "0"
  </FilesMatch>
- <FilesMatch "^(admin|admin_orders|admin_store|admin_discounts|admin_users|admin_products|admin_couriers|admin_order_edit|admin_integrations|admin_coupons|pyramid|track|courier|account)\.php$">
+ <FilesMatch "^(index|shop|admin|admin_orders|admin_store|admin_discounts|admin_users|admin_products|admin_couriers|admin_order_edit|admin_integrations|admin_coupons|pyramid|track|courier|account)\.php$">
   Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
   Header always set Pragma "no-cache"
   Header always set Expires "0"
