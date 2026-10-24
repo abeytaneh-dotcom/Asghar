@@ -1,3 +1,4 @@
+# second-pass audit after safe-error rollout
 name: Audit Tehran Safe Errors
 on:
   push:
