@@ -43,9 +43,12 @@ jobs:
                   blocks.append(textwrap.dedent('\n'.join(chunk)))
                   continue
               i+=1
-          if not blocks:
-              raise SystemExit('No run blocks found in ux-overhaul.yml')
+          if len(blocks)<7:
+              raise SystemExit(f'Expected 7 run blocks, found {len(blocks)}')
           for n,block in enumerate(blocks,1):
+              if n==5:
+                  print('--- admin safety/nav patch already applied; skipping block 5 ---')
+                  continue
               print(f'--- running overhaul block {n}/{len(blocks)} ---')
               subprocess.run(['bash','-lc',block],check=True)
           PY
