@@ -1,9 +1,13 @@
 #!/bin/sh
 set -eu
 
+PORT_VALUE="${PORT:-8080}"
 PERSIST_ROOT="${NIAZESTAN_DATA_DIR:-/data}"
 DB_DIR="$PERSIST_ROOT/marketplace-data"
 MEDIA_DIR="$PERSIST_ROOT/marketplace-uploads"
+
+sed -ri "s/^Listen [0-9]+/Listen ${PORT_VALUE}/" /etc/apache2/ports.conf
+sed -ri "s/<VirtualHost \*:[0-9]+>/<VirtualHost *:${PORT_VALUE}>/" /etc/apache2/sites-available/000-default.conf
 
 mkdir -p "$DB_DIR" "$MEDIA_DIR"
 chown -R www-data:www-data "$PERSIST_ROOT"
