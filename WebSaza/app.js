@@ -16,7 +16,9 @@
     a.textContent=employmentLabel;
     a.className='ws-employment-link';
     a.addEventListener('click',()=>{nav.classList.remove('open');if(menu)menu.setAttribute('aria-expanded','false')});
-    nav.appendChild(a);
+    const faqLink=q('a[href="#faq"]',nav);
+    if(faqLink) faqLink.insertAdjacentElement('afterend',a);
+    else nav.appendChild(a);
   }
   const quick=q('.footer-grid > div:nth-child(3) .footer-links');
   if(quick&&!q('a[href="/namayandegi/"]',quick)){
