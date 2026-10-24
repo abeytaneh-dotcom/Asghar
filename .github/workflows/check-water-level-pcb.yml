@@ -1,0 +1,63 @@
+name: Build and check Water Level PCB
+
+on:
+  push:
+    branches: [kicad-pcb]
+    paths:
+      - 'PCB/WaterLevel_ESP32_40x40/**'
+      - '.github/workflows/check-water-level-pcb.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-drc:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: kicad-pcb
+
+      - name: Rebuild KiCad PCB source and verify checksum
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, zlib
+
+          root = Path('PCB/WaterLevel_ESP32_40x40')
+          source = root / '.source'
+          encoded = ''.join((source / f'b64_{i}.txt').read_text().strip() for i in range(1, 6))
+          raw = zlib.decompress(base64.b64decode(encoded))
+          digest = hashlib.sha256(raw).hexdigest()
+          expected = '1b30f846f35a4e366ad433657026882b93b8ea06a4f4284a1c53c4f0f98db84a'
+          if digest != expected:
+              raise SystemExit(f'PCB checksum mismatch: {digest} != {expected}')
+          target = root / 'WaterLevel_ESP32.kicad_pcb'
+          target.write_bytes(raw)
+          print(f'Built {target} ({len(raw)} bytes), sha256={digest}')
+          PY
+
+      - name: Commit reconstructed PCB if needed
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PCB/WaterLevel_ESP32_40x40/WaterLevel_ESP32.kicad_pcb
+          if ! git diff --cached --quiet; then
+            git commit -m "Build WaterLevel ESP32 KiCad PCB RevA"
+            git push origin HEAD:kicad-pcb
+          fi
+
+      - name: Install KiCad CLI
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y kicad
+
+      - name: Run KiCad PCB DRC
+        shell: bash
+        run: |
+          kicad-cli pcb drc --exit-code-violations PCB/WaterLevel_ESP32_40x40/WaterLevel_ESP32.kicad_pcb
