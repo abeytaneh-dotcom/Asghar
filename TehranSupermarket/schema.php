@@ -57,6 +57,9 @@ function ensure_product_schema(PDO $pdo): void {
     if(!isset($orderCols['delivery_zone_id'])) $oa[]="ADD COLUMN delivery_zone_id INT UNSIGNED NULL";
     if(!isset($orderCols['delivery_zone_name'])) $oa[]="ADD COLUMN delivery_zone_name VARCHAR(120) NULL";
     if(!isset($orderCols['delivery_eta'])) $oa[]="ADD COLUMN delivery_eta VARCHAR(120) NULL";
+    if(!isset($orderCols['delivery_lat'])) $oa[]="ADD COLUMN delivery_lat DECIMAL(10,7) NULL";
+    if(!isset($orderCols['delivery_lng'])) $oa[]="ADD COLUMN delivery_lng DECIMAL(10,7) NULL";
+    if(!isset($orderCols['delivery_accuracy'])) $oa[]="ADD COLUMN delivery_accuracy INT UNSIGNED NULL";
     if(!isset($orderCols['public_token'])) $oa[]="ADD COLUMN public_token VARCHAR(64) NULL";
     if(!isset($orderCols['courier_id'])) $oa[]="ADD COLUMN courier_id INT UNSIGNED NULL";
     if(!isset($orderCols['courier_assigned_at'])) $oa[]="ADD COLUMN courier_assigned_at DATETIME NULL";
