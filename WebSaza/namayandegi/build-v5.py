@@ -35,7 +35,7 @@ for step in steps:
 
 # Final product-policy/UI patches live outside the deployment path so support
 # assets can be staged without triggering incomplete production deployments.
-for name in ['direct-access-gallery-v10.py','tutorial-slider-v11.py','tutorial-highlight-v12.py']:
+for name in ['direct-access-gallery-v10.py','tutorial-slider-v11.py','tutorial-highlight-v12.py','tutorial-first-readable-v13.py']:
     final_step = root.parent / 'namayandegi_build' / name
     if not final_step.is_file():
         raise SystemExit(f'missing build step: {name}')
