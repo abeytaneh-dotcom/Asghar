@@ -1,0 +1,38 @@
+name: Diagnose Tehran Live Map
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/diagnose-tehran-map-live.yml']
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe live endpoints
+        shell: bash
+        run: |
+          set -u
+          BASE='https://websaza.ir/tehran'
+          probe(){
+            local name="$1" url="$2" out="$3"
+            code=$(curl -sS -L --max-time 30 -o "$out" -w '%{http_code}' "$url" || echo CURLFAIL)
+            size=$(wc -c < "$out" 2>/dev/null || echo 0)
+            type=$(file -b "$out" 2>/dev/null || true)
+            echo "$name code=$code size=$size type=$type"
+          }
+          probe home "$BASE/" /tmp/home
+          probe admin "$BASE/admin.php" /tmp/admin
+          probe track "$BASE/track.php" /tmp/track
+          probe account "$BASE/account.php" /tmp/account
+          probe manifest "$BASE/manifest.webmanifest" /tmp/manifest
+          probe sw "$BASE/sw.js" /tmp/sw
+          probe leaflet_js "$BASE/assets/leaflet/leaflet.js?v=1.9.4" /tmp/leaflet.js
+          probe leaflet_css "$BASE/assets/leaflet/leaflet.css?v=1.9.4" /tmp/leaflet.css
+          probe map "$BASE/map_tile.php?z=15&x=21096&y=13254" /tmp/map.png
+          probe installer "$BASE/install.php" /tmp/install
+          echo '--- checks ---'
+          grep -F 'انتخاب لوکیشن تحویل' /tmp/home >/dev/null && echo location_ui=yes || echo location_ui=no
+          grep -F 'assets/leaflet/leaflet.js' /tmp/home >/dev/null && echo local_leaflet_ref=yes || echo local_leaflet_ref=no
+          grep -F 'Leaflet' /tmp/leaflet.js >/dev/null && echo leaflet_signature=yes || echo leaflet_signature=no
+          echo "map_head=$(xxd -p -l 8 /tmp/map.png 2>/dev/null || true)"
