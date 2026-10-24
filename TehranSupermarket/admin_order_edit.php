@@ -1,15 +1,15 @@
 <?php
-declare(strict_types=1);
+declare(strict_types=1);require_once __DIR__.'/error_bootstrap.php';
 ini_set('session.cookie_httponly','1');ini_set('session.cookie_samesite','Strict');if(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')ini_set('session.cookie_secure','1');session_start();date_default_timezone_set('Asia/Tehran');
 header('Cache-Control: no-store, private, max-age=0');
 if(!file_exists(__DIR__.'/config.php')){header('Location:install.php');exit;}$c=require __DIR__.'/config.php';
-try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);require_once __DIR__.'/admin_auth.php';ts_admin_schema($pdo);}catch(Throwable $e){exit('اتصال برقرار نیست.');}
+try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);require_once __DIR__.'/admin_auth.php';ts_admin_schema($pdo);}catch(Throwable $e){ts_log_internal($e,'SYS-101');ts_html_fail('SYS-101',503,'index.php');}
 $me=ts_require_roles($pdo,['owner','manager']);
 function e($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}function token(){if(empty($_SESSION['csrf']))$_SESSION['csrf']=bin2hex(random_bytes(24));return $_SESSION['csrf'];}function toman($n){return number_format((int)$n).' تومان';}
 $orderId=max(0,(int)($_REQUEST['order_id']??0));$msg='';$err='';
 function recalc_order(PDO $pdo,int $orderId): void {$s=$pdo->prepare('SELECT COALESCE(SUM(unit_price*quantity),0) FROM order_items WHERE order_id=?');$s->execute([$orderId]);$sub=(int)$s->fetchColumn();$q=$pdo->prepare('SELECT delivery_fee,status FROM orders WHERE id=?');$q->execute([$orderId]);$o=$q->fetch();if(!$o)return;$status=(string)$o['status']==='ready'?'preparing':(string)$o['status'];$pdo->prepare('UPDATE orders SET subtotal=?,total=?,status=?,status_updated_at=NOW(),pyramid_synced_at=NULL,pyramid_invoice_no=NULL WHERE id=?')->execute([$sub,$sub+(int)$o['delivery_fee'],$status,$orderId]);}
 if($_SERVER['REQUEST_METHOD']==='POST'){
- if(!hash_equals($_SESSION['csrf']??'',$_POST['csrf']??'')){http_response_code(419);exit('درخواست نامعتبر');}
+ if(!hash_equals($_SESSION['csrf']??'',$_POST['csrf']??'')){ts_html_fail('REQ-102',419,'index.php');}
  $action=(string)($_POST['action']??'');$itemId=max(0,(int)($_POST['item_id']??0));
  try{$pdo->beginTransaction();$q=$pdo->prepare("SELECT status FROM orders WHERE id=? FOR UPDATE");$q->execute([$orderId]);$status=(string)($q->fetchColumn()?:'');if($status===''||in_array($status,['cancelled','delivered'],true))throw new RuntimeException('این سفارش دیگر قابل اصلاح نیست.');
    $q=$pdo->prepare('SELECT * FROM order_items WHERE id=? AND order_id=? FOR UPDATE');$q->execute([$itemId,$orderId]);$it=$q->fetch();if(!$it)throw new RuntimeException('قلم سفارش پیدا نشد.');
@@ -23,7 +23,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
      $origName=(string)($it['original_product_name']?:$it['product_name']);$note='جایگزین «'.$origName.'» شد';$pdo->prepare('UPDATE order_items SET product_id=?,barcode=?,product_name=?,unit_price=?,picked=0,picked_at=NULL,adjustment_note=? WHERE id=?')->execute([$newPid,$np['barcode'],$np['name'],(int)$np['price'],$note,$itemId]);$msg='کالای جایگزین ثبت و مبلغ سفارش اصلاح شد.';
    } else throw new RuntimeException('عملیات نامعتبر است.');
    recalc_order($pdo,$orderId);$pdo->commit();ts_audit($pdo,'order_adjusted','order='.$orderId.' item='.$itemId.' action='.$action);
- }catch(Throwable $x){if($pdo->inTransaction())$pdo->rollBack();$err=$x->getMessage();}
+ }catch(Throwable $x){if($pdo->inTransaction())$pdo->rollBack();$err=ts_error_text('SYS-100');ts_log_internal($x,'SYS-100');}
 }
 $st=$pdo->prepare('SELECT o.*,c.name customer_name,c.phone,c.address FROM orders o JOIN customers c ON c.id=o.customer_id WHERE o.id=?');$st->execute([$orderId]);$order=$st->fetch();if(!$order){http_response_code(404);exit('سفارش پیدا نشد.');}
 $st=$pdo->prepare('SELECT oi.*,p.stock current_stock,p.image_path FROM order_items oi LEFT JOIN products p ON p.id=oi.product_id WHERE oi.order_id=? ORDER BY oi.id');$st->execute([$orderId]);$items=$st->fetchAll();

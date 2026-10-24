@@ -1,15 +1,15 @@
 <?php
-declare(strict_types=1);
+declare(strict_types=1);require_once __DIR__.'/error_bootstrap.php';
 ini_set('session.cookie_httponly','1');ini_set('session.cookie_samesite','Strict');if(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')ini_set('session.cookie_secure','1');
 session_start();date_default_timezone_set('Asia/Tehran');
 if(!file_exists(__DIR__.'/config.php')){header('Location:install.php');exit;}$c=require __DIR__.'/config.php';
-try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/admin_auth.php';ts_admin_schema($pdo);}catch(Throwable $e){exit('اتصال برقرار نیست.');}
+try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/admin_auth.php';ts_admin_schema($pdo);}catch(Throwable $e){ts_log_internal($e,'SYS-101');ts_html_fail('SYS-101',503,'index.php');}
 $me=ts_require_roles($pdo,['owner']);
 function e($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
 function token(){if(empty($_SESSION['csrf']))$_SESSION['csrf']=bin2hex(random_bytes(24));return $_SESSION['csrf'];}
 $msg='';$err='';
 if($_SERVER['REQUEST_METHOD']==='POST'){
- if(!hash_equals($_SESSION['csrf']??'',$_POST['csrf']??'')){http_response_code(419);exit('درخواست نامعتبر');}
+ if(!hash_equals($_SESSION['csrf']??'',$_POST['csrf']??'')){ts_html_fail('REQ-102',419,'index.php');}
  $a=(string)($_POST['action']??'');
  try{
   if($a==='create'){
@@ -33,7 +33,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    $s=$pdo->prepare('SELECT username FROM admins WHERE id=?');$s->execute([$id]);$username=(string)($s->fetchColumn()?:'');if($username==='')throw new RuntimeException('کاربر پیدا نشد.');
    $q=$pdo->prepare('UPDATE admins SET password_hash=?,failed_attempts=0,locked_until=NULL,password_changed_at=NOW() WHERE id=?');$q->execute([password_hash($pass,PASSWORD_DEFAULT),$id]);ts_audit($pdo,'password_reset',$username);$msg='رمز عبور تغییر کرد و قفل ورود نیز پاک شد.';
   }
- }catch(Throwable $x){$err=$x->getMessage();}
+ }catch(Throwable $x){$err=ts_error_text('SYS-100');ts_log_internal($x,'SYS-100');}
 }
 $users=$pdo->query('SELECT id,username,display_name,role,active,failed_attempts,locked_until,last_login_at,last_login_ip,created_at FROM admins ORDER BY id')->fetchAll();
 $logs=$pdo->query('SELECT username,action,details,ip,created_at FROM admin_audit_log ORDER BY id DESC LIMIT 30')->fetchAll();

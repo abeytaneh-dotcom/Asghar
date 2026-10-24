@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types=1);require_once __DIR__.'/error_bootstrap.php';
 session_start();
 date_default_timezone_set('Asia/Tehran');
 header('Content-Type: application/json; charset=utf-8');
@@ -58,30 +58,30 @@ function off_images(string $q): array {
     return $r;
 }
 
-if (empty($_SESSION['admin_id'])) out(['ok'=>false,'error'=>'ورود مدیر لازم است.'],401);
-$configFile=__DIR__.'/config.php'; if(!file_exists($configFile)) out(['ok'=>false,'error'=>'سایت نصب نشده است.'],503);
+if(empty($_SESSION['admin_id']))ts_json_fail('REQ-102',401);
+$configFile=__DIR__.'/config.php';if(!file_exists($configFile))ts_json_fail('SYS-100',503);
 $c=require $configFile;
-try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);}catch(Throwable $e){out(['ok'=>false,'error'=>'خطای پایگاه داده'],500);}
+try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);}catch(Throwable $e){ts_log_internal($e,'SYS-101');ts_json_fail('SYS-101',503);}
 
 $action=$_GET['action']??'';
 if($action==='barcode_lookup'){
     $barcode=preg_replace('/[^0-9A-Za-z\-_.]/','',trim((string)($_GET['barcode']??'')));
-    if($barcode==='')out(['ok'=>false,'error'=>'بارکد خالی است.'],422);
+    if($barcode==='')ts_json_fail('REQ-101',422);
     $st=$pdo->prepare('SELECT id,barcode,name,brand,quantity_label,category,image_path,image_source,price,stock,active FROM products WHERE barcode=? LIMIT 1');$st->execute([$barcode]);$p=$st->fetch();
     out(['ok'=>true,'found'=>(bool)$p,'product'=>$p?:null]);
 }
 if($action==='order_items'){
     $orderId=max(0,(int)($_GET['order_id']??0));
-    if($orderId<=0)out(['ok'=>false,'error'=>'شماره سفارش نامعتبر است.'],422);
+    if($orderId<=0)ts_json_fail('REQ-101',422);
     $st=$pdo->prepare('SELECT oi.product_id,oi.product_name,oi.unit_price,oi.quantity,p.barcode FROM order_items oi LEFT JOIN products p ON p.id=oi.product_id WHERE oi.order_id=? ORDER BY oi.id ASC');
     $st->execute([$orderId]);
     $items=$st->fetchAll();
     out(['ok'=>true,'order_id'=>$orderId,'items'=>$items]);
 }
 if($action==='image_search'){
-    $q=trim((string)($_GET['q']??'')); if(mb_strlen($q)<2)out(['ok'=>false,'error'=>'حداقل ۲ حرف بنویسید.'],422);
+    $q=trim((string)($_GET['q']??'')); if(mb_strlen($q)<2)ts_json_fail('REQ-101',422);
     $items=array_merge(bing_source_images($q),off_images($q));
     $seen=[];$unique=[];foreach($items as $it){$key=preg_replace('/[?#].*/','',$it['image']);if(isset($seen[$key]))continue;$seen[$key]=1;$unique[]=$it;if(count($unique)>=48)break;}
     out(['ok'=>true,'query'=>$q,'items'=>$unique,'count'=>count($unique)]);
 }
-out(['ok'=>false,'error'=>'درخواست ناشناخته است.'],404);
+ts_json_fail('REQ-101',404);

@@ -1,9 +1,9 @@
 <?php
-declare(strict_types=1);
+declare(strict_types=1);require_once __DIR__.'/error_bootstrap.php';
 ini_set('session.cookie_httponly','1');ini_set('session.cookie_samesite','Strict');if(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')ini_set('session.cookie_secure','1');session_start();date_default_timezone_set('Asia/Tehran');
 if(!file_exists(__DIR__.'/config.php')){header('Location: install.php');exit;}
 $c=require __DIR__.'/config.php';
-try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);require_once __DIR__.'/admin_auth.php';ts_admin_schema($pdo);require_once __DIR__.'/backup_lib.php';ts_schedule_auto_backup($pdo);}catch(Throwable $e){exit('اتصال پایگاه داده برقرار نیست.');}
+try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);require_once __DIR__.'/admin_auth.php';ts_admin_schema($pdo);require_once __DIR__.'/backup_lib.php';ts_schedule_auto_backup($pdo);}catch(Throwable $e){ts_log_internal($e,'SYS-101');ts_html_fail('SYS-101',503,'index.php');}
 function e($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
 function token(){if(empty($_SESSION['csrf']))$_SESSION['csrf']=bin2hex(random_bytes(24));return $_SESSION['csrf'];}
 function admin(){return !empty($_SESSION['admin_id']);}
@@ -38,7 +38,7 @@ $cats=['میوه و سبزی','لبنیات و صبحانه','نوشیدنی','�
 if(isset($_POST['logout'])){ts_audit($pdo,'logout');session_destroy();header('Location: admin.php');exit;}
 $currentAdmin=null;if(admin()){$currentAdmin=ts_admin_current($pdo);if(!$currentAdmin){header('Location: admin.php');exit;}if(($currentAdmin['role']??'')==='staff'){if($_SERVER['REQUEST_METHOD']==='POST'){http_response_code(403);exit('دسترسی این حساب فقط به سفارش‌ها محدود است.');}header('Location: admin_orders.php');exit;}}
 if($_SERVER['REQUEST_METHOD']==='POST'){
- if(!hash_equals($_SESSION['csrf']??'',$_POST['csrf']??'')){http_response_code(419);exit('درخواست نامعتبر');}
+ if(!hash_equals($_SESSION['csrf']??'',$_POST['csrf']??'')){ts_html_fail('REQ-102',419,'index.php');}
  if(($_POST['action']??'')==='login'){
   [$ok,$loginErr,$role]=ts_login($pdo,trim((string)($_POST['username']??'')),(string)($_POST['password']??''));
   if($ok){header('Location: '.($role==='staff'?'admin_orders.php':'admin.php'));exit;}else{$err=$loginErr;}
@@ -62,7 +62,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
       $st=$pdo->prepare('INSERT INTO products(name,barcode,brand,quantity_label,category,image_path,image_source,price,stock,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,1,NOW(),NOW())');
       $st->execute([$name,$barcode!==''?$barcode:null,$brand!==''?$brand:null,$qty!==''?$qty:null,$category,$imagePath,$source!==''?$source:null,$price,$stock]);$msg='محصول جدید ثبت شد.';
     }
-   }catch(Throwable $x){$err='ذخیره محصول انجام نشد: '.$x->getMessage();}
+   }catch(Throwable $x){$err=ts_error_text('SYS-100');ts_log_internal($x,'SYS-100');}
   }
  }
  if(admin()&&($_POST['action']??'')==='stock'){$id=(int)($_POST['id']??0);$price=max(0,(int)($_POST['price']??0));$stock=max(0,(int)($_POST['stock']??0));$st=$pdo->prepare('UPDATE products SET price=?,stock=?,updated_at=NOW() WHERE id=? AND active=1');$st->execute([$price,$stock,$id]);$msg='قیمت و موجودی ذخیره شد.';}
@@ -78,7 +78,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   if($status==='cancelled'&&$o['status']!=='cancelled'&&empty($o['stock_restored_at'])){$it=$pdo->prepare('SELECT product_id,quantity FROM order_items WHERE order_id=?');$it->execute([$id]);$up=$pdo->prepare('UPDATE products SET stock=stock+?,updated_at=NOW() WHERE id=?');foreach($it->fetchAll() as $row)$up->execute([(int)$row['quantity'],(int)$row['product_id']]);$pdo->prepare('UPDATE orders SET status=?,stock_restored_at=NOW(),status_updated_at=NOW() WHERE id=?')->execute([$status,$id]);}
   elseif($o['status']==='cancelled'&&$status!=='cancelled')throw new RuntimeException('سفارش لغوشده را دوباره فعال نکنید.');
   else{$pdo->prepare('UPDATE orders SET status=?,status_updated_at=NOW() WHERE id=?')->execute([$status,$id]);}
-  $pdo->commit();$msg='وضعیت سفارش تغییر کرد.';}catch(Throwable $x){if($pdo->inTransaction())$pdo->rollBack();$err=$x->getMessage();}
+  $pdo->commit();$msg='وضعیت سفارش تغییر کرد.';}catch(Throwable $x){if($pdo->inTransaction())$pdo->rollBack();$err=ts_error_text('SYS-100');ts_log_internal($x,'SYS-100');}
  }
 }
 }

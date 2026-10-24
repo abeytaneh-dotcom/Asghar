@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types=1);require_once __DIR__.'/error_bootstrap.php';
 session_start();
 date_default_timezone_set('Asia/Tehran');
 function e($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
@@ -28,6 +28,6 @@ if($_SERVER['REQUEST_METHOD']==='POST'&&!$done){
   @chmod(__DIR__.'/config.php',0600);
   file_put_contents(__DIR__.'/install.lock.php',"<?php http_response_code(403); exit('Installer disabled');",LOCK_EX);
   $done=true;
- } catch(Throwable $ex){$error='نصب انجام نشد. اطلاعات اتصال و مجوزهای دیتابیس را بررسی کنید. جزئیات: '.e($ex->getMessage());}
+ } catch(Throwable $ex){$error=ts_error_text('SYS-100');ts_log_internal($ex,'SYS-100');}
 }
 ?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>نصب سوپرمارکت طهران</title><link rel="stylesheet" href="assets/style.css"></head><body><main class="login"><div class="logo big">🛒</div><h1>نصب سوپرمارکت طهران</h1><p class="muted">Tehran Supermarket · نصب‌کننده خودکار هاست cPanel</p><?php if($done):?><div class="success">پیکربندی اولیه انجام شده یا قبلاً نصب شده است.</div><a class="btn wide" href="index.php">ورود به فروشگاه</a><a class="btn pale wide" href="admin.php">ورود به پنل مدیریت</a><?php else:?><?php if($error):?><div class="notice"><?=$error?></div><?php endif;?><div class="notice">ابتدا در cPanel یک دیتابیس MySQL و کاربر بسازید و کاربر را با ALL PRIVILEGES به دیتابیس وصل کنید.</div><form method="post" class="checkout"><h3>اتصال پایگاه داده MySQL</h3><label>هاست دیتابیس<input name="db_host" value="<?=e($_POST['db_host']??'localhost')?>" required></label><label>نام دیتابیس کامل cPanel<input name="db_name" value="<?=e($_POST['db_name']??'')?>" placeholder="account_store" required></label><label>نام کاربر دیتابیس کامل<input name="db_user" value="<?=e($_POST['db_user']??'')?>" required></label><label>رمز کاربر دیتابیس<input type="password" name="db_pass" required></label><h3>ساخت حساب مدیر</h3><label>نام کاربری مدیر<input name="admin_user" value="<?=e($_POST['admin_user']??'admin')?>" required></label><label>رمز عبور مدیر (حداقل ۱۲ کاراکتر)<input type="password" name="admin_pass" minlength="12" required></label><label>هزینه ارسال (تومان)<input type="number" name="delivery_fee" min="0" value="<?=e($_POST['delivery_fee']??'0')?>" required></label><button class="btn wide">نصب و ساخت جدول‌ها</button></form><?php endif;?></main></body></html>
