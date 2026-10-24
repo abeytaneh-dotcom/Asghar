@@ -1,0 +1,61 @@
+name: Patch Pyramid Admin Nav
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/patch-pyramid-nav.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+          fetch-depth: 0
+      - name: Patch admin source
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/admin.php')
+          s=p.read_text(encoding='utf-8')
+          old='<nav class="nav"><a href="index.php">مشاهده فروشگاه</a><a href="#add">📷 ثبت محصول</a><a href="#products-list">کالاها</a><a href="#orders">سفارش‌ها</a></nav>'
+          new='<nav class="nav"><a href="index.php">مشاهده فروشگاه</a><a href="#add">📷 ثبت محصول</a><a href="#products-list">کالاها</a><a href="#orders">سفارش‌ها</a><a href="pyramid.php">🔄 پیرامید</a></nav>'
+          if new not in s:
+              if old not in s: raise SystemExit('admin nav pattern not found')
+              s=s.replace(old,new,1)
+              p.write_text(s,encoding='utf-8')
+          PY
+          php -l TehranSupermarket/admin.php
+      - name: Commit source patch
+        shell: bash
+        run: |
+          if git diff --quiet -- TehranSupermarket/admin.php; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/admin.php
+          git commit -m 'Show Pyramid integration in admin nav'
+          git push origin HEAD:websaza-hosting
+      - name: Deploy patched admin directly
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          OUT="$RUNNER_TEMP/save.json"
+          curl -sS --fail-with-body -H "$AUTH" --request POST \
+            --data-urlencode 'dir=public_html/tehran' \
+            --data-urlencode 'file=admin.php' \
+            --data-urlencode 'content@TehranSupermarket/admin.php' \
+            "${BASE}/execute/Fileman/save_file_content" -o "$OUT"
+          test "$(jq -r '.result.status // .status // 0' "$OUT")" = '1'
