@@ -7,29 +7,25 @@ on:
       - '.github/workflows/inspect-niazestan-registry.yml'
   workflow_dispatch:
 
+concurrency:
+  group: inspect-niazestan-registry
+  cancel-in-progress: true
+
 jobs:
   inspect:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
-      - name: Query public and .ir parent DNS
+      - name: Query public DNS-over-HTTPS
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== Public recursive NS ==='
-          dig +short NS niazestan.ir || true
-          echo '=== Trace delegation ==='
-          dig +trace NS niazestan.ir || true
-          echo '=== .ir authoritative servers ==='
-          IRNS=$(dig +short NS ir. | head -6)
-          printf '%s\n' "$IRNS"
-          echo '=== Ask each .ir parent for niazestan.ir ==='
-          for ns in $IRNS; do
-            echo "--- $ns ---"
-            dig +norecurse NS niazestan.ir "@$ns" || true
-          done
-          echo '=== Target nameserver IPs ==='
-          dig +short A ns44.dnsuserver.com || true
-          dig +short A ns45.dnsuserver.com || true
-          echo '=== Old nameserver/IP clues ==='
-          dig +short -x 38.113.162.10 || true
-          dig +short -x 164.138.16.151 || true
+          echo '=== Google NS ==='
+          curl -fsS --max-time 15 'https://dns.google/resolve?name=niazestan.ir&type=NS' | jq '.' || true
+          echo '=== Cloudflare NS ==='
+          curl -fsS --max-time 15 -H 'accept: application/dns-json' 'https://cloudflare-dns.com/dns-query?name=niazestan.ir&type=NS' | jq '.' || true
+          echo '=== Google A ==='
+          curl -fsS --max-time 15 'https://dns.google/resolve?name=niazestan.ir&type=A' | jq '.' || true
+          echo '=== Target NS addresses ==='
+          curl -fsS --max-time 15 'https://dns.google/resolve?name=ns44.dnsuserver.com&type=A' | jq '.' || true
+          curl -fsS --max-time 15 'https://dns.google/resolve?name=ns45.dnsuserver.com&type=A' | jq '.' || true
