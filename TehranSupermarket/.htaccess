@@ -1,4 +1,4 @@
-# delivery-map-picker-v4-reject-coarse-gps
+# delivery-map-picker-v5-gps-moves-pin
 Options -Indexes
 DirectoryIndex index.php
 <FilesMatch "^(config\.php|install\.lock\.php|admin_auth\.php|backup_cli\.php|backup_lib\.php|store_lib\.php|sms_lib\.php|coupon_lib\.php|README\.txt)$">
