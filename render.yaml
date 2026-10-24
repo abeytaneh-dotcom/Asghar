@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: niazestan
+    runtime: docker
+    repo: https://github.com/abeytaneh-dotcom/Asghar.git
+    branch: niazestan-cloud
+    rootDir: WebSaza
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: frankfurt
+    plan: 0.5c-512mb
+    autoDeployTrigger: commit
+    healthCheckPath: /nz-health.php
+    domains:
+      - niazestan.ir
+    envVars:
+      - key: NIAZESTAN_DATA_DIR
+        value: /data
+    disk:
+      name: niazestan-data
+      mountPath: /data
+      sizeGB: 5
