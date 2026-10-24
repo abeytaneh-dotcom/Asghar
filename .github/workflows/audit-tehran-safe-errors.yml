@@ -1,0 +1,22 @@
+name: Audit Tehran Safe Errors
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/audit-tehran-safe-errors.yml']
+  workflow_dispatch:
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Scan error surfaces
+        shell: bash
+        run: |
+          echo '=== getMessage / raw exception output ==='
+          grep -RniE 'getMessage\(|->getMessage|\$e->|\$x->' TehranSupermarket --include='*.php' || true
+          echo '=== direct exits / error responses ==='
+          grep -RniE "exit\(|die\(|'error'=>|\"error\"=>|http_response_code\((4|5)" TehranSupermarket --include='*.php' || true
+          echo '=== catches ==='
+          grep -RniE 'catch\s*\(' TehranSupermarket --include='*.php' || true
