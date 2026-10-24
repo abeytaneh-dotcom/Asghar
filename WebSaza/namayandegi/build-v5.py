@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 
+# Deployment marker: landing order = tutorial, registration, explanatory content.
 root = Path(__file__).resolve().parent
 steps = [
     'build-patch.py',
