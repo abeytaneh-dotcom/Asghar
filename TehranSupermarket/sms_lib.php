@@ -13,7 +13,13 @@ function ts_queue_sms(PDO $pdo,?int $orderId,string $phone,string $event,string 
     try{if($orderId){$q=$pdo->prepare("SELECT COUNT(*) FROM sms_outbox WHERE order_id=? AND event_key=? AND status IN ('queued','sent')");$q->execute([$orderId,$event]);if((int)$q->fetchColumn()>0)return;}$st=$pdo->prepare("INSERT INTO sms_outbox(order_id,phone,event_key,message_text,status,created_at) VALUES(?,?,?,?, 'queued',NOW())");$st->execute([$orderId,$phone,$event,mb_substr($message,0,500)]);}catch(Throwable $e){}
 }
 function ts_sms_order_event(PDO $pdo,int $orderId,string $event): void {
-    try{$st=$pdo->prepare('SELECT o.id,o.total,o.status,c.name,c.phone FROM orders o JOIN customers c ON c.id=o.customer_id WHERE o.id=?');$st->execute([$orderId]);$o=$st->fetch();if(!$o)return;$name=trim((string)$o['name']);$prefix=$name!==''?$name.' عزیز، ':'';$texts=['created'=>$prefix.'سفارش #'.$orderId.' در سوپرمارکت طهران ثبت شد. مبلغ '.number_format((int)$o['total']).' تومان.','ready'=>$prefix.'سفارش #'.$orderId.' آماده ارسال است.','out'=>$prefix.'سفارش #'.$orderId.' تحویل پیک شد و در مسیر شماست.','delivered'=>$prefix.'سفارش #'.$orderId.' تحویل شد. از خرید شما سپاسگزاریم.','cancelled'=>$prefix.'سفارش #'.$orderId.' لغو شد. در صورت نیاز با فروشگاه تماس بگیرید.'];if(isset($texts[$event]))ts_queue_sms($pdo,$orderId,(string)$o['phone'],$event,$texts[$event]);}catch(Throwable $e){}
+    try{
+        $st=$pdo->prepare('SELECT o.id,o.total,o.status,c.name,c.phone FROM orders o JOIN customers c ON c.id=o.customer_id WHERE o.id=?');$st->execute([$orderId]);$o=$st->fetch();if(!$o)return;
+        $name=trim((string)$o['name']);$prefix=$name!==''?$name.' عزیز، ':'';
+        $texts=['created'=>$prefix.'سفارش #'.$orderId.' در سوپرمارکت طهران ثبت شد. مبلغ '.number_format((int)$o['total']).' تومان.','ready'=>$prefix.'سفارش #'.$orderId.' آماده ارسال است.','out'=>$prefix.'سفارش #'.$orderId.' تحویل پیک شد و در مسیر شماست.','delivered'=>$prefix.'سفارش #'.$orderId.' تحویل شد. از خرید شما سپاسگزاریم.','cancelled'=>$prefix.'سفارش #'.$orderId.' لغو شد. در صورت نیاز با فروشگاه تماس بگیرید.'];
+        if(isset($texts[$event]))ts_queue_sms($pdo,$orderId,(string)$o['phone'],$event,$texts[$event]);
+        if($event==='created'){try{require_once __DIR__.'/push_lib.php';ts_push_notify_new_order($pdo,$orderId);}catch(Throwable $e){}}
+    }catch(Throwable $e){}
 }
 function ts_sms_http(string $url,array $headers,string $payload): array {
     $ch=curl_init($url);curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>$payload,CURLOPT_HTTPHEADER=>$headers,CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>7,CURLOPT_TIMEOUT=>15,CURLOPT_SSL_VERIFYPEER=>true]);$resp=curl_exec($ch);$code=(int)curl_getinfo($ch,CURLINFO_RESPONSE_CODE);$err=curl_error($ch);curl_close($ch);return [$resp,$code,$err];
