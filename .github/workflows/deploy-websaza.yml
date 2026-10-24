@@ -79,6 +79,9 @@ jobs:
           html=re.sub(r'<link rel="preload" as="image" href="https://images\.unsplash\.com[^>]+>\n?','<link rel="preload" as="image" href="/hero-real-v10.jpg?v=20261017-1" fetchpriority="high">\n',html)
           html=re.sub(r'<meta property="og:image" content="[^"]+">','<meta property="og:image" content="https://websaza.ir/hero-real-v10.jpg?v=20261017-1">',html)
           html=re.sub(r'<meta name="twitter:image" content="[^"]+">','<meta name="twitter:image" content="https://websaza.ir/hero-real-v10.jpg?v=20261017-1">',html)
+          employment='<a href="/namayandegi/" class="ws-employment-link">استخدام در وب سازا</a>'
+          if employment not in html:
+              html=html.replace('<a href="#faq">سؤالات متداول</a>', '<a href="#faq">سؤالات متداول</a>\n      '+employment, 1)
           replacements={
             'https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=1200&q=86':'/hero-real-v10.jpg?v=20261017-1',
             'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1000&q=80':'/service-web-v8.jpg?v=20261017-1',
@@ -141,7 +144,10 @@ jobs:
         run: |
           set -euo pipefail
           sleep 8
-          curl -fsS --max-time 20 https://websaza.ir/ | grep -F 'فروشگاه اینترنتی، اپلیکیشن و سئو' >/dev/null
+          HOME_HTML=$(curl -fsS --max-time 20 https://websaza.ir/)
+          grep -F 'فروشگاه اینترنتی، اپلیکیشن و سئو' <<<"$HOME_HTML" >/dev/null
+          grep -F 'استخدام در وب سازا' <<<"$HOME_HTML" >/dev/null
+          grep -F 'href="/namayandegi/"' <<<"$HOME_HTML" >/dev/null
           HTML=$(curl -fsS --max-time 25 https://websaza.ir/nz)
           grep -F 'نیازستان' <<<"$HTML" >/dev/null
           grep -E 'nz-brand-model\.js\?v=[a-f0-9]{12}' <<<"$HTML" >/dev/null
