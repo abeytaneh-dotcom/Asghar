@@ -1,0 +1,34 @@
+name: Patch Tehran Account Link
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/patch-tehran-account-link.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Add account link
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/shop.php');s=p.read_text();old='<a href="track.php">📦 پیگیری سفارش</a>';new='<a href="account.php">👤 سفارش‌های من</a> <a href="track.php">📦 پیگیری سفارش</a>'
+          if old not in s: raise SystemExit('shop header marker missing')
+          p.write_text(s.replace(old,new,1))
+          PY
+          php -l TehranSupermarket/shop.php
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/shop.php
+          git diff --cached --quiet && exit 0
+          git commit -m 'Add customer account link to Tehran shop'
+          git push origin HEAD:websaza-hosting
