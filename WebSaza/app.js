@@ -7,6 +7,25 @@
     document.addEventListener('click',e=>{if(!nav.contains(e.target)&&!menu.contains(e.target)){nav.classList.remove('open');menu.setAttribute('aria-expanded','false')}})
   }
 
+  /* Employment / representative entry */
+  const employmentHref='/namayandegi/';
+  const employmentLabel='استخدام در وب سازا';
+  if(nav&&!q('a[href="/namayandegi/"]',nav)){
+    const a=document.createElement('a');
+    a.href=employmentHref;
+    a.textContent=employmentLabel;
+    a.className='ws-employment-link';
+    a.addEventListener('click',()=>{nav.classList.remove('open');if(menu)menu.setAttribute('aria-expanded','false')});
+    nav.appendChild(a);
+  }
+  const quick=q('.footer-grid > div:nth-child(3) .footer-links');
+  if(quick&&!q('a[href="/namayandegi/"]',quick)){
+    const a=document.createElement('a');
+    a.href=employmentHref;
+    a.textContent=employmentLabel;
+    quick.appendChild(a);
+  }
+
   const year=q('[data-year]');
   if(year)year.textContent=new Date().getFullYear();
 
