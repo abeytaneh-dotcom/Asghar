@@ -1,0 +1,60 @@
+name: Patch Tehran Delivery Map Picker
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/patch-tehran-map-picker.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Patch checkout location picker
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('TehranSupermarket/shop.php')
+          s = p.read_text(encoding='utf-8')
+
+          old_head = '<title>سوپرمارکت طهران</title><link rel="stylesheet" href="assets/style.css?v=20261024-shop2">'
+          new_head = '<title>سوپرمارکت طهران</title><link rel="stylesheet" href="assets/style.css?v=20261024-shop2"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">'
+          if old_head not in s:
+              raise SystemExit('head marker not found')
+          s = s.replace(old_head, new_head, 1)
+
+          old_style = ".locbox{display:flex;align-items:center;gap:12px;background:#f3f8f4;border:1px solid #dce9df;border-radius:14px;padding:11px}.locbox .btn{flex:0 0 auto}.locbox div{font-size:12px;line-height:1.7}.locbox a{color:#08783b;font-weight:800}@media(max-width:520px){.locbox{align-items:stretch;flex-direction:column}.locbox .btn{width:100%}}"
+          new_style = ".locbox{display:block;background:#f7faf7;border:1px solid #dce9df;border-radius:16px;padding:12px}.lochead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px}.lochead b{display:block;margin-bottom:3px}.locactions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.locactions .btn{font-size:12px;padding:9px 11px}.delivery-map{height:285px;border:1px solid #dfe9e1;border-radius:14px;overflow:hidden;background:#eef3ef;position:relative}.locstatus{font-size:12px;line-height:1.8;margin-top:9px;padding:9px 11px;background:#fff;border-radius:10px;color:#617068}.locstatus.ok{background:#e7f7eb;color:#17602e}.locstatus.warn{background:#fff4dd;color:#815a12}.leaflet-container{font-family:inherit}.leaflet-control-attribution{font-size:8px!important;opacity:.72}.leaflet-control-zoom a{color:#17472e!important}.delivery-pin{filter:drop-shadow(0 2px 3px #0004)}@media(max-width:520px){.lochead{display:block}.locactions{display:grid;grid-template-columns:1fr 1fr}.locactions .btn:last-child{grid-column:1/-1}.delivery-map{height:260px}}"
+          if old_style not in s:
+              raise SystemExit('location style marker not found')
+          s = s.replace(old_style, new_style, 1)
+
+          old_box = '<div class="locbox wide"><input type="hidden" name="delivery_lat" id="delivery_lat"><input type="hidden" name="delivery_lng" id="delivery_lng"><input type="hidden" name="delivery_accuracy" id="delivery_accuracy"><button type="button" class="btn pale" id="getLocation">📍 ثبت موقعیت فعلی</button><div><b id="locationStatus">برای تحویل دقیق‌تر، لوکیشن را ثبت کنید.</b><br><a id="locationMap" href="#" target="_blank" rel="noopener" hidden>🗺️ مشاهده موقعیت روی نقشه</a></div></div>'
+          new_box = '<div class="locbox wide"><input type="hidden" name="delivery_lat" id="delivery_lat"><input type="hidden" name="delivery_lng" id="delivery_lng"><input type="hidden" name="delivery_accuracy" id="delivery_accuracy"><div class="lochead"><div><b>📍 لوکیشن تحویل روی نقشه</b><span class="muted">روی خیابان یا کوچه موردنظر بزنید؛ لازم نیست لوکیشن فعلی خودتان باشد.</span></div></div><div id="deliveryMap" class="delivery-map" aria-label="نقشه انتخاب محل تحویل"></div><div class="locactions"><button type="button" class="btn pale" id="getLocation">موقعیت فعلی من</button><button type="button" class="btn" id="saveMapLocation">ثبت این نقطه</button><button type="button" class="btn pale" id="clearLocation">پاک کردن لوکیشن</button></div><div id="locationStatus" class="locstatus">پین را روی محل تحویل بگذارید و «ثبت این نقطه» را بزنید.</div></div>'
+          if old_box not in s:
+              raise SystemExit('location box marker not found')
+          s = s.replace(old_box, new_box, 1)
+
+          old_script = '''<script>(()=>{const b=document.getElementById('getLocation'),st=document.getElementById('locationStatus'),la=document.getElementById('delivery_lat'),ln=document.getElementById('delivery_lng'),ac=document.getElementById('delivery_accuracy'),map=document.getElementById('locationMap');if(!b)return;b.addEventListener('click',()=>{if(!navigator.geolocation){st.textContent='مرورگر این گوشی امکان ثبت لوکیشن ندارد.';return;}b.disabled=true;b.textContent='📍 در حال دریافت موقعیت…';st.textContent='اجازه دسترسی به موقعیت مکانی را تأیید کنید.';navigator.geolocation.getCurrentPosition(pos=>{const lat=pos.coords.latitude,lng=pos.coords.longitude,acc=Math.round(pos.coords.accuracy||0);la.value=lat.toFixed(7);ln.value=lng.toFixed(7);ac.value=acc;st.textContent='✅ لوکیشن ثبت شد'+(acc?' · دقت تقریبی '+acc.toLocaleString('fa-IR')+' متر':'');map.href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(lat+','+lng);map.hidden=false;b.textContent='✅ بروزرسانی لوکیشن';b.disabled=false;},err=>{const m=err.code===1?'اجازه دسترسی به لوکیشن داده نشد. از تنظیمات مرورگر Location را فعال کنید.':err.code===2?'موقعیت فعلی پیدا نشد. GPS گوشی را روشن کنید.':'دریافت لوکیشن طول کشید؛ دوباره امتحان کنید.';st.textContent=m;b.textContent='📍 ثبت موقعیت فعلی';b.disabled=false;},{enableHighAccuracy:true,timeout:15000,maximumAge:0});});})();</script>'''
+          new_script = '''<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script><script>(()=>{const mapEl=document.getElementById('deliveryMap'),geoBtn=document.getElementById('getLocation'),saveBtn=document.getElementById('saveMapLocation'),clearBtn=document.getElementById('clearLocation'),st=document.getElementById('locationStatus'),la=document.getElementById('delivery_lat'),ln=document.getElementById('delivery_lng'),ac=document.getElementById('delivery_accuracy');if(!mapEl||typeof L==='undefined')return;const home=[32.48814,51.773119];let pending={lat:home[0],lng:home[1],acc:null};const map=L.map(mapEl,{zoomControl:true,attributionControl:true}).setView(home,14);L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:20,attribution:'&copy; OpenStreetMap &copy; CARTO'}).addTo(map);const icon=L.divIcon({className:'delivery-pin',html:'<div style="font-size:34px;line-height:34px;transform:translate(-5px,-15px)">📍</div>',iconSize:[24,36],iconAnchor:[12,34]});const marker=L.marker(home,{draggable:true,icon}).addTo(map);function choose(lat,lng,acc=null,zoom=false){pending={lat:+lat,lng:+lng,acc:acc==null?null:Math.max(0,Math.round(+acc||0))};marker.setLatLng([pending.lat,pending.lng]);if(zoom)map.setView([pending.lat,pending.lng],17);st.className='locstatus';st.textContent='نقطه انتخاب شد؛ اگر درست است «ثبت این نقطه» را بزنید.';}map.on('click',e=>choose(e.latlng.lat,e.latlng.lng,null,false));marker.on('dragend',()=>{const p=marker.getLatLng();choose(p.lat,p.lng,null,false);});saveBtn.addEventListener('click',()=>{la.value=pending.lat.toFixed(7);ln.value=pending.lng.toFixed(7);ac.value=pending.acc??'';st.className='locstatus ok';st.textContent='✅ لوکیشن تحویل ثبت شد. می‌توانید قبل از ثبت سفارش دوباره آن را تغییر دهید.';});clearBtn.addEventListener('click',()=>{la.value='';ln.value='';ac.value='';pending={lat:home[0],lng:home[1],acc:null};marker.setLatLng(home);map.setView(home,14);st.className='locstatus';st.textContent='لوکیشن پاک شد؛ یک نقطه دیگر روی نقشه انتخاب کنید.';});geoBtn.addEventListener('click',()=>{if(!navigator.geolocation){st.className='locstatus warn';st.textContent='مرورگر این گوشی لوکیشن را پشتیبانی نمی‌کند؛ روی نقشه دستی انتخاب کنید.';return;}geoBtn.disabled=true;geoBtn.textContent='در حال پیدا کردن…';st.className='locstatus';st.textContent='در حال دریافت موقعیت فعلی؛ اگر طول کشید می‌توانید همین حالا روی نقشه دستی انتخاب کنید.';navigator.geolocation.getCurrentPosition(pos=>{choose(pos.coords.latitude,pos.coords.longitude,pos.coords.accuracy,true);geoBtn.disabled=false;geoBtn.textContent='موقعیت فعلی من';},()=>{st.className='locstatus warn';st.textContent='موقعیت فعلی پیدا نشد؛ مشکلی نیست، روی نقشه محل تحویل را دستی انتخاب کنید.';geoBtn.disabled=false;geoBtn.textContent='موقعیت فعلی من';},{enableHighAccuracy:true,timeout:10000,maximumAge:30000});});setTimeout(()=>map.invalidateSize(),100);})();</script>'''
+          if old_script not in s:
+              raise SystemExit('old geolocation script marker not found')
+          s = s.replace(old_script, new_script, 1)
+
+          p.write_text(s, encoding='utf-8')
+      - name: Validate PHP
+        run: php -l TehranSupermarket/shop.php
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add TehranSupermarket/shop.php
+          git diff --cached --quiet && exit 0
+          git commit -m "Add map-based delivery location picker"
+          git push origin HEAD:websaza-hosting
