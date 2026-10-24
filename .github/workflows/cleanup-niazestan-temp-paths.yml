@@ -1,0 +1,37 @@
+name: Cleanup Niazestan temporary paths
+
+on:
+  push:
+    branches: [niazestan-cloud]
+    paths:
+      - '.github/workflows/cleanup-niazestan-temp-paths.yml'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+    steps:
+      - name: Move only known failed-deploy directories to cPanel trash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          for src in 'public_html/niazestan.ir' 'public_html/public_html'; do
+            echo "Trashing temporary path: $src"
+            R=$(curl --fail-with-body --silent --show-error -H "$auth" --get \
+              --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
+              --data-urlencode "cpanel_jsonapi_apiversion=2" \
+              --data-urlencode "cpanel_jsonapi_module=Fileman" \
+              --data-urlencode "cpanel_jsonapi_func=fileop" \
+              --data-urlencode "op=trash" \
+              --data-urlencode "sourcefiles=$src" \
+              --data-urlencode "doubledecode=1" \
+              "https://${CPANEL_HOST}:2083/json-api/cpanel")
+            echo "$R" | jq '.'
+            echo "$R" | jq -e '.cpanelresult.data[0].result == 1' >/dev/null
+          done
