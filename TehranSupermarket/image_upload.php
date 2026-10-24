@@ -1,0 +1,97 @@
+<?php
+declare(strict_types=1);
+session_start();
+date_default_timezone_set('Asia/Tehran');
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+
+function respond(array $data,int $status=200): never { http_response_code($status); echo json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); exit; }
+if(empty($_SESSION['admin_id'])) respond(['ok'=>false,'error'=>'ابتدا وارد پنل مدیریت شوید.'],401);
+if($_SERVER['REQUEST_METHOD']!=='POST') respond(['ok'=>false,'error'=>'درخواست نامعتبر است.'],405);
+if(!hash_equals((string)($_SESSION['csrf']??''),(string)($_POST['csrf']??''))) respond(['ok'=>false,'error'=>'نشست مدیریت منقضی شده؛ صفحه را تازه کنید.'],419);
+if(empty($_FILES['image_file'])) respond(['ok'=>false,'error'=>'فایل تصویری دریافت نشد.'],422);
+
+$f=$_FILES['image_file'];
+$uploadError=(int)($f['error']??UPLOAD_ERR_NO_FILE);
+if($uploadError!==UPLOAD_ERR_OK){
+    $messages=[
+        UPLOAD_ERR_INI_SIZE=>'حجم عکس از سقف مجاز سرور بیشتر است.',
+        UPLOAD_ERR_FORM_SIZE=>'حجم عکس بیش از حد مجاز است.',
+        UPLOAD_ERR_PARTIAL=>'آپلود عکس ناقص انجام شد؛ دوباره امتحان کنید.',
+        UPLOAD_ERR_NO_FILE=>'فایلی انتخاب نشده است.',
+        UPLOAD_ERR_NO_TMP_DIR=>'پوشه موقت سرور در دسترس نیست.',
+        UPLOAD_ERR_CANT_WRITE=>'سرور نتوانست فایل را روی دیسک بنویسد.',
+        UPLOAD_ERR_EXTENSION=>'آپلود توسط تنظیمات PHP متوقف شد.'
+    ];
+    respond(['ok'=>false,'error'=>$messages[$uploadError]??'خطای ناشناخته هنگام آپلود عکس.'],422);
+}
+$tmp=(string)($f['tmp_name']??'');
+$size=(int)($f['size']??0);
+if($tmp===''||!is_uploaded_file($tmp)) respond(['ok'=>false,'error'=>'فایل آپلودشده معتبر نیست.'],422);
+if($size<1) respond(['ok'=>false,'error'=>'فایل تصویر خالی است.'],422);
+if($size>96*1024*1024) respond(['ok'=>false,'error'=>'حجم فایل خیلی بزرگ است؛ سقف ورودی ۹۶ مگابایت است.'],413);
+
+$dir=__DIR__.'/uploads/products';
+if(!is_dir($dir) && !mkdir($dir,0755,true) && !is_dir($dir)) respond(['ok'=>false,'error'=>'پوشه ذخیره عکس قابل ایجاد نیست.'],500);
+
+$base='product_'.date('Ymd_His').'_'.bin2hex(random_bytes(6));
+$width=0;$height=0;$format='';$bytes=0;$relative='';
+
+try{
+    if(class_exists('Imagick')){
+        $im=new Imagick();
+        $im->setResourceLimit(Imagick::RESOURCETYPE_MEMORY,256*1024*1024);
+        $im->setResourceLimit(Imagick::RESOURCETYPE_MAP,512*1024*1024);
+        $im->readImage($tmp);
+        if($im->getNumberImages()>1) $im->setIteratorIndex(0);
+        if(method_exists($im,'autoOrient')) $im->autoOrient();
+        elseif(method_exists($im,'autoOrientImage')) $im->autoOrientImage();
+        $im->setImageColorspace(Imagick::COLORSPACE_SRGB);
+        $w=$im->getImageWidth();$h=$im->getImageHeight();
+        if($w<1||$h<1) throw new RuntimeException('ابعاد تصویر قابل تشخیص نیست.');
+        $max=1800;
+        if(max($w,$h)>$max) $im->thumbnailImage($max,$max,true,true);
+        $im->stripImage();
+        $webpSupported=!empty(Imagick::queryFormats('WEBP'));
+        if($webpSupported){
+            $format='webp';
+            $im->setImageFormat('webp');
+            $im->setImageCompressionQuality(84);
+            if(method_exists($im,'setOption')){$im->setOption('webp:method','6');$im->setOption('webp:alpha-quality','90');}
+        }else{
+            $format='jpg';
+            $im->setImageBackgroundColor('white');
+            if($im->getImageAlphaChannel()) $im=$im->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);
+            $im->setImageFormat('jpeg');
+            $im->setImageCompression(Imagick::COMPRESSION_JPEG);
+            $im->setImageCompressionQuality(86);
+        }
+        $path=$dir.'/'.$base.'.'.$format;
+        if(!$im->writeImage($path)) throw new RuntimeException('ذخیره فایل خروجی انجام نشد.');
+        $width=$im->getImageWidth();$height=$im->getImageHeight();
+        $im->clear();$im->destroy();
+        $relative='uploads/products/'.basename($path);
+        $bytes=(int)filesize($path);
+    }else{
+        $raw=file_get_contents($tmp);
+        if($raw===false) throw new RuntimeException('خواندن فایل تصویر ممکن نیست.');
+        $src=@imagecreatefromstring($raw);
+        if(!$src) throw new RuntimeException('این فرمت روی سرور قابل تبدیل نیست. برای HEIC/HEIF/AVIF، مرورگر ابتدا تلاش می‌کند آن را به فرمت استاندارد تبدیل کند.');
+        $w=imagesx($src);$h=imagesy($src);if($w<1||$h<1) throw new RuntimeException('ابعاد تصویر معتبر نیست.');
+        $max=1800;$scale=min(1,$max/max($w,$h));$nw=max(1,(int)round($w*$scale));$nh=max(1,(int)round($h*$scale));
+        $dst=imagecreatetruecolor($nw,$nh);
+        imagealphablending($dst,false);imagesavealpha($dst,true);
+        $transparent=imagecolorallocatealpha($dst,255,255,255,127);imagefilledrectangle($dst,0,0,$nw,$nh,$transparent);
+        imagecopyresampled($dst,$src,0,0,0,0,$nw,$nh,$w,$h);
+        if(function_exists('imagewebp')){$format='webp';$path=$dir.'/'.$base.'.webp';$ok=imagewebp($dst,$path,84);}else{$format='jpg';$path=$dir.'/'.$base.'.jpg';$white=imagecreatetruecolor($nw,$nh);$bg=imagecolorallocate($white,255,255,255);imagefill($white,0,0,$bg);imagecopy($white,$dst,0,0,0,0,$nw,$nh);$ok=imagejpeg($white,$path,86);imagedestroy($white);}
+        imagedestroy($src);imagedestroy($dst);
+        if(!$ok) throw new RuntimeException('نوشتن تصویر تبدیل‌شده انجام نشد.');
+        $width=$nw;$height=$nh;$relative='uploads/products/'.basename($path);$bytes=(int)filesize($path);
+    }
+}catch(Throwable $e){respond(['ok'=>false,'error'=>'تبدیل عکس انجام نشد: '.$e->getMessage()],422);}
+
+$scheme=(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')?'https':'http';
+$host=(string)($_SERVER['HTTP_HOST']??'websaza.ir');
+$basePath=rtrim(str_replace('\\','/',dirname((string)($_SERVER['SCRIPT_NAME']??'/tehran/image_upload.php'))),'/');
+$url=$scheme.'://'.$host.$basePath.'/'.$relative;
+respond(['ok'=>true,'url'=>$url,'path'=>$relative,'format'=>$format,'width'=>$width,'height'=>$height,'bytes'=>$bytes,'original_bytes'=>$size]);
