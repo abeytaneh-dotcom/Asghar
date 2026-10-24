@@ -10,6 +10,7 @@ on:
 jobs:
   provision:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       CPANEL_HOST: mch4444.dnsuserver.com
       CPANEL_USER: vt6qdx8
@@ -29,18 +30,53 @@ jobs:
             --data-urlencode "cpanel_jsonapi_func=listparkeddomains" \
             "https://${CPANEL_HOST}:2083/json-api/cpanel")
           echo "$LIST" | jq '.'
-          if echo "$LIST" | jq -e '.cpanelresult.data[]? | select(.domain == "niazestan.ir")' >/dev/null; then
+
+          if ! echo "$LIST" | jq -e '.cpanelresult.data[]? | select(.domain == "niazestan.ir")' >/dev/null; then
+            PARK=$(curl --fail-with-body --silent --show-error -H "$auth" --get \
+              --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
+              --data-urlencode "cpanel_jsonapi_apiversion=2" \
+              --data-urlencode "cpanel_jsonapi_module=Park" \
+              --data-urlencode "cpanel_jsonapi_func=park" \
+              --data-urlencode "domain=niazestan.ir" \
+              --data-urlencode "disallowdot=0" \
+              "https://${CPANEL_HOST}:2083/json-api/cpanel")
+            echo "$PARK" | jq '.'
+            echo "$PARK" | jq -e '.cpanelresult.data[0].result == 1' >/dev/null
+          else
             echo 'niazestan.ir is already an alias.'
-            exit 0
           fi
 
-          PARK=$(curl --fail-with-body --silent --show-error -H "$auth" --get \
+      - name: Verify alias is registered in cPanel
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          LIST=$(curl --fail-with-body --silent --show-error -H "$auth" --get \
             --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
             --data-urlencode "cpanel_jsonapi_apiversion=2" \
             --data-urlencode "cpanel_jsonapi_module=Park" \
-            --data-urlencode "cpanel_jsonapi_func=park" \
-            --data-urlencode "domain=niazestan.ir" \
-            --data-urlencode "disallowdot=0" \
+            --data-urlencode "cpanel_jsonapi_func=listparkeddomains" \
             "https://${CPANEL_HOST}:2083/json-api/cpanel")
-          echo "$PARK" | jq '.'
-          echo "$PARK" | jq -e '.cpanelresult.data[0].result == 1' >/dev/null
+          echo "$LIST" | jq '.'
+          echo "$LIST" | jq -e '.cpanelresult.data[]? | select(.domain == "niazestan.ir")' >/dev/null
+
+      - name: Start AutoSSL for the newly delegated domain
+        continue-on-error: true
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        shell: bash
+        run: |
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+            "https://${CPANEL_HOST}:2083/execute/SSL/start_autossl_check" | jq '.'
+
+      - name: Verify Niazestan application through the alias
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML=$(curl -fsSL --connect-timeout 10 --max-time 30 https://niazestan.ir/)
+          grep -F 'نیازستان' <<<"$HTML" >/dev/null
+          curl -fsS --connect-timeout 10 --max-time 30 https://niazestan.ir/nz-health.php | jq -e '.ok == true' >/dev/null
