@@ -1,0 +1,16 @@
+{
+  "name": "سوپرمارکت طهران",
+  "short_name": "طهران مارکت",
+  "description": "خرید آنلاین سوپرمارکتی محلی",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "/tehran/?source=pwa",
+  "scope": "/tehran/",
+  "display": "standalone",
+  "background_color": "#f7faf7",
+  "theme_color": "#11823b",
+  "icons": [
+    {"src":"/tehran/pwa-icon.php?size=192","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/tehran/pwa-icon.php?size=512","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
