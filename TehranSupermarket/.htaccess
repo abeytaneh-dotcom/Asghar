@@ -1,4 +1,4 @@
-# delivery-map-picker-v1
+# delivery-map-picker-v2-same-origin-tiles
 Options -Indexes
 DirectoryIndex index.php
 <FilesMatch "^(config\.php|install\.lock\.php|admin_auth\.php|backup_cli\.php|backup_lib\.php|store_lib\.php|sms_lib\.php|coupon_lib\.php|README\.txt)$">
