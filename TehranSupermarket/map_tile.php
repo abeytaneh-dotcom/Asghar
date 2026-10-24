@@ -27,6 +27,22 @@ $dir = $cacheRoot . '/' . $z . '/' . $x;
 $file = $dir . '/' . $y . '.png';
 $ttl = 2592000; // 30 days
 
+// Prevent the tile cache from growing forever. Cleanup is intentionally rare
+// so normal map requests stay fast. Tiles unused for 90 days are removed.
+try {
+    if (random_int(1, 500) === 1 && is_dir($cacheRoot)) {
+        $cutoff = time() - 7776000;
+        $it = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($cacheRoot, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($it as $node) {
+            if ($node->isFile() && $node->getExtension() === 'png' && $node->getMTime() < $cutoff) @unlink($node->getPathname());
+            elseif ($node->isDir()) @rmdir($node->getPathname());
+        }
+    }
+} catch (Throwable $e) { /* cache cleanup must never break the map */ }
+
 function send_tile_file(string $path, int $ttl, string $source = 'cache'): never {
     header('Content-Type: image/png');
     header('Cache-Control: public, max-age=' . $ttl . ', stale-while-revalidate=86400');
