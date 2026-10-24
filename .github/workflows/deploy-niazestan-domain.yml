@@ -45,7 +45,7 @@ jobs:
           R=$(curl --fail-with-body --silent --show-error \
             -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
             "https://${CPANEL_HOST}:2083/execute/DomainInfo/list_domains")
-          echo "$R" | jq -e '.result.status == 1' >/dev/null
+          echo "$R" | jq -e '.status == 1' >/dev/null
 
       - name: Provision niazestan.ir as an addon domain if needed
         id: provision
@@ -57,6 +57,7 @@ jobs:
           auth="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
           DOMAINS=$(curl --fail-with-body --silent --show-error -H "$auth" \
             "https://${CPANEL_HOST}:2083/execute/DomainInfo/list_domains")
+          echo "$DOMAINS" | jq -e '.status == 1' >/dev/null
           if echo "$DOMAINS" | jq -e '.. | strings | select(. == "niazestan.ir")' >/dev/null; then
             echo "Domain already exists in cPanel."
             echo "created=0" >> "$GITHUB_OUTPUT"
@@ -112,12 +113,10 @@ jobs:
           rm -rf .niazestan-release
           mkdir -p .niazestan-release
 
-          # Core web-server files.
           cp WebSaza/.htaccess .niazestan-release/.htaccess
           cp WebSaza/.user.ini .niazestan-release/.user.ini
           cp WebSaza/404.html .niazestan-release/404.html
 
-          # Niazestan application files. Keep the app isolated from unrelated WebSaza pages.
           find WebSaza -maxdepth 1 -type f \( \
             -name 'nz*' -o \
             -name 'niazestan*' -o \
@@ -130,7 +129,6 @@ jobs:
             [ ! -f WebSaza/marketplace-uploads/.htaccess ] || cp WebSaza/marketplace-uploads/.htaccess .niazestan-release/marketplace-uploads/.htaccess
           fi
 
-          # Never package live state from Git. Runtime data stays on the hosting disk.
           rm -rf .niazestan-release/.marketplace-data
           (cd .niazestan-release && zip -qr ../niazestan-release.zip .)
           test -s niazestan-release.zip
@@ -148,7 +146,7 @@ jobs:
             -F "dir=${TARGET_DIR}" \
             -F "overwrite=1" \
             "https://${CPANEL_HOST}:2083/execute/Fileman/upload_files")
-          echo "$UP" | jq -e '.result.status == 1' >/dev/null
+          echo "$UP" | jq -e '.status == 1' >/dev/null
 
           EX=$(curl --fail-with-body --silent --show-error -H "$auth" --get \
             --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
@@ -175,7 +173,7 @@ jobs:
             --data-urlencode "file=.niazestan-release.json" \
             --data-urlencode "content=$RELEASE" \
             "https://${CPANEL_HOST}:2083/execute/Fileman/save_file_content")
-          echo "$R" | jq -e '.result.status == 1' >/dev/null
+          echo "$R" | jq -e '.status == 1' >/dev/null
 
       - name: Start AutoSSL check
         continue-on-error: true
@@ -196,6 +194,7 @@ jobs:
           R=$(curl --fail-with-body --silent --show-error \
             -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
             "https://${CPANEL_HOST}:2083/execute/DomainInfo/list_domains?return_https_redirects_status=1")
+          echo "$R" | jq -e '.status == 1' >/dev/null
           echo "$R" | jq '.'
           echo "$R" | jq -e '.. | strings | select(. == "niazestan.ir")' >/dev/null
 
