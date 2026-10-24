@@ -8,6 +8,7 @@ on:
       - 'TehranManagerApp/build.gradle'
       - 'TehranManagerApp/settings.gradle'
       - 'TehranManagerApp/gradle.properties'
+      - 'TehranSupermarket/assets/tehran-icon-192.jpg.b64'
       - '.github/workflows/build-tehran-manager-apk.yml'
   workflow_dispatch:
 
@@ -43,7 +44,7 @@ jobs:
           path: ~/.android/debug.keystore
           key: tehran-manager-signing-v1
 
-      - name: Prepare Android SDK and signing key
+      - name: Prepare Android SDK, icon and signing key
         shell: bash
         run: |
           set -euo pipefail
@@ -51,7 +52,8 @@ jobs:
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools' >/dev/null
-          mkdir -p "$HOME/.android"
+          mkdir -p "$HOME/.android" TehranManagerApp/app/src/main/res/drawable-nodpi
+          base64 -d TehranSupermarket/assets/tehran-icon-192.jpg.b64 > TehranManagerApp/app/src/main/res/drawable-nodpi/tehran_app_icon.jpg
           if [ ! -f "$HOME/.android/debug.keystore" ]; then
             keytool -genkeypair -v \
               -keystore "$HOME/.android/debug.keystore" \
@@ -68,15 +70,15 @@ jobs:
           set -euo pipefail
           gradle -p TehranManagerApp :app:assembleRelease --no-daemon --stacktrace
           mkdir -p dist TehranManagerApp/releases
-          cp TehranManagerApp/app/build/outputs/apk/release/app-release.apk dist/TehranManager-v1.0.0.apk
-          cp dist/TehranManager-v1.0.0.apk TehranManagerApp/releases/Tehran-Manager.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs dist/TehranManager-v1.0.0.apk
-          SHA=$(sha256sum dist/TehranManager-v1.0.0.apk | awk '{print $1}')
-          SIZE=$(stat -c%s dist/TehranManager-v1.0.0.apk)
-          printf 'version=1.0.0\nsha256=%s\nbytes=%s\nbuilt_at=%s\n' "$SHA" "$SIZE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > TehranManagerApp/releases/release-info.txt
-          printf '%s  %s\n' "$SHA" 'TehranManager-v1.0.0.apk' > dist/TehranManager-v1.0.0.sha256.txt
-          unzip -t dist/TehranManager-v1.0.0.apk >/dev/null
-          test -s dist/TehranManager-v1.0.0.apk
+          cp TehranManagerApp/app/build/outputs/apk/release/app-release.apk dist/TehranManager-v1.0.2.apk
+          cp dist/TehranManager-v1.0.2.apk TehranManagerApp/releases/Tehran-Manager.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs dist/TehranManager-v1.0.2.apk
+          SHA=$(sha256sum dist/TehranManager-v1.0.2.apk | awk '{print $1}')
+          SIZE=$(stat -c%s dist/TehranManager-v1.0.2.apk)
+          printf 'version=1.0.2\nsha256=%s\nbytes=%s\nbuilt_at=%s\n' "$SHA" "$SIZE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > TehranManagerApp/releases/release-info.txt
+          printf '%s  %s\n' "$SHA" 'TehranManager-v1.0.2.apk' > dist/TehranManager-v1.0.2.sha256.txt
+          unzip -t dist/TehranManager-v1.0.2.apk >/dev/null
+          test -s dist/TehranManager-v1.0.2.apk
 
       - name: Publish installable APK to branch
         shell: bash
@@ -88,14 +90,14 @@ jobs:
           if git diff --cached --quiet; then
             echo 'APK output unchanged.'
           else
-            git commit -m 'Publish Tehran manager APK v1.0.0'
+            git commit -m 'Publish Tehran manager APK v1.0.2'
             git push origin HEAD:websaza-hosting
           fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TehranManager-APK
+          name: TehranManager-APK-v1.0.2
           path: dist/*
           if-no-files-found: error
           retention-days: 30
