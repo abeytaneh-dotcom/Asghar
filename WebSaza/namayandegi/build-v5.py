@@ -33,12 +33,13 @@ for step in steps:
         raise SystemExit(f'missing build step: {step}')
     subprocess.run([sys.executable, str(path)], cwd=str(root), env=os.environ.copy(), check=True)
 
-# Final product-policy patch lives outside the deployment path so tutorial image
-# payloads can be staged without triggering partial production releases.
-final_step = root.parent / 'namayandegi_build' / 'direct-access-gallery-v10.py'
-if not final_step.is_file():
-    raise SystemExit('missing build step: direct-access-gallery-v10.py')
-subprocess.run([sys.executable, str(final_step)], cwd=str(root), env=os.environ.copy(), check=True)
+# Final product-policy/UI patches live outside the deployment path so support
+# assets can be staged without triggering incomplete production deployments.
+for name in ['direct-access-gallery-v10.py','tutorial-slider-v11.py']:
+    final_step = root.parent / 'namayandegi_build' / name
+    if not final_step.is_file():
+        raise SystemExit(f'missing build step: {name}')
+    subprocess.run([sys.executable, str(final_step)], cwd=str(root), env=os.environ.copy(), check=True)
 
 # Bundle static assets exactly once after all source patches.
 style = root / 'style.css'
