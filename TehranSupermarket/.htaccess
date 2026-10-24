@@ -1,7 +1,12 @@
-# delivery-map-picker-v14-production-final
+# safe-errors-v15-production
 Options -Indexes
 DirectoryIndex index.php
-<FilesMatch "^(config\.php|install\.lock\.php|admin_auth\.php|backup_cli\.php|backup_lib\.php|store_lib\.php|sms_lib\.php|coupon_lib\.php|location_resolve\.php|README\.txt)$">
+ErrorDocument 403 /tehran/error.php?s=403
+ErrorDocument 404 /tehran/error.php?s=404
+ErrorDocument 413 /tehran/error.php?s=413
+ErrorDocument 429 /tehran/error.php?s=429
+ErrorDocument 500 /tehran/error.php?s=500
+<FilesMatch "^(config\.php|install\.lock\.php|admin_auth\.php|backup_cli\.php|backup_lib\.php|store_lib\.php|sms_lib\.php|coupon_lib\.php|error_bootstrap\.php|location_resolve\.php|README\.txt)$">
   Require all denied
 </FilesMatch>
 <IfModule mod_headers.c>
@@ -16,7 +21,7 @@ DirectoryIndex index.php
   Header always set Pragma "no-cache"
   Header always set Expires "0"
  </FilesMatch>
- <FilesMatch "^(index|shop|admin|admin_orders|admin_store|admin_discounts|admin_users|admin_products|admin_couriers|admin_order_edit|admin_integrations|admin_coupons|pyramid|track|courier|account)\.php$">
+ <FilesMatch "^(index|shop|admin|admin_orders|admin_store|admin_discounts|admin_users|admin_products|admin_couriers|admin_order_edit|admin_integrations|admin_coupons|pyramid|track|courier|account|error)\.php$">
   Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
   Header always set Pragma "no-cache"
   Header always set Expires "0"
