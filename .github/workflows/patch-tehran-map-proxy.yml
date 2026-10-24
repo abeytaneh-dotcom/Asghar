@@ -1,0 +1,39 @@
+name: Patch Tehran Map Proxy
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/patch-tehran-map-proxy.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Patch map tiles
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/shop.php')
+          s=p.read_text()
+          old="L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:20,attribution:'&copy; OpenStreetMap &copy; CARTO'}).addTo(map);"
+          new="L.tileLayer('map_tile.php?z={z}&x={x}&y={y}',{maxZoom:19,minZoom:3,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);"
+          if old not in s:
+              raise SystemExit('old tile layer not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+          php -l TehranSupermarket/shop.php
+          php -l TehranSupermarket/map_tile.php
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/shop.php TehranSupermarket/map_tile.php
+          git diff --cached --quiet && exit 0
+          git commit -m 'Use same-origin cached OpenStreetMap tiles for checkout map'
+          git push origin websaza-hosting
