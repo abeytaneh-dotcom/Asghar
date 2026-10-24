@@ -2,83 +2,57 @@
 declare(strict_types=1);
 session_start();
 date_default_timezone_set('Asia/Tehran');
-
-$configFile = __DIR__ . '/config.php';
-$installed = file_exists($configFile);
-if (!$installed) {
-    header('Location: install.php');
-    exit;
+if(!file_exists(__DIR__.'/config.php')){header('Location: install.php');exit;}
+$config=require __DIR__.'/config.php';
+try{$pdo=new PDO('mysql:host='.$config['db_host'].';dbname='.$config['db_name'].';charset=utf8mb4',$config['db_user'],$config['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);}catch(Throwable $e){http_response_code(500);exit('اتصال پایگاه داده برقرار نشد.');}
+require_once __DIR__.'/schema.php';ensure_product_schema($pdo);
+function e($v):string{return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
+function toman(int $n):string{return number_format($n).' تومان';}
+function csrf():string{if(empty($_SESSION['csrf']))$_SESSION['csrf']=bin2hex(random_bytes(24));return $_SESSION['csrf'];}
+function verify_csrf():void{if(!hash_equals($_SESSION['csrf']??'',$_POST['csrf']??'')){http_response_code(419);exit('درخواست نامعتبر است.');}}
+function back_to(string $fallback='index.php#products'):never{$to=(string)($_POST['return_to']??$fallback);if(!str_starts_with($to,'index.php'))$to=$fallback;header('Location: '.$to);exit;}
+$categories=['میوه و سبزی','لبنیات و صبحانه','نوشیدنی','تنقلات و شیرینی','خانه و شوینده','گوشت و مرغ','مواد غذایی','کنسرو و غذای آماده','بهداشت شخصی','کودک','سایر'];
+if($_SERVER['REQUEST_METHOD']==='POST'){
+  verify_csrf();$action=(string)($_POST['action']??'');
+  if(in_array($action,['add_cart','cart_delta'],true)){
+    $id=max(0,(int)($_POST['product_id']??0));$delta=$action==='add_cart'?max(1,min(50,(int)($_POST['qty']??1))):max(-10,min(10,(int)($_POST['delta']??0)));
+    $st=$pdo->prepare('SELECT id,stock,active,price FROM products WHERE id=?');$st->execute([$id]);$p=$st->fetch();
+    if($p&&$p['active']&&(int)$p['price']>0&&(int)$p['stock']>0){$cur=(int)($_SESSION['cart'][$id]??0);$new=max(0,min((int)$p['stock'],50,$cur+$delta));if($new>0)$_SESSION['cart'][$id]=$new;else unset($_SESSION['cart'][$id]);}
+    back_to();
+  }
+  if($action==='remove_cart'){$id=max(0,(int)($_POST['product_id']??0));unset($_SESSION['cart'][$id]);back_to('index.php#cart');}
+  if($action==='checkout'){
+    $name=trim((string)($_POST['name']??''));$phone=trim((string)($_POST['phone']??''));$address=trim((string)($_POST['address']??''));$slot=trim((string)($_POST['slot']??'اولین زمان ممکن'));
+    if(mb_strlen($name)<2||!preg_match('/^09\d{9}$/',$phone)||mb_strlen($address)<5){$_SESSION['flash']='نام، شماره موبایل و آدرس را درست وارد کنید.';header('Location:index.php#checkout');exit;}
+    $cart=$_SESSION['cart']??[];if(!$cart){$_SESSION['flash']='سبد خرید شما خالی است.';header('Location:index.php#products');exit;}
+    try{
+      $pdo->beginTransaction();$items=[];$subtotal=0;
+      foreach($cart as $id=>$qty){$st=$pdo->prepare('SELECT id,name,barcode,price,stock,active FROM products WHERE id=? FOR UPDATE');$st->execute([(int)$id]);$p=$st->fetch();if(!$p||!$p['active']||(int)$p['price']<=0||(int)$p['stock']<(int)$qty)throw new RuntimeException('موجودی یا قیمت یکی از کالاها تغییر کرده؛ سبد را بررسی کنید.');$items[]=['id'=>(int)$p['id'],'name'=>$p['name'],'barcode'=>$p['barcode'],'price'=>(int)$p['price'],'qty'=>(int)$qty];$subtotal+=(int)$p['price']*(int)$qty;}
+      $st=$pdo->prepare('SELECT id FROM customers WHERE phone=? ORDER BY id DESC LIMIT 1');$st->execute([$phone]);$customerId=(int)($st->fetchColumn()?:0);
+      if($customerId){$st=$pdo->prepare('UPDATE customers SET name=?,address=? WHERE id=?');$st->execute([$name,$address,$customerId]);}else{$st=$pdo->prepare('INSERT INTO customers(name,phone,address,created_at) VALUES(?,?,?,NOW())');$st->execute([$name,$phone,$address]);$customerId=(int)$pdo->lastInsertId();}
+      $fee=(int)($config['delivery_fee']??0);$st=$pdo->prepare('INSERT INTO orders(customer_id,status,payment_method,payment_status,delivery_slot,subtotal,delivery_fee,total,created_at,status_updated_at) VALUES(?,?,?,?,?,?,?,?,NOW(),NOW())');$st->execute([$customerId,'new','cod','unpaid',$slot,$subtotal,$fee,$subtotal+$fee]);$orderId=(int)$pdo->lastInsertId();
+      $ins=$pdo->prepare('INSERT INTO order_items(order_id,product_id,barcode,product_name,unit_price,quantity,picked) VALUES(?,?,?,?,?,?,0)');$upd=$pdo->prepare('UPDATE products SET stock=stock-?,updated_at=NOW() WHERE id=?');
+      foreach($items as $it){$ins->execute([$orderId,$it['id'],$it['barcode'],$it['name'],$it['price'],$it['qty']]);$upd->execute([$it['qty'],$it['id']]);}
+      $pdo->commit();unset($_SESSION['cart']);$_SESSION['last_order_id']=$orderId;$_SESSION['last_phone']=$phone;$_SESSION['checkout_name']=$name;$_SESSION['checkout_phone']=$phone;$_SESSION['checkout_address']=$address;header('Location:track.php?order='.$orderId);exit;
+    }catch(Throwable $ex){if($pdo->inTransaction())$pdo->rollBack();$_SESSION['flash']=$ex instanceof RuntimeException?$ex->getMessage():'ثبت سفارش انجام نشد؛ دوباره تلاش کنید.';header('Location:index.php#checkout');exit;}
+  }
 }
-$config = require $configFile;
-try {
-    $pdo = new PDO(
-        'mysql:host=' . $config['db_host'] . ';dbname=' . $config['db_name'] . ';charset=utf8mb4',
-        $config['db_user'],
-        $config['db_pass'],
-        [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES=>false]
-    );
-} catch (Throwable $e) {
-    http_response_code(500); exit('اتصال پایگاه داده برقرار نشد. تنظیمات config.php را بررسی کنید.');
-}
-require_once __DIR__.'/schema.php';
-ensure_product_schema($pdo);
-function e($v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
-function toman(int $n): string { return number_format($n) . ' تومان'; }
-function csrf(): string { if (empty($_SESSION['csrf'])) $_SESSION['csrf']=bin2hex(random_bytes(24)); return $_SESSION['csrf']; }
-function verify_csrf(): void { if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) { http_response_code(419); exit('درخواست نامعتبر است. صفحه را تازه‌سازی کنید.'); } }
-function is_admin(): bool { return !empty($_SESSION['admin_id']); }
-$categories = ['میوه و سبزی','لبنیات و صبحانه','نوشیدنی','تنقلات و شیرینی','خانه و شوینده','گوشت و مرغ','مواد غذایی','کنسرو و غذای آماده','بهداشت شخصی','کودک','سایر'];
-if ($_SERVER['REQUEST_METHOD']==='POST') {
-    verify_csrf();
-    $action = $_POST['action'] ?? '';
-    if ($action==='add_cart') {
-        $id=(int)($_POST['product_id']??0); $qty=max(1,min(50,(int)($_POST['qty']??1)));
-        $st=$pdo->prepare('SELECT id,stock,active,price FROM products WHERE id=?');$st->execute([$id]);$p=$st->fetch();
-        if ($p && $p['active'] && (int)$p['price']>0) { $_SESSION['cart'][$id]=min((int)$p['stock'],(int)($_SESSION['cart'][$id]??0)+$qty); }
-        header('Location: index.php#products'); exit;
-    }
-    if ($action==='remove_cart') { $id=(int)($_POST['product_id']??0); unset($_SESSION['cart'][$id]); header('Location: index.php#cart');exit; }
-    if ($action==='checkout') {
-        $name=trim($_POST['name']??'');$phone=trim($_POST['phone']??'');$address=trim($_POST['address']??'');$slot=trim($_POST['slot']??'اولین زمان ممکن');$payment=$_POST['payment']??'cod';
-        if (mb_strlen($name)<2 || !preg_match('/^09\d{9}$/',$phone) || mb_strlen($address)<5) { $_SESSION['flash']='نام، شماره موبایل و آدرس را درست وارد کنید.'; header('Location: index.php#checkout');exit; }
-        if (!in_array($payment,['cod','online'],true)) $payment='cod';
-        $cart=$_SESSION['cart']??[];
-        if (!$cart) { $_SESSION['flash']='سبد خرید شما خالی است.';header('Location: index.php#products');exit; }
-        try {
-            $pdo->beginTransaction(); $items=[]; $subtotal=0;
-            foreach($cart as $id=>$qty){
-                $st=$pdo->prepare('SELECT id,name,price,stock,active FROM products WHERE id=? FOR UPDATE');$st->execute([(int)$id]);$p=$st->fetch();
-                if(!$p || !$p['active'] || (int)$p['price']<=0 || (int)$p['stock']<(int)$qty) throw new RuntimeException('قیمت یا موجودی یکی از کالاها برای خرید آماده نیست؛ سبد خرید را بررسی کنید.');
-                $items[]=['id'=>(int)$p['id'],'name'=>$p['name'],'price'=>(int)$p['price'],'qty'=>(int)$qty];$subtotal+=(int)$p['price']*(int)$qty;
-            }
-            $st=$pdo->prepare('INSERT INTO customers(name,phone,address,created_at) VALUES(?,?,?,NOW())');$st->execute([$name,$phone,$address]);$customerId=(int)$pdo->lastInsertId();
-            $st=$pdo->prepare('INSERT INTO orders(customer_id,status,payment_method,payment_status,delivery_slot,subtotal,delivery_fee,total,created_at) VALUES(?,?,?,?,?,?,?,?,NOW())');
-            $fee=(int)$config['delivery_fee'];$st->execute([$customerId,'new',$payment,'unpaid',$slot,$subtotal,$fee,$subtotal+$fee]);$orderId=(int)$pdo->lastInsertId();
-            $ins=$pdo->prepare('INSERT INTO order_items(order_id,product_id,product_name,unit_price,quantity) VALUES(?,?,?,?,?)');
-            $upd=$pdo->prepare('UPDATE products SET stock=stock-? WHERE id=?');
-            foreach($items as $it){$ins->execute([$orderId,$it['id'],$it['name'],$it['price'],$it['qty']]);$upd->execute([$it['qty'],$it['id']]);}
-            $pdo->commit();unset($_SESSION['cart']);$_SESSION['flash']='سفارش شما با شماره '.$orderId.' ثبت شد. برای پیگیری با فروشگاه تماس بگیرید.';header('Location: index.php#products');exit;
-        } catch(Throwable $ex){if($pdo->inTransaction())$pdo->rollBack();$_SESSION['flash']=$ex instanceof RuntimeException?$ex->getMessage():'ثبت سفارش انجام نشد. لطفاً دوباره تلاش کنید.';header('Location: index.php#checkout');exit;}
-    }
-}
-$search=trim($_GET['q']??'');$cat=trim($_GET['cat']??'');
-$sql='SELECT * FROM products WHERE active=1';$params=[];
-if($search!==''){$sql.=' AND (name LIKE ? OR barcode LIKE ?)';$params[]='%'.$search.'%';$params[]='%'.$search.'%';}
-if($cat!==''){$sql.=' AND category=?';$params[]=$cat;}
-$sql.=' ORDER BY id DESC LIMIT 120';$st=$pdo->prepare($sql);$st->execute($params);$products=$st->fetchAll();
-$cart=$_SESSION['cart']??[];$cartRows=[];$cartTotal=0;
-if($cart){$ids=array_map('intval',array_keys($cart));$in=implode(',',array_fill(0,count($ids),'?'));$st=$pdo->prepare("SELECT id,name,price,stock FROM products WHERE id IN ($in)");$st->execute($ids);foreach($st->fetchAll() as $p){$q=min((int)$p['stock'],(int)$cart[$p['id']]);$cartRows[]=$p+['qty'=>$q];$cartTotal+=(int)$p['price']*$q;}}
-$flash=$_SESSION['flash']??'';unset($_SESSION['flash']);
+$search=trim((string)($_GET['q']??''));$cat=trim((string)($_GET['cat']??''));$sql='SELECT * FROM products WHERE active=1';$params=[];if($search!==''){$sql.=' AND (name LIKE ? OR barcode LIKE ? OR brand LIKE ?)';$params[]='%'.$search.'%';$params[]='%'.$search.'%';$params[]='%'.$search.'%';}if($cat!==''){$sql.=' AND category=?';$params[]=$cat;}$sql.=' ORDER BY id DESC LIMIT 160';$st=$pdo->prepare($sql);$st->execute($params);$products=$st->fetchAll();
+$cart=$_SESSION['cart']??[];$cartRows=[];$cartTotal=0;$cartQty=0;if($cart){$ids=array_map('intval',array_keys($cart));$in=implode(',',array_fill(0,count($ids),'?'));$st=$pdo->prepare("SELECT id,name,price,stock,image_path FROM products WHERE id IN ($in)");$st->execute($ids);foreach($st->fetchAll() as $p){$q=max(0,min((int)$p['stock'],(int)$cart[$p['id']]));if($q<1)continue;$cartRows[]=$p+['qty'=>$q];$cartTotal+=(int)$p['price']*$q;$cartQty+=$q;}}
+$flash=$_SESSION['flash']??'';unset($_SESSION['flash']);$savedName=(string)($_SESSION['checkout_name']??'');$savedPhone=(string)($_SESSION['checkout_phone']??'');$savedAddress=(string)($_SESSION['checkout_address']??'');
+$emojis=['میوه و سبزی'=>'🥬','لبنیات و صبحانه'=>'🥛','نوشیدنی'=>'🧃','تنقلات و شیرینی'=>'🍪','خانه و شوینده'=>'🧼','گوشت و مرغ'=>'🍗','مواد غذایی'=>'🛍️','کنسرو و غذای آماده'=>'🥫','بهداشت شخصی'=>'🧴','کودک'=>'🍼','سایر'=>'🛒'];
 ?>
-<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#11823b"><title>سوپرمارکت طهران</title><link rel="stylesheet" href="assets/style.css"></head><body>
-<header class="top"><a class="brand" href="index.php"><span class="logo">🛒</span><span><b>سوپرمارکت طهران</b><small>Tehran Supermarket · تازه، سالم، همیشه در دسترس</small></span></a><span class="location">📍 بهارستان اصفهان</span></header>
-<section class="hero"><div><span class="pill">خرید آسان محلی</span><h1>خرید روزانه،<br><em>سریع و راحت</em></h1><p>محصولات موردنیازت رو انتخاب کن؛ ما در بهارستان برات آماده می‌کنیم.</p><a class="btn" href="#products">شروع خرید ←</a></div><div class="heroart">🥬 🥛 🍎</div></section>
-<main>
-<?php if($flash): ?><div class="notice"><?=e($flash)?></div><?php endif; ?>
-<section id="products"><div class="sectionhead"><div><h2>محصولات فروشگاه</h2><p>محصولت رو جستجو کن و به سبد اضافه کن.</p></div><a class="btn pale" href="admin.php">پنل مدیریت</a></div>
-<form class="search" method="get"><input name="q" value="<?=e($search)?>" placeholder="🔎 جستجوی نام یا بارکد محصول"><select name="cat"><option value="">همه دسته‌ها</option><?php foreach($categories as $c): ?><option value="<?=e($c)?>" <?=$cat===$c?'selected':''?>><?=e($c)?></option><?php endforeach; ?></select><button class="btn">جستجو</button></form>
-<div class="grid"><?php foreach($products as $p): ?><article class="card"><?php if(!empty($p['image_path'])):?><div class="product-photo"><img loading="lazy" src="<?=e($p['image_path'])?>" alt="<?=e($p['name'])?>"></div><?php else:?><div class="emoji"><?=['میوه و سبزی'=>'🥬','لبنیات و صبحانه'=>'🥛','نوشیدنی'=>'🧃','تنقلات و شیرینی'=>'🍪','خانه و شوینده'=>'🧼','گوشت و مرغ'=>'🍗','مواد غذایی'=>'🛍️','کنسرو و غذای آماده'=>'🥫','بهداشت شخصی'=>'🧴','کودک'=>'🍼','سایر'=>'🛒'][$p['category']]??'🛒'?></div><?php endif;?><h3><?=e($p['name'])?></h3><?php if(!empty($p['brand'])||!empty($p['quantity_label'])):?><p class="product-meta"><?=e(trim(($p['brand']??'').' '.($p['quantity_label']??'')))?></p><?php endif;?><p class="muted"><?=e($p['category'])?> · موجودی <?=number_format((int)$p['stock'])?></p><div class="price-row"><?php if((int)$p['price']>0): ?><b><?=toman((int)$p['price'])?></b><?php else: ?><b class="muted">قیمت در حال ثبت</b><?php endif; ?><?php if((int)$p['stock']>0 && (int)$p['price']>0): ?><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="action" value="add_cart"><input type="hidden" name="product_id" value="<?=(int)$p['id']?>"><button class="add">+ افزودن</button></form><?php elseif((int)$p['stock']<=0): ?><span class="muted">ناموجود</span><?php else: ?><span class="muted">به‌زودی</span><?php endif; ?></div></article><?php endforeach; if(!$products): ?><p class="notice">محصولی پیدا نشد. مدیر فروشگاه می‌تواند محصولات را از پنل مدیریت ثبت کند.</p><?php endif; ?></div></section>
-<section id="cart" class="cartbox"><div class="sectionhead"><div><h2>سبد خرید</h2><p><?=number_format(count($cartRows))?> نوع کالا</p></div><strong><?=toman($cartTotal)?></strong></div>
-<?php if($cartRows): foreach($cartRows as $r): ?><div class="cartline"><span><?=e($r['name'])?> × <?=number_format((int)$r['qty'])?></span><span><?=toman((int)$r['price']*(int)$r['qty'])?></span><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="action" value="remove_cart"><input type="hidden" name="product_id" value="<?=(int)$r['id']?>"><button class="remove">حذف</button></form></div><?php endforeach; ?>
-<h3 id="checkout">اطلاعات تحویل</h3><form method="post" class="checkout"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="action" value="checkout"><label>نام و نام خانوادگی<input name="name" required minlength="2" placeholder="نام شما"></label><label>شماره موبایل<input name="phone" required pattern="09[0-9]{9}" placeholder="09123456789"></label><label class="wide">آدرس دقیق تحویل<textarea name="address" required minlength="5" placeholder="شهر، خیابان، کوچه، پلاک"></textarea></label><label>زمان تحویل<select name="slot"><option>اولین زمان ممکن</option><option>۱۰ تا ۱۲</option><option>۱۲ تا ۱۴</option><option>۱۶ تا ۱۸</option><option>۱۸ تا ۲۰</option><option>۲۰ تا ۲۲</option></select></label><label>روش پرداخت<select name="payment"><option value="cod">پرداخت در محل</option><option value="online">پرداخت آنلاین (تا اتصال درگاه فعال نیست)</option></select></label><p class="muted wide">هزینه ارسال: <?=toman((int)$config['delivery_fee'])?> · خرید بدون ساخت حساب کاربری</p><button class="btn wide" type="submit">ثبت سفارش · <?=toman($cartTotal+(int)$config['delivery_fee'])?></button></form>
-<?php else: ?><p class="muted">سبد خرید خالی است؛ از محصولات بالا کالا اضافه کنید.</p><?php endif; ?></section></main><footer>سوپرمارکت طهران · بهارستان اصفهان <a href="admin.php">مدیریت فروشگاه</a></footer></body></html>
+<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#11823b"><title>سوپرمارکت طهران</title><link rel="stylesheet" href="assets/style.css?v=20261024-ux1"><style>
+body{padding-bottom:86px}.customer-actions{display:flex;gap:8px;align-items:center}.cat-strip{display:flex;gap:8px;overflow:auto;padding:4px 0 12px;scrollbar-width:none}.cat-strip::-webkit-scrollbar{display:none}.cat-chip{white-space:nowrap;background:#fff;border:1px solid #e2ebe4;padding:9px 13px;border-radius:999px;font-size:12px}.cat-chip.active{background:#11823b;color:#fff}.qtybox{display:flex;align-items:center;gap:5px;background:#eef8ef;border-radius:10px;padding:3px}.qtybox form{margin:0}.qtybtn{width:32px;height:32px;border:0;border-radius:8px;background:#fff;color:#11823b;font-size:20px;font-weight:800}.qtynum{min-width:26px;text-align:center;font-weight:800;color:#123c27}.sticky-cart{position:fixed;left:12px;right:12px;bottom:12px;z-index:50;max-width:680px;margin:auto;background:#123c27;color:#fff;border-radius:16px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 12px 36px #0003}.sticky-cart b{display:block}.sticky-cart span{font-size:11px;opacity:.8}.sticky-cart a{background:#fff;color:#11823b;padding:9px 13px;border-radius:10px;font-weight:800}.cartline{gap:8px}.cart-main{display:flex;align-items:center;gap:9px;min-width:0;flex:1}.cart-main img{width:48px;height:48px;object-fit:contain;border:1px solid #edf0ed;border-radius:9px}.cart-main b{font-size:12px;display:block}.cart-tools{display:flex;align-items:center;gap:8px}.track-link{font-weight:700}.mobile-title{display:none}@media(max-width:800px){.hero{display:none}.customer-actions .location{display:none}.top{position:sticky;top:0;z-index:40}.brand small{display:none}.mobile-title{display:block;margin:14px 0 6px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.card{padding:10px}.card h3{font-size:13px;min-height:42px}.product-photo{height:125px}.price-row{align-items:flex-end}.cartline{align-items:flex-start;flex-wrap:wrap}.cart-tools{width:100%;justify-content:space-between}.checkout{grid-template-columns:1fr}.checkout .wide{grid-column:auto}}
+</style></head><body>
+<header class="top"><a class="brand" href="index.php"><span class="logo">🛒</span><span><b>سوپرمارکت طهران</b><small>خرید سریع محلی</small></span></a><div class="customer-actions"><a class="track-link" href="track.php">📦 پیگیری سفارش</a><span class="location">📍 بهارستان اصفهان</span></div></header>
+<section class="hero"><div><span class="pill">خرید آسان محلی</span><h1>خرید روزانه،<br><em>سریع و راحت</em></h1><p>محصولات را انتخاب کن؛ ما آماده و تحویل می‌کنیم.</p><a class="btn" href="#products">شروع خرید ←</a></div><div class="heroart">🥬 🥛 🍎</div></section>
+<main><h2 class="mobile-title">چی لازم داری؟</h2><?php if($flash):?><div class="notice"><?=e($flash)?></div><?php endif;?>
+<section id="products"><div class="sectionhead"><div><h2>محصولات فروشگاه</h2><p>نام، برند یا بارکد را جستجو کن.</p></div></div>
+<form class="search" method="get"><input name="q" value="<?=e($search)?>" placeholder="🔎 جستجوی محصول"><input type="hidden" name="cat" value="<?=e($cat)?>"><button class="btn">جستجو</button></form>
+<div class="cat-strip"><a class="cat-chip <?=$cat===''?'active':''?>" href="index.php<?= $search!==''?'?q='.urlencode($search):'' ?>#products">همه</a><?php foreach($categories as $c):?><a class="cat-chip <?=$cat===$c?'active':''?>" href="index.php?cat=<?=urlencode($c)?><?= $search!==''?'&q='.urlencode($search):'' ?>#products"><?=e(($emojis[$c]??'🛒').' '.$c)?></a><?php endforeach;?></div>
+<div class="grid"><?php foreach($products as $p):$inCart=(int)($cart[(int)$p['id']]??0);?><article class="card"><?php if(!empty($p['image_path'])):?><div class="product-photo"><img loading="lazy" src="<?=e($p['image_path'])?>" alt="<?=e($p['name'])?>"></div><?php else:?><div class="emoji"><?=e($emojis[$p['category']]??'🛒')?></div><?php endif;?><h3><?=e($p['name'])?></h3><?php if(!empty($p['brand'])||!empty($p['quantity_label'])):?><p class="product-meta"><?=e(trim(($p['brand']??'').' '.($p['quantity_label']??'')))?></p><?php endif;?><p class="muted"><?=e($p['category'])?> · موجودی <?=number_format((int)$p['stock'])?></p><div class="price-row"><?php if((int)$p['price']>0):?><b><?=toman((int)$p['price'])?></b><?php else:?><b class="muted">قیمت در حال ثبت</b><?php endif;?><?php if((int)$p['stock']>0&&(int)$p['price']>0):?><?php if($inCart>0):?><div class="qtybox"><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="action" value="cart_delta"><input type="hidden" name="product_id" value="<?=(int)$p['id']?>"><input type="hidden" name="delta" value="-1"><button class="qtybtn">−</button></form><span class="qtynum"><?=number_format($inCart)?></span><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="action" value="cart_delta"><input type="hidden" name="product_id" value="<?=(int)$p['id']?>"><input type="hidden" name="delta" value="1"><button class="qtybtn">+</button></form></div><?php else:?><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="action" value="add_cart"><input type="hidden" name="product_id" value="<?=(int)$p['id']?>"><button class="add">+ افزودن</button></form><?php endif;?><?php elseif((int)$p['stock']<=0):?><span class="muted">ناموجود</span><?php else:?><span class="muted">به‌زودی</span><?php endif;?></div></article><?php endforeach;if(!$products):?><p class="notice">محصولی پیدا نشد.</p><?php endif;?></div></section>
+<section id="cart" class="cartbox"><div class="sectionhead"><div><h2>سبد خرید</h2><p><?=number_format($cartQty)?> قلم</p></div><strong><?=toman($cartTotal)?></strong></div><?php if($cartRows):foreach($cartRows as $r):?><div class="cartline"><div class="cart-main"><?php if(!empty($r['image_path'])):?><img src="<?=e($r['image_path'])?>" alt=""><?php endif;?><div><b><?=e($r['name'])?></b><span class="muted"><?=toman((int)$r['price']*(int)$r['qty'])?></span></div></div><div class="cart-tools"><div class="qtybox"><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="action" value="cart_delta"><input type="hidden" name="product_id" value="<?=(int)$r['id']?>"><input type="hidden" name="delta" value="-1"><input type="hidden" name="return_to" value="index.php#cart"><button class="qtybtn">−</button></form><span class="qtynum"><?=number_format((int)$r['qty'])?></span><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="action" value="cart_delta"><input type="hidden" name="product_id" value="<?=(int)$r['id']?>"><input type="hidden" name="delta" value="1"><input type="hidden" name="return_to" value="index.php#cart"><button class="qtybtn">+</button></form></div><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="action" value="remove_cart"><input type="hidden" name="product_id" value="<?=(int)$r['id']?>"><input type="hidden" name="return_to" value="index.php#cart"><button class="remove">حذف</button></form></div></div><?php endforeach;?>
+<h3 id="checkout">اطلاعات تحویل</h3><form method="post" class="checkout"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="action" value="checkout"><label>نام و نام خانوادگی<input name="name" required minlength="2" value="<?=e($savedName)?>" placeholder="نام شما"></label><label>شماره موبایل<input name="phone" required pattern="09[0-9]{9}" value="<?=e($savedPhone)?>" placeholder="09123456789" inputmode="numeric"></label><label class="wide">آدرس دقیق تحویل<textarea name="address" required minlength="5" placeholder="خیابان، کوچه، پلاک"><?=e($savedAddress)?></textarea></label><label>زمان تحویل<select name="slot"><option>اولین زمان ممکن</option><option>۱۰ تا ۱۲</option><option>۱۲ تا ۱۴</option><option>۱۶ تا ۱۸</option><option>۱۸ تا ۲۰</option><option>۲۰ تا ۲۲</option></select></label><div><span class="muted">روش پرداخت</span><div class="success">پرداخت در محل</div></div><p class="muted wide">هزینه ارسال: <?=toman((int)($config['delivery_fee']??0))?> · بدون ساخت حساب</p><button class="btn wide" type="submit">ثبت سفارش · <?=toman($cartTotal+(int)($config['delivery_fee']??0))?></button></form><?php else:?><p class="muted">سبد خرید خالی است.</p><?php endif;?></section></main>
+<?php if($cartQty>0):?><div class="sticky-cart"><div><b><?=number_format($cartQty)?> قلم · <?=toman($cartTotal)?></b><span>سبد خرید شما</span></div><a href="#cart">مشاهده سبد</a></div><?php endif;?>
+<footer><span>سوپرمارکت طهران · بهارستان اصفهان</span><a href="track.php">پیگیری سفارش</a></footer></body></html>
