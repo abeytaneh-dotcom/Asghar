@@ -16,10 +16,7 @@ function ensure_pyramid_mapping(PDO $pdo): void {
     foreach ($rows as $r) {
         $barcode = trim((string)($r['barcode'] ?? ''));
         $generated = (int)($r['pyramid_barcode_generated'] ?? 0);
-        if ($barcode === '') {
-            $barcode = pyramid_internal_ean13((int)$r['id']);
-            $generated = 1;
-        }
+        if ($barcode === '') {$barcode = pyramid_internal_ean13((int)$r['id']);$generated = 1;}
         $code2 = trim((string)($r['pyramid_code2'] ?? ''));
         if ($code2 === '') $code2 = (string)(900000 + (int)$r['id']);
         $stock = (int)$r['stock'];
@@ -31,10 +28,7 @@ function ensure_pyramid_mapping(PDO $pdo): void {
 function ensure_order_public_tokens(PDO $pdo): void {
     try {
         $rows=$pdo->query("SELECT id FROM orders WHERE public_token IS NULL OR public_token='' LIMIT 1000")->fetchAll(PDO::FETCH_COLUMN);
-        if($rows){
-            $st=$pdo->prepare('UPDATE orders SET public_token=? WHERE id=? AND (public_token IS NULL OR public_token=\'\')');
-            foreach($rows as $id)$st->execute([bin2hex(random_bytes(24)),(int)$id]);
-        }
+        if($rows){$st=$pdo->prepare("UPDATE orders SET public_token=? WHERE id=? AND (public_token IS NULL OR public_token='')");foreach($rows as $id)$st->execute([bin2hex(random_bytes(24)),(int)$id]);}
     } catch(Throwable $e) {}
 }
 
@@ -67,11 +61,16 @@ function ensure_product_schema(PDO $pdo): void {
     if(!isset($orderCols['courier_id'])) $oa[]="ADD COLUMN courier_id INT UNSIGNED NULL";
     if(!isset($orderCols['courier_assigned_at'])) $oa[]="ADD COLUMN courier_assigned_at DATETIME NULL";
     if(!isset($orderCols['delivered_at'])) $oa[]="ADD COLUMN delivered_at DATETIME NULL";
+    if(!isset($orderCols['payment_authority'])) $oa[]="ADD COLUMN payment_authority VARCHAR(100) NULL";
+    if(!isset($orderCols['payment_ref_id'])) $oa[]="ADD COLUMN payment_ref_id VARCHAR(100) NULL";
+    if(!isset($orderCols['payment_requested_at'])) $oa[]="ADD COLUMN payment_requested_at DATETIME NULL";
+    if(!isset($orderCols['payment_error'])) $oa[]="ADD COLUMN payment_error VARCHAR(500) NULL";
     if($oa) $pdo->exec('ALTER TABLE orders '.implode(', ', $oa));
     try{
         $idx=[];foreach($pdo->query('SHOW INDEX FROM orders')->fetchAll(PDO::FETCH_ASSOC) as $r)$idx[$r['Key_name']]=true;
         if(!isset($idx['uq_orders_public_token']))$pdo->exec('ALTER TABLE orders ADD UNIQUE KEY uq_orders_public_token(public_token)');
         if(!isset($idx['idx_orders_courier']))$pdo->exec('ALTER TABLE orders ADD KEY idx_orders_courier(courier_id,status,created_at)');
+        if(!isset($idx['idx_orders_payment']))$pdo->exec('ALTER TABLE orders ADD KEY idx_orders_payment(payment_status,payment_method,created_at)');
     }catch(Throwable $e){}
 
     $itemCols=[];
@@ -85,63 +84,20 @@ function ensure_product_schema(PDO $pdo): void {
     if(!isset($itemCols['adjustment_note'])) $ia[]="ADD COLUMN adjustment_note VARCHAR(255) NULL AFTER picked_at";
     if($ia) $pdo->exec('ALTER TABLE order_items '.implode(', ', $ia));
 
-    $pdo->exec("CREATE TABLE IF NOT EXISTS store_settings (
-      setting_key VARCHAR(80) NOT NULL PRIMARY KEY,
-      setting_value TEXT NULL,
-      updated_at DATETIME NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS delivery_zones (
-      id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(120) NOT NULL,
-      fee BIGINT UNSIGNED NOT NULL DEFAULT 0,
-      min_order BIGINT UNSIGNED NOT NULL DEFAULT 0,
-      eta VARCHAR(120) NULL,
-      active TINYINT(1) NOT NULL DEFAULT 1,
-      sort_order INT NOT NULL DEFAULT 0,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS couriers (
-      id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(120) NOT NULL,
-      phone VARCHAR(20) NULL,
-      access_token VARCHAR(64) NOT NULL UNIQUE,
-      active TINYINT(1) NOT NULL DEFAULT 1,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME NULL,
-      last_seen_at DATETIME NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS sms_outbox (
-      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-      order_id BIGINT UNSIGNED NULL,
-      phone VARCHAR(20) NOT NULL,
-      event_key VARCHAR(60) NOT NULL,
-      message_text VARCHAR(500) NOT NULL,
-      status VARCHAR(20) NOT NULL DEFAULT 'queued',
-      provider_response TEXT NULL,
-      attempts INT UNSIGNED NOT NULL DEFAULT 0,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      sent_at DATETIME NULL,
-      INDEX(status,created_at), INDEX(order_id,event_key)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS store_settings (setting_key VARCHAR(80) NOT NULL PRIMARY KEY,setting_value TEXT NULL,updated_at DATETIME NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS delivery_zones (id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,name VARCHAR(120) NOT NULL,fee BIGINT UNSIGNED NOT NULL DEFAULT 0,min_order BIGINT UNSIGNED NOT NULL DEFAULT 0,eta VARCHAR(120) NULL,active TINYINT(1) NOT NULL DEFAULT 1,sort_order INT NOT NULL DEFAULT 0,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS couriers (id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,name VARCHAR(120) NOT NULL,phone VARCHAR(20) NULL,access_token VARCHAR(64) NOT NULL UNIQUE,active TINYINT(1) NOT NULL DEFAULT 1,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME NULL,last_seen_at DATETIME NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS sms_outbox (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,order_id BIGINT UNSIGNED NULL,phone VARCHAR(20) NOT NULL,event_key VARCHAR(60) NOT NULL,message_text VARCHAR(500) NOT NULL,status VARCHAR(20) NOT NULL DEFAULT 'queued',provider_response TEXT NULL,attempts INT UNSIGNED NOT NULL DEFAULT 0,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,sent_at DATETIME NULL,INDEX(status,created_at),INDEX(order_id,event_key)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS push_subscriptions (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,endpoint_hash CHAR(64) NOT NULL UNIQUE,endpoint TEXT NOT NULL,admin_id INT UNSIGNED NULL,user_agent VARCHAR(250) NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,last_success_at DATETIME NULL,last_error_at DATETIME NULL,INDEX(admin_id,created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     $defaults=[
-      'manual_mode'=>'auto',
-      'open_time'=>'08:00',
-      'close_time'=>'23:00',
+      'manual_mode'=>'auto','open_time'=>'08:00','close_time'=>'23:00',
       'closed_message'=>'سفارش‌گیری فعلاً بسته است. می‌توانید محصولات را ببینید و بعداً سفارش را ثبت کنید.',
-      'sms_enabled'=>'0',
-      'sms_webhook_url'=>'',
-      'sms_webhook_token'=>'',
-      'payment_enabled'=>'0',
-      'payment_provider'=>'zarinpal',
-      'payment_merchant_id'=>'',
-      'push_enabled'=>'0',
-      'push_provider'=>'onesignal',
-      'push_app_id'=>'',
-      'push_rest_key'=>''
+      'sms_enabled'=>'0','sms_provider'=>'ippanel','sms_api_token'=>'','sms_from_number'=>'','sms_webhook_url'=>'','sms_webhook_token'=>'',
+      'payment_enabled'=>'0','payment_provider'=>'zarinpal','payment_merchant_id'=>'','payment_multiplier'=>'10',
+      'push_enabled'=>'1','push_provider'=>'native'
     ];
-    $ins=$pdo->prepare('INSERT IGNORE INTO store_settings(setting_key,setting_value,updated_at) VALUES(?,?,NOW())');
-    foreach($defaults as $k=>$v)$ins->execute([$k,$v]);
+    $ins=$pdo->prepare('INSERT IGNORE INTO store_settings(setting_key,setting_value,updated_at) VALUES(?,?,NOW())');foreach($defaults as $k=>$v)$ins->execute([$k,$v]);
 
     try{$pdo->exec("UPDATE order_items oi JOIN products p ON p.id=oi.product_id SET oi.barcode=p.barcode WHERE (oi.barcode IS NULL OR oi.barcode='')");}catch(Throwable $e){}
     try{$pdo->exec("UPDATE order_items SET original_product_id=product_id WHERE original_product_id IS NULL");}catch(Throwable $e){}
