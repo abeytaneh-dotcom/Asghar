@@ -36,7 +36,7 @@ function store_remote_image(string $url): ?string {
 }
 $cats=['میوه و سبزی','لبنیات و صبحانه','نوشیدنی','تنقلات و شیرینی','خانه و شوینده','گوشت و مرغ','مواد غذایی','کنسرو و غذای آماده','بهداشت شخصی','کودک','سایر'];$err='';$msg='';
 if(isset($_POST['logout'])){ts_audit($pdo,'logout');session_destroy();header('Location: admin.php');exit;}
-$currentAdmin=null;if(admin()){$currentAdmin=ts_admin_current($pdo);if(!$currentAdmin){header('Location: admin.php');exit;}if(($currentAdmin['role']??'')==='staff'){if($_SERVER['REQUEST_METHOD']==='POST'){http_response_code(403);exit('دسترسی این حساب فقط به سفارش‌ها محدود است.');}header('Location: admin_orders.php');exit;}}
+$currentAdmin=null;if(admin()){$currentAdmin=ts_admin_current($pdo);if(!$currentAdmin){header('Location: admin.php');exit;}if(($currentAdmin['role']??'')==='staff'){if($_SERVER['REQUEST_METHOD']==='POST'){ts_html_fail('AUTH-104',403,'admin.php');}header('Location: admin_orders.php');exit;}}
 if($_SERVER['REQUEST_METHOD']==='POST'){
  if(!hash_equals($_SESSION['csrf']??'',$_POST['csrf']??'')){ts_html_fail('REQ-102',419,'index.php');}
  if(($_POST['action']??'')==='login'){
