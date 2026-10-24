@@ -1,3 +1,4 @@
+# deploy-trigger-2026-10-24-ux
 name: Deploy Tehran Supermarket
 
 on:
@@ -95,8 +96,11 @@ jobs:
           set -euo pipefail
           HCODE=$(curl -sS -L --max-time 30 -o "$RUNNER_TEMP/home.html" -w '%{http_code}' "${PUBLIC_URL}/")
           ACODE=$(curl -sS -L --max-time 30 -o "$RUNNER_TEMP/admin.html" -w '%{http_code}' "${PUBLIC_URL}/admin.php")
+          TCODE=$(curl -sS -L --max-time 30 -o "$RUNNER_TEMP/track.html" -w '%{http_code}' "${PUBLIC_URL}/track.php")
           ICODE=$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "${PUBLIC_URL}/install.php")
-          test "$HCODE" = '200'; test "$ACODE" = '200'; test "$ICODE" = '403'
+          test "$HCODE" = '200'; test "$ACODE" = '200'; test "$TCODE" = '200'; test "$ICODE" = '403'
           grep -Fq 'سوپرمارکت طهران' "$RUNNER_TEMP/home.html"
+          grep -Fq 'پیگیری سفارش' "$RUNNER_TEMP/home.html"
           grep -Fq 'پنل مدیریت سوپرمارکت طهران' "$RUNNER_TEMP/admin.html"
-          echo "DEPLOY_OK home=$HCODE admin=$ACODE installer=$ICODE"
+          grep -Fq 'سفارشت کجاست؟' "$RUNNER_TEMP/track.html"
+          echo "DEPLOY_OK home=$HCODE admin=$ACODE track=$TCODE installer=$ICODE"
