@@ -1,0 +1,101 @@
+name: Apply Tehran Safe Errors
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/apply-tehran-safe-errors.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Apply safe error transformations
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root=Path('TehranSupermarket')
+          targets=[
+            'admin_order_edit.php','admin_users.php','courier.php','admin_coupons.php','admin_couriers.php','admin_orders.php','admin.php',
+            'admin_products.php','account.php','reorder.php','api.php','admin_store.php','admin_alert.php','pyramid.php','push_subscribe.php',
+            'shop.php','admin_catalog.php','admin_discounts.php','track.php','push_public.php','install.php'
+          ]
+          for name in targets:
+              p=root/name
+              if not p.exists(): continue
+              s=p.read_text()
+              if "error_bootstrap.php" not in s:
+                  s=s.replace("declare(strict_types=1);", "declare(strict_types=1);require_once __DIR__.'/error_bootstrap.php';",1)
+              # DB / service connection failures: never expose internals.
+              s=re.sub(r"catch\(Throwable \$e\)\{exit\('اتصال(?: پایگاه داده)? برقرار نیست\.'\);\}", "catch(Throwable $e){ts_log_internal($e,'SYS-101');ts_html_fail('SYS-101',503,'index.php');}", s)
+              s=re.sub(r"catch\(Throwable \$e\)\{http_response_code\(500\);exit\('اتصال پایگاه داده برقرار نشد\.'\);\}", "catch(Throwable $e){ts_log_internal($e,'SYS-101');ts_html_fail('SYS-101',503,'index.php');}", s)
+              # CSRF/session expiry.
+              s=s.replace("http_response_code(419);exit('درخواست نامعتبر');", "ts_html_fail('REQ-102',419,'index.php');")
+              # Raw exception exposure in admin screens.
+              s=s.replace("$err=$x->getMessage();", "$err=ts_error_text('SYS-100');ts_log_internal($x,'SYS-100');")
+              s=s.replace("$err='ذخیره محصول انجام نشد: '.$x->getMessage();", "$err=ts_error_text('SYS-100');ts_log_internal($x,'SYS-100');")
+              # Installer must not echo DB/server exception details.
+              s=s.replace("$error='نصب انجام نشد. اطلاعات اتصال و مجوزهای دیتابیس را بررسی کنید. جزئیات: '.e($ex->getMessage());", "$error=ts_error_text('SYS-100');ts_log_internal($ex,'SYS-100');")
+              p.write_text(s)
+
+          # Public storefront: map known business failures to stable safe codes.
+          p=root/'shop.php'; s=p.read_text()
+          s=s.replace("if(!$state['open']){$_SESSION['flash']='فروشگاه فعلاً بسته است. ساعت کاری '.$state['open_time'].' تا '.$state['close_time'];", "if(!$state['open']){$_SESSION['flash']=ts_error_text('SHOP-201');")
+          s=s.replace("function checkcsrf(){if(!hash_equals($_SESSION['csrf']??'',$_POST['csrf']??'')){ts_html_fail('REQ-102',419,'index.php');}}", "function checkcsrf(){if(!hash_equals($_SESSION['csrf']??'',$_POST['csrf']??''))ts_html_fail('REQ-102',419,'index.php');}")
+          s=s.replace("throw new RuntimeException('موجودی یا قیمت یکی از کالاها تغییر کرده است.');", "throw new RuntimeException('SHOP-203');")
+          s=re.sub(r"throw new RuntimeException\('حداقل خرید برای '.+?' است\.'\);", "throw new RuntimeException('SHOP-205');", s)
+          s=s.replace("if(!($coupon['ok']??false))throw new RuntimeException((string)($coupon['error']??'کد تخفیف معتبر نیست.'));", "if(!($coupon['ok']??false))throw new RuntimeException('SHOP-206');")
+          s=s.replace("if(!$zone){$_SESSION['flash']='محدوده ارسال را انتخاب کنید.';", "if(!$zone){$_SESSION['flash']=ts_error_text('SHOP-204');")
+          s=s.replace("if(mb_strlen($name)<2||!preg_match('/^09\\d{9}$/',$phone)||mb_strlen($address)<5){$_SESSION['flash']='نام، موبایل و آدرس را درست وارد کنید.';", "if(mb_strlen($name)<2||!preg_match('/^09\\d{9}$/',$phone)||mb_strlen($address)<5){$_SESSION['flash']=ts_error_text('REQ-101');")
+          s=s.replace("if(!$cart){header('Location:index.php');exit;}", "if(!$cart){$_SESSION['flash']=ts_error_text('SHOP-202');header('Location:index.php#cart');exit;}")
+          old="}catch(Throwable $x){if($pdo->inTransaction())$pdo->rollBack();$_SESSION['flash']=$x instanceof RuntimeException?$x->getMessage():'ثبت سفارش انجام نشد.';header('Location:index.php#checkout');exit;}"
+          new="}catch(Throwable $x){if($pdo->inTransaction())$pdo->rollBack();$c=$x instanceof RuntimeException&&(bool)preg_match('/^(SHOP|REQ)-\\d+$/',$x->getMessage())?$x->getMessage():'SHOP-207';if($c==='SHOP-207')ts_log_internal($x,'SHOP-207');$_SESSION['flash']=ts_error_text($c);header('Location:index.php#checkout');exit;}"
+          s=s.replace(old,new)
+          # Geolocation failure gets a code + user action without exposing browser internals.
+          s=s.replace("status.textContent='موقعیت خودکار پیدا نشد؛ نقشه را دستی روی محل تحویل ببرید.';", "status.textContent='کد خطا: LOC-601 — موقعیت خودکار پیدا نشد. اجازه Location را بررسی کنید یا نقشه را دستی روی محل تحویل ببرید.';")
+          p.write_text(s)
+
+          # Generic JSON APIs: return coded, Persian, actionable errors.
+          p=root/'api.php'; s=p.read_text()
+          s=s.replace("if (empty($_SESSION['admin_id'])) out(['ok'=>false,'error'=>'ورود مدیر لازم است.'],401);", "if(empty($_SESSION['admin_id']))ts_json_fail('REQ-102',401);")
+          s=s.replace("$configFile=__DIR__.'/config.php'; if(!file_exists($configFile)) out(['ok'=>false,'error'=>'سایت نصب نشده است.'],503);", "$configFile=__DIR__.'/config.php';if(!file_exists($configFile))ts_json_fail('SYS-100',503);")
+          s=s.replace("}catch(Throwable $e){out(['ok'=>false,'error'=>'خطای پایگاه داده'],500);}", "}catch(Throwable $e){ts_log_internal($e,'SYS-101');ts_json_fail('SYS-101',503);}")
+          s=s.replace("if($barcode==='')out(['ok'=>false,'error'=>'بارکد خالی است.'],422);", "if($barcode==='')ts_json_fail('REQ-101',422);")
+          s=s.replace("if($orderId<=0)out(['ok'=>false,'error'=>'شماره سفارش نامعتبر است.'],422);", "if($orderId<=0)ts_json_fail('REQ-101',422);")
+          s=s.replace("if(mb_strlen($q)<2)out(['ok'=>false,'error'=>'حداقل ۲ حرف بنویسید.'],422);", "if(mb_strlen($q)<2)ts_json_fail('REQ-101',422);")
+          s=s.replace("out(['ok'=>false,'error'=>'درخواست ناشناخته است.'],404);", "ts_json_fail('REQ-101',404);")
+          p.write_text(s)
+
+          # Push endpoints should also explain safely.
+          for name in ['admin_alert.php','push_subscribe.php','push_public.php']:
+              p=root/name; s=p.read_text()
+              s=s.replace("http_response_code(401);echo json_encode(['ok'=>false]);exit;", "ts_json_fail('REQ-102',401);")
+              s=s.replace("http_response_code(405);echo json_encode(['ok'=>false]);exit;", "ts_json_fail('REQ-101',405);")
+              s=s.replace("http_response_code(422);echo json_encode(['ok'=>false]);exit;", "ts_json_fail('REQ-101',422);")
+              s=s.replace("http_response_code(503);echo json_encode(['ok'=>false]);exit;", "ts_json_fail('SYS-100',503);")
+              s=s.replace("catch(Throwable $e){http_response_code(500);echo json_encode(['ok'=>false]);}", "catch(Throwable $e){ts_log_internal($e,'SYS-100');ts_json_fail('SYS-100',500);}")
+              s=s.replace("catch(Throwable $e){http_response_code(503);echo json_encode(['ok'=>false]);}", "catch(Throwable $e){ts_log_internal($e,'SYS-100');ts_json_fail('SYS-100',503);}")
+              p.write_text(s)
+
+          # Tracking / account connection errors.
+          for name in ['account.php','track.php','reorder.php']:
+              p=root/name; s=p.read_text()
+              s=re.sub(r"catch\(Throwable \$e\)\{exit\('اتصال برقرار نیست\.'\);\}", "catch(Throwable $e){ts_log_internal($e,'SYS-101');ts_html_fail('SYS-101',503,'index.php');}", s)
+              p.write_text(s)
+          PY
+          git diff --check
+          find TehranSupermarket -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name 'abeytaneh-dotcom'
+          git config user.email 'abeytaneh@gmail.com'
+          git add TehranSupermarket
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Apply safe Persian error codes across Tehran app'
+          git push origin HEAD:websaza-hosting
