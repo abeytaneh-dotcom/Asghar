@@ -40,6 +40,7 @@ function ensure_product_schema(PDO $pdo): void {
     if (!isset($columns['pyramid_code2'])) $alters[] = "ADD COLUMN pyramid_code2 VARCHAR(40) NULL AFTER barcode";
     if (!isset($columns['pyramid_barcode_generated'])) $alters[] = "ADD COLUMN pyramid_barcode_generated TINYINT(1) NOT NULL DEFAULT 0 AFTER pyramid_code2";
     if (!isset($columns['pyramid_initialized'])) $alters[] = "ADD COLUMN pyramid_initialized TINYINT(1) NOT NULL DEFAULT 0 AFTER pyramid_barcode_generated";
+    if (!isset($columns['original_price'])) $alters[] = "ADD COLUMN original_price BIGINT UNSIGNED NULL AFTER price";
     if ($alters) $pdo->exec('ALTER TABLE products '.implode(', ', $alters));
 
     $orderCols=[];
@@ -49,6 +50,9 @@ function ensure_product_schema(PDO $pdo): void {
     if(!isset($orderCols['pyramid_invoice_no'])) $oa[]="ADD COLUMN pyramid_invoice_no VARCHAR(100) NULL";
     if(!isset($orderCols['stock_restored_at'])) $oa[]="ADD COLUMN stock_restored_at DATETIME NULL";
     if(!isset($orderCols['status_updated_at'])) $oa[]="ADD COLUMN status_updated_at DATETIME NULL";
+    if(!isset($orderCols['delivery_zone_id'])) $oa[]="ADD COLUMN delivery_zone_id INT UNSIGNED NULL";
+    if(!isset($orderCols['delivery_zone_name'])) $oa[]="ADD COLUMN delivery_zone_name VARCHAR(120) NULL";
+    if(!isset($orderCols['delivery_eta'])) $oa[]="ADD COLUMN delivery_eta VARCHAR(120) NULL";
     if($oa) $pdo->exec('ALTER TABLE orders '.implode(', ', $oa));
 
     $itemCols=[];
@@ -58,6 +62,31 @@ function ensure_product_schema(PDO $pdo): void {
     if(!isset($itemCols['picked'])) $ia[]="ADD COLUMN picked TINYINT(1) NOT NULL DEFAULT 0 AFTER quantity";
     if(!isset($itemCols['picked_at'])) $ia[]="ADD COLUMN picked_at DATETIME NULL AFTER picked";
     if($ia) $pdo->exec('ALTER TABLE order_items '.implode(', ', $ia));
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS store_settings (
+      setting_key VARCHAR(80) NOT NULL PRIMARY KEY,
+      setting_value TEXT NULL,
+      updated_at DATETIME NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS delivery_zones (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(120) NOT NULL,
+      fee BIGINT UNSIGNED NOT NULL DEFAULT 0,
+      min_order BIGINT UNSIGNED NOT NULL DEFAULT 0,
+      eta VARCHAR(120) NULL,
+      active TINYINT(1) NOT NULL DEFAULT 1,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $defaults=[
+      'manual_mode'=>'auto',
+      'open_time'=>'08:00',
+      'close_time'=>'23:00',
+      'closed_message'=>'سفارش‌گیری فعلاً بسته است. می‌توانید محصولات را ببینید و بعداً سفارش را ثبت کنید.'
+    ];
+    $ins=$pdo->prepare('INSERT IGNORE INTO store_settings(setting_key,setting_value,updated_at) VALUES(?,?,NOW())');
+    foreach($defaults as $k=>$v)$ins->execute([$k,$v]);
 
     try{$pdo->exec("UPDATE order_items oi JOIN products p ON p.id=oi.product_id SET oi.barcode=p.barcode WHERE (oi.barcode IS NULL OR oi.barcode='')");}catch(Throwable $e){}
     ensure_pyramid_mapping($pdo);
