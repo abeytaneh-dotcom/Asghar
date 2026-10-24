@@ -1,0 +1,35 @@
+name: Inspect Niazestan registry delegation
+
+on:
+  push:
+    branches: [niazestan-cloud]
+    paths:
+      - '.github/workflows/inspect-niazestan-registry.yml'
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query public and .ir parent DNS
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== Public recursive NS ==='
+          dig +short NS niazestan.ir || true
+          echo '=== Trace delegation ==='
+          dig +trace NS niazestan.ir || true
+          echo '=== .ir authoritative servers ==='
+          IRNS=$(dig +short NS ir. | head -6)
+          printf '%s\n' "$IRNS"
+          echo '=== Ask each .ir parent for niazestan.ir ==='
+          for ns in $IRNS; do
+            echo "--- $ns ---"
+            dig +norecurse NS niazestan.ir "@$ns" || true
+          done
+          echo '=== Target nameserver IPs ==='
+          dig +short A ns44.dnsuserver.com || true
+          dig +short A ns45.dnsuserver.com || true
+          echo '=== Old nameserver/IP clues ==='
+          dig +short -x 38.113.162.10 || true
+          dig +short -x 164.138.16.151 || true
