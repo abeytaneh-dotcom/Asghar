@@ -30,6 +30,7 @@ function ts_error_catalog(): array {
         'IMG-303'=>['حجم عکس بیش از حد مجاز است','فایل انتخابی خیلی بزرگ است.','عکس کوچک‌تری انتخاب کنید یا قبل از ارسال حجم آن را کم کنید.'],
         'IMG-304'=>['فرمت عکس قابل پردازش نیست','نوع یا محتوای این فایل برای پردازش مناسب نیست.','عکس را با فرمت JPG، PNG یا WebP ذخیره و دوباره ارسال کنید.'],
         'IMG-305'=>['پردازش عکس انجام نشد','سرور نتوانست عکس را آماده کند.','یک عکس دیگر امتحان کنید. اگر تکرار شد، کد خطا را به پشتیبانی بدهید.'],
+        'IMG-306'=>['آپلود عکس هنوز تمام نشده','فایل تصویر هنوز در حال ارسال یا پردازش است.','چند لحظه صبر کنید تا پیام موفقیت نمایش داده شود و بعد محصول را ذخیره کنید.'],
         'PAY-401'=>['سفارش معتبر نیست','سفارشی برای شروع پرداخت پیدا نشد.','از صفحه پیگیری همان سفارش دوباره وارد پرداخت شوید.'],
         'PAY-402'=>['پرداخت لغو یا کامل نشده','پرداخت نهایی نشده است.','در صورت کسر نشدن وجه، دوباره از صفحه سفارش پرداخت را شروع کنید.'],
         'PAY-403'=>['پرداخت آنلاین فعال نیست','درگاه آنلاین در حال حاضر آماده استفاده نیست.','پرداخت در محل را انتخاب کنید یا بعداً دوباره امتحان کنید.'],
@@ -39,69 +40,30 @@ function ts_error_catalog(): array {
         'SMS-502'=>['تنظیمات پیامک کامل نیست','سرویس پیامک هنوز آماده ارسال نیست.','توکن سرویس و شماره ارسال‌کننده را در تنظیمات بررسی کنید.'],
         'SMS-503'=>['ارسال پیامک انجام نشد','پیام به سرویس ارسال نشد.','تنظیمات پیامک و اعتبار پنل را بررسی کرده و دوباره تست کنید.'],
         'LOC-601'=>['موقعیت قابل دریافت نیست','موقعیت فعلی دستگاه دریافت نشد.','اجازه Location را فعال کنید یا محل تحویل را دستی روی نقشه مشخص کنید.'],
+        'BAR-801'=>['اسکن بارکد آماده نیست','امکان اسکن زنده در این دستگاه یا مرورگر در دسترس نیست.','از گزینه «عکس بارکد» استفاده کنید یا عدد زیر بارکد را دستی وارد کنید.'],
+        'BAR-802'=>['بارکد خوانده نشد','از تصویر انتخابی بارکد قابل اطمینانی پیدا نشد.','عکس را صاف، نزدیک و با نور کافی بگیرید؛ همه خط‌ها و عدد زیر بارکد داخل تصویر باشد.'],
+        'BAR-803'=>['بررسی بارکد انجام نشد','اطلاعات بارکد در این لحظه بررسی نشد.','می‌توانید اطلاعات کالا را دستی ادامه دهید یا دوباره بررسی بارکد را بزنید.'],
+        'PUSH-901'=>['اعلان پس‌زمینه فعال نشد','مرورگر یا مجوز اعلان اجازه فعال‌سازی را نداده است.','مجوز Notifications را برای سایت روی Allow بگذارید و دوباره دکمه فعال‌سازی اعلان را بزنید.'],
         'SYNC-701'=>['ارتباط همگام‌سازی تأیید نشد','درخواست همگام‌سازی قابل تأیید نیست.','تنظیمات اتصال نرم‌افزار فروشگاه را بررسی کنید.'],
         'SYNC-702'=>['اطلاعات همگام‌سازی معتبر نیست','داده دریافتی قابل پردازش نیست.','تنظیمات همگام‌سازی و اطلاعات کالا یا سفارش را بررسی کنید.'],
         'SYNC-703'=>['همگام‌سازی موقتاً در دسترس نیست','ارتباط همگام‌سازی فعلاً آماده نیست.','اتصال اینترنت و وضعیت نرم‌افزار فروشگاه را بررسی کنید و دوباره تلاش کنید.'],
+        'ORD-801'=>['سفارش پیدا نشد','سفارش با اطلاعات واردشده پیدا نشد یا دیگر در دسترس نیست.','شماره سفارش و شماره موبایل را بررسی کنید و دوباره امتحان کنید.'],
+        'ORD-802'=>['تغییر وضعیت سفارش مجاز نیست','وضعیت فعلی سفارش اجازه این تغییر را نمی‌دهد.','صفحه را تازه کنید و وضعیت فعلی سفارش را دوباره بررسی کنید.'],
+        'COU-801'=>['لینک ورود پیک معتبر نیست','لینک ورود قابل استفاده نیست یا اعتبار آن پایان یافته است.','از مدیر فروشگاه بخواهید لینک ورود جدید پیک را ارسال کند.'],
+        'HTTP-403'=>['دسترسی مجاز نیست','امکان مشاهده این بخش وجود ندارد.','به صفحه اصلی برگردید یا با حساب دارای دسترسی مناسب وارد شوید.'],
+        'HTTP-404'=>['صفحه پیدا نشد','آدرس درخواستی وجود ندارد یا جابه‌جا شده است.','به صفحه اصلی برگردید و از منوها مسیر موردنظر را دوباره باز کنید.'],
+        'HTTP-413'=>['حجم درخواست بیش از حد مجاز است','فایل یا اطلاعات ارسالی بزرگ‌تر از حد قابل قبول است.','حجم فایل را کمتر کنید و دوباره ارسال کنید.'],
+        'HTTP-429'=>['درخواست‌های زیادی ارسال شده','برای محافظت از سرویس، درخواست‌ها موقتاً محدود شده‌اند.','کمی بعد دوباره امتحان کنید.'],
+        'HTTP-500'=>['خطای موقت سرور','سرور نتوانست این درخواست را کامل کند.','صفحه را تازه کنید و دوباره امتحان کنید. اگر تکرار شد، همین کد خطا را به پشتیبانی بدهید.'],
         'ERR-999'=>['خطای پیش‌بینی‌نشده','عملیات به دلیل یک خطای موقت کامل نشد.','دوباره امتحان کنید. اگر تکرار شد، همین کد خطا را به پشتیبانی بدهید.'],
     ];
 }
-
-function ts_error_info(string $code): array {
-    $all=ts_error_catalog();
-    return $all[$code]??$all['ERR-999'];
-}
-function ts_error_text(string $code): string {
-    [$title,$message,$fix]=ts_error_info($code);
-    return 'کد خطا: '.$code.' — '.$title.' | '.$message.' راه‌حل: '.$fix;
-}
-function ts_error_payload(string $code,array $extra=[]): array {
-    [$title,$message,$fix]=ts_error_info($code);
-    return ['ok'=>false,'code'=>$code,'error'=>$title,'message'=>$message,'help'=>$fix]+$extra;
-}
-function ts_log_internal(Throwable $e,string $code='ERR-999'): void {
-    $ref='R'.date('ymdHis').'-'.substr(hash('sha256',$e->getMessage().'|'.$e->getFile().'|'.$e->getLine()),0,8);
-    error_log("[$code][$ref] ".get_class($e).': '.$e->getMessage().' @ '.$e->getFile().':'.$e->getLine());
-}
-function ts_json_fail(string $code,int $status=400,array $extra=[]): never {
-    http_response_code($status);
-    header('Content-Type: application/json; charset=utf-8');
-    header('Cache-Control: no-store');
-    echo json_encode(ts_error_payload($code,$extra),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
-    exit;
-}
-function ts_html_fail(string $code,int $status=400,string $back=''): never {
-    http_response_code($status);
-    header('Content-Type: text/html; charset=utf-8');
-    header('Cache-Control: no-store');
-    [$title,$message,$fix]=ts_error_info($code);
-    $h=static fn($v)=>htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');
-    $backHtml=$back!==''?'<a href="'.$h($back).'" style="display:inline-block;margin-top:14px;padding:10px 14px;border-radius:10px;background:#11823b;color:#fff;text-decoration:none">بازگشت</a>':'';
-    echo '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'.$h($title).'</title></head><body style="font-family:Tahoma,Arial,sans-serif;background:#f6f8f6;color:#183425;margin:0"><main style="max-width:620px;margin:8vh auto;padding:18px"><section style="background:#fff;border:1px solid #e1e9e3;border-radius:18px;padding:20px"><div style="font-size:12px;color:#6d7a71">کد خطا: <b>'.$h($code).'</b></div><h2>'.$h($title).'</h2><p>'.$h($message).'</p><div style="background:#f1f7f2;border-radius:12px;padding:12px"><b>راه‌حل:</b> '.$h($fix).'</div>'.$backHtml.'</section></main></body></html>';
-    exit;
-}
-function ts_script_wants_json(): bool {
-    $name=strtolower(basename((string)($_SERVER['SCRIPT_NAME']??'')));
-    if(str_contains($name,'api')||in_array($name,['image_upload.php','push_subscribe.php','push_public.php','admin_alert.php'],true))return true;
-    return str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT']??'')),'application/json');
-}
-
-set_exception_handler(function(Throwable $e): void {
-    ts_log_internal($e,'ERR-999');
-    if(ts_script_wants_json()) ts_json_fail('ERR-999',500);
-    ts_html_fail('ERR-999',500,'index.php');
-});
-
-register_shutdown_function(function(): void {
-    $e=error_get_last();
-    if(!$e||!in_array($e['type']??0,[E_ERROR,E_PARSE,E_CORE_ERROR,E_COMPILE_ERROR,E_USER_ERROR,E_RECOVERABLE_ERROR],true))return;
-    error_log('[ERR-999][FATAL] '.($e['message']??'').' @ '.($e['file']??'').':'.($e['line']??0));
-    if(headers_sent())return;
-    if(ts_script_wants_json()){
-        http_response_code(500);header('Content-Type: application/json; charset=utf-8');header('Cache-Control:no-store');
-        echo json_encode(ts_error_payload('ERR-999'),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
-    }else{
-        http_response_code(500);header('Content-Type:text/html; charset=utf-8');header('Cache-Control:no-store');
-        [$t,$m,$f]=ts_error_info('ERR-999');
-        echo '<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:Tahoma,Arial,sans-serif;padding:24px"><h2>'.htmlspecialchars($t).'</h2><p>کد خطا: ERR-999</p><p>'.htmlspecialchars($m).'</p><p><b>راه‌حل:</b> '.htmlspecialchars($f).'</p></body></html>';
-    }
-});
+function ts_error_info(string $code): array {$all=ts_error_catalog();return $all[$code]??$all['ERR-999'];}
+function ts_error_text(string $code): string {[$title,$message,$fix]=ts_error_info($code);return 'کد خطا: '.$code.' — '.$title.' | '.$message.' راه‌حل: '.$fix;}
+function ts_error_payload(string $code,array $extra=[]): array {[$title,$message,$fix]=ts_error_info($code);return ['ok'=>false,'code'=>$code,'error'=>$title,'message'=>$message,'help'=>$fix]+$extra;}
+function ts_log_internal(Throwable $e,string $code='ERR-999'): void {$ref='R'.date('ymdHis').'-'.substr(hash('sha256',$e->getMessage().'|'.$e->getFile().'|'.$e->getLine()),0,8);error_log("[$code][$ref] ".get_class($e).': '.$e->getMessage().' @ '.$e->getFile().':'.$e->getLine());}
+function ts_json_fail(string $code,int $status=400,array $extra=[]): never {http_response_code($status);header('Content-Type: application/json; charset=utf-8');header('Cache-Control: no-store');echo json_encode(ts_error_payload($code,$extra),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}
+function ts_html_fail(string $code,int $status=400,string $back=''): never {http_response_code($status);header('Content-Type: text/html; charset=utf-8');header('Cache-Control: no-store');[$title,$message,$fix]=ts_error_info($code);$h=static fn($v)=>htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');$backHtml=$back!==''?'<a href="'.$h($back).'" style="display:inline-block;margin-top:14px;padding:10px 14px;border-radius:10px;background:#11823b;color:#fff;text-decoration:none">بازگشت</a>':'';echo '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'.$h($title).'</title></head><body style="font-family:Tahoma,Arial,sans-serif;background:#f6f8f6;color:#183425;margin:0"><main style="max-width:620px;margin:8vh auto;padding:18px"><section style="background:#fff;border:1px solid #e1e9e3;border-radius:18px;padding:20px"><div style="font-size:12px;color:#6d7a71">کد خطا: <b>'.$h($code).'</b></div><h2>'.$h($title).'</h2><p>'.$h($message).'</p><div style="background:#f1f7f2;border-radius:12px;padding:12px"><b>راه‌حل:</b> '.$h($fix).'</div>'.$backHtml.'</section></main></body></html>';exit;}
+function ts_script_wants_json(): bool {$name=strtolower(basename((string)($_SERVER['SCRIPT_NAME']??'')));if(str_contains($name,'api')||in_array($name,['image_upload.php','push_subscribe.php','push_public.php','admin_alert.php'],true))return true;return str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT']??'')),'application/json');}
+set_exception_handler(function(Throwable $e): void {ts_log_internal($e,'ERR-999');if(ts_script_wants_json())ts_json_fail('ERR-999',500);ts_html_fail('ERR-999',500,'index.php');});
+register_shutdown_function(function(): void {$e=error_get_last();if(!$e||!in_array($e['type']??0,[E_ERROR,E_PARSE,E_CORE_ERROR,E_COMPILE_ERROR,E_USER_ERROR,E_RECOVERABLE_ERROR],true))return;error_log('[ERR-999][FATAL] '.($e['message']??'').' @ '.($e['file']??'').':'.($e['line']??0));if(headers_sent())return;if(ts_script_wants_json()){http_response_code(500);header('Content-Type: application/json; charset=utf-8');header('Cache-Control:no-store');echo json_encode(ts_error_payload('ERR-999'),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);}else{http_response_code(500);header('Content-Type:text/html; charset=utf-8');header('Cache-Control:no-store');[$t,$m,$f]=ts_error_info('ERR-999');echo '<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:Tahoma,Arial,sans-serif;padding:24px"><h2>'.htmlspecialchars($t).'</h2><p>کد خطا: ERR-999</p><p>'.htmlspecialchars($m).'</p><p><b>راه‌حل:</b> '.htmlspecialchars($f).'</p></body></html>';}});
