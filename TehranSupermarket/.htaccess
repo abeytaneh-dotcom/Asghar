@@ -1,7 +1,7 @@
-# delivery-map-picker-v13-production-final
+# delivery-map-picker-v14-production-final
 Options -Indexes
 DirectoryIndex index.php
-<FilesMatch "^(config\.php|install\.lock\.php|admin_auth\.php|backup_cli\.php|backup_lib\.php|store_lib\.php|sms_lib\.php|coupon_lib\.php|README\.txt)$">
+<FilesMatch "^(config\.php|install\.lock\.php|admin_auth\.php|backup_cli\.php|backup_lib\.php|store_lib\.php|sms_lib\.php|coupon_lib\.php|location_resolve\.php|README\.txt)$">
   Require all denied
 </FilesMatch>
 <IfModule mod_headers.c>
