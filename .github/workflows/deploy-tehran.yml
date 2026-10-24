@@ -1,4 +1,4 @@
-# deploy-trigger-2026-10-24-ops2
+# deploy-trigger-2026-10-24-ops-complete
 name: Deploy Tehran Supermarket
 
 on:
@@ -36,7 +36,8 @@ jobs:
           set -euo pipefail
           test -n "${CPANEL_TOKEN:-}"
           find TehranSupermarket -type f -name '*.php' -print0 | xargs -0 -n1 php -l
-          node --check TehranSupermarket/assets/admin.js
+          find TehranSupermarket/assets -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+          node --check TehranSupermarket/sw.js
       - name: Ensure target directories
         shell: bash
         run: |
@@ -44,17 +45,11 @@ jobs:
           BASE="https://${CPANEL_HOST}:2083"
           AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
           mkdir_cp(){
-            local parent="$1"
-            local name="$2"
-            local out="$RUNNER_TEMP/mkdir.json"
-            curl -sS --connect-timeout 15 --max-time 60 -H "$AUTH" \
-              -H 'Content-Type: application/x-www-form-urlencoded' --request POST \
-              --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
-              --data-urlencode 'cpanel_jsonapi_apiversion=2' \
-              --data-urlencode 'cpanel_jsonapi_module=Fileman' \
-              --data-urlencode 'cpanel_jsonapi_func=mkdir' \
-              --data-urlencode "path=${parent}" --data-urlencode "name=${name}" \
-              --data-urlencode 'permissions=0755' \
+            local parent="$1" name="$2" out="$RUNNER_TEMP/mkdir.json"
+            curl -sS --connect-timeout 15 --max-time 60 -H "$AUTH" -H 'Content-Type: application/x-www-form-urlencoded' --request POST \
+              --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" --data-urlencode 'cpanel_jsonapi_apiversion=2' \
+              --data-urlencode 'cpanel_jsonapi_module=Fileman' --data-urlencode 'cpanel_jsonapi_func=mkdir' \
+              --data-urlencode "path=${parent}" --data-urlencode "name=${name}" --data-urlencode 'permissions=0755' \
               "${BASE}/json-api/cpanel" -o "$out" || true
           }
           ROOT="/home/${CPANEL_USER}/public_html"
@@ -64,8 +59,7 @@ jobs:
           mkdir_cp "$ROOT/tehran" uploads
           mkdir_cp "$ROOT/tehran/uploads" products
           VERIFY="$RUNNER_TEMP/verify.json"
-          curl -sS --fail-with-body -H "$AUTH" --get \
-            --data-urlencode 'dir=public_html/tehran' --data-urlencode 'show_hidden=1' \
+          curl -sS --fail-with-body -H "$AUTH" --get --data-urlencode 'dir=public_html/tehran' --data-urlencode 'show_hidden=1' \
             "${BASE}/execute/Fileman/list_files" -o "$VERIFY"
           test "$(jq -r '.result.status // .status // 0' "$VERIFY")" = '1'
       - name: Upload application updates
@@ -76,31 +70,34 @@ jobs:
           AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
           save_file(){
             local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
-            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 \
-              -H "$AUTH" --request POST \
-              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" \
-              --data-urlencode "content@${src}" \
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
               "${BASE}/execute/Fileman/save_file_content" -o "$out"
             test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
           }
           while IFS= read -r -d '' src; do
-            rel="${src#TehranSupermarket/}"
-            [ "$rel" = 'install.php' ] && continue
-            sub="$(dirname "$rel")"; file="$(basename "$rel")"; dir="$TARGET_DIR"
-            [ "$sub" = '.' ] || dir="$TARGET_DIR/$sub"
+            rel="${src#TehranSupermarket/}"; [ "$rel" = 'install.php' ] && continue
+            sub="$(dirname "$rel")"; file="$(basename "$rel")"; dir="$TARGET_DIR"; [ "$sub" = '.' ] || dir="$TARGET_DIR/$sub"
             save_file "$src" "$dir" "$file"
           done < <(find TehranSupermarket -type f -print0)
       - name: Verify production stays installed
         shell: bash
         run: |
           set -euo pipefail
-          HCODE=$(curl -sS -L --max-time 30 -o "$RUNNER_TEMP/home.html" -w '%{http_code}' "${PUBLIC_URL}/")
-          ACODE=$(curl -sS -L --max-time 30 -o "$RUNNER_TEMP/admin.html" -w '%{http_code}' "${PUBLIC_URL}/admin.php")
-          TCODE=$(curl -sS -L --max-time 30 -o "$RUNNER_TEMP/track.html" -w '%{http_code}' "${PUBLIC_URL}/track.php")
+          get(){ local url="$1" out="$2"; curl -sS -L --max-time 30 -o "$out" -w '%{http_code}' "$url"; }
+          HCODE=$(get "${PUBLIC_URL}/" "$RUNNER_TEMP/home.html")
+          ACODE=$(get "${PUBLIC_URL}/admin.php" "$RUNNER_TEMP/admin.html")
+          TCODE=$(get "${PUBLIC_URL}/track.php" "$RUNNER_TEMP/track.html")
+          UCODE=$(get "${PUBLIC_URL}/account.php" "$RUNNER_TEMP/account.html")
+          MCODE=$(get "${PUBLIC_URL}/manifest.webmanifest" "$RUNNER_TEMP/manifest.json")
+          SWCODE=$(get "${PUBLIC_URL}/sw.js" "$RUNNER_TEMP/sw.js")
           ICODE=$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "${PUBLIC_URL}/install.php")
-          test "$HCODE" = '200'; test "$ACODE" = '200'; test "$TCODE" = '200'; test "$ICODE" = '403'
+          test "$HCODE" = '200'; test "$ACODE" = '200'; test "$TCODE" = '200'; test "$UCODE" = '200'; test "$MCODE" = '200'; test "$SWCODE" = '200'; test "$ICODE" = '403'
           grep -Fq 'سوپرمارکت طهران' "$RUNNER_TEMP/home.html"
           grep -Fq 'پیگیری سفارش' "$RUNNER_TEMP/home.html"
           grep -Fq 'پنل مدیریت سوپرمارکت طهران' "$RUNNER_TEMP/admin.html"
           grep -Fq 'سفارشت کجاست؟' "$RUNNER_TEMP/track.html"
-          echo "DEPLOY_OK home=$HCODE admin=$ACODE track=$TCODE installer=$ICODE"
+          grep -Fq 'ورود امن با موبایل' "$RUNNER_TEMP/account.html"
+          grep -Fq 'سوپرمارکت طهران' "$RUNNER_TEMP/manifest.json"
+          grep -Fq "addEventListener('push'" "$RUNNER_TEMP/sw.js"
+          echo "DEPLOY_OK home=$HCODE admin=$ACODE track=$TCODE account=$UCODE manifest=$MCODE sw=$SWCODE installer=$ICODE"
