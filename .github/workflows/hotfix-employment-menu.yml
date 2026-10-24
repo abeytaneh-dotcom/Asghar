@@ -1,0 +1,59 @@
+name: Hotfix employment menu
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/hotfix-employment-menu.yml'
+  workflow_dispatch:
+
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch homepage menu
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('WebSaza/index.html')
+          html=p.read_text(encoding='utf-8')
+          marker='<a href="#faq">سؤالات متداول</a>'
+          link='<a href="/namayandegi/" class="ws-employment-link">استخدام در وب سازا</a>'
+          if link not in html:
+              if marker not in html:
+                  raise SystemExit('FAQ menu marker not found')
+              html=html.replace(marker, marker+'\n      '+link, 1)
+          p.write_text(html, encoding='utf-8')
+          PY
+          grep -F 'استخدام در وب سازا' WebSaza/index.html >/dev/null
+
+      - name: Deploy homepage only
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CPANEL_TOKEN"
+          RESPONSE=$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: cpanel vt6qdx8:$CPANEL_TOKEN" \
+            --request POST \
+            --data-urlencode "dir=public_html" \
+            --data-urlencode "file=index.html" \
+            --data-urlencode "content@WebSaza/index.html" \
+            "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
+          echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
+
+      - name: Verify employment link live
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 3
+          HTML=$(curl -fsS --max-time 20 "https://websaza.ir/?menu_hotfix=${GITHUB_SHA}")
+          grep -F 'استخدام در وب سازا' <<<"$HTML" >/dev/null
+          grep -F 'href="/namayandegi/"' <<<"$HTML" >/dev/null
