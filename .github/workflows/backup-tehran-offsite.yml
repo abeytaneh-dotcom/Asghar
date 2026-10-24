@@ -3,7 +3,7 @@ name: Tehran Offsite Backup
 on:
   schedule:
     - cron: '17 2 * * *'
-  workflow_dispatch:
+  workflow_dispatch: {}
   push:
     branches: [main]
     paths:
@@ -23,37 +23,35 @@ jobs:
       PUBLIC_URL: https://websaza.ir/tehran/
     steps:
       - name: Trigger application backup if due
+        shell: bash
         run: |
           set -euo pipefail
           curl -fsSL --max-time 30 "$PUBLIC_URL" >/dev/null
       - name: Find newest database backup
         id: latest
+        shell: bash
         run: |
           set -euo pipefail
           AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
-          curl -fsS -H "$AUTH" --get \
-            --data-urlencode 'dir=public_html/tehran/storage/backups' \
-            --data-urlencode 'show_hidden=0' \
-            "https://${CPANEL_HOST}:2083/execute/Fileman/list_files" > /tmp/list.json
+          curl -fsS -H "$AUTH" --get --data-urlencode 'dir=public_html/tehran/storage/backups' --data-urlencode 'show_hidden=0' "https://${CPANEL_HOST}:2083/execute/Fileman/list_files" > /tmp/list.json
           test "$(jq -r '.result.status // .status // 0' /tmp/list.json)" = '1'
           FILE=$(jq -r '[.result.data[]? | select((.file // .name // "") | startswith("db-")) | (.file // .name)] | sort | last // empty' /tmp/list.json)
           test -n "$FILE"
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
       - name: Download backup from cPanel
+        shell: bash
+        env:
+          FILE: ${{ steps.latest.outputs.file }}
         run: |
           set -euo pipefail
           AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
-          FILE='${{ steps.latest.outputs.file }}'
-          ENCODED=$(python3 - <<'PY'
-import os, urllib.parse
-p=f"/home/{os.environ['CPANEL_USER']}/public_html/tehran/storage/backups/{os.environ['FILE']}"
-print(urllib.parse.quote(p,safe=''))
-PY
-          )
+          FULL="/home/${CPANEL_USER}/public_html/tehran/storage/backups/${FILE}"
+          ENCODED=$(python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["FULL"],safe=""))')
           curl -fsSL --max-time 120 -H "$AUTH" "https://${CPANEL_HOST}:2083/download?file=${ENCODED}" -o "/tmp/${FILE}"
           test -s "/tmp/${FILE}"
         env:
           FILE: ${{ steps.latest.outputs.file }}
+          FULL: /home/${{ env.CPANEL_USER }}/public_html/tehran/storage/backups/${{ steps.latest.outputs.file }}
       - name: Store offsite artifact
         uses: actions/upload-artifact@v4
         with:
