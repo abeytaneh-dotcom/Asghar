@@ -1,0 +1,28 @@
+name: Verify Tehran Watermark Live
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'TehranSupermarket/assets/style.css'
+      - '.github/workflows/verify-tehran-watermark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify watermark in live production CSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://websaza.ir/tehran/assets/style.css?wm=${GITHUB_SHA}"
+          curl -fsSL --connect-timeout 15 --max-time 30 -H 'Cache-Control: no-cache' "$URL" -o /tmp/style.css
+          test "$(wc -c < /tmp/style.css)" -gt 1000
+          grep -Fq 'body::after' /tmp/style.css
+          grep -Fq 'تستی — جهت سفارش تماس بگیرید — websaza.ir' /tmp/style.css
+          echo "WATERMARK_LIVE_OK bytes=$(wc -c < /tmp/style.css)"
