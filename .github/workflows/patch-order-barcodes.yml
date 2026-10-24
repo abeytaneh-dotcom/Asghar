@@ -1,0 +1,121 @@
+name: Patch Order Barcodes
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/patch-order-barcodes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Patch schema, checkout and admin order details
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root=Path('TehranSupermarket')
+
+          # 1) schema.php: add barcode snapshot column to order_items for existing installs.
+          p=root/'schema.php'
+          s=p.read_text()
+          marker="    if ($alters) {\n        $pdo->exec('ALTER TABLE products '.implode(', ', $alters));\n    }\n"
+          add="""    if ($alters) {
+        $pdo->exec('ALTER TABLE products '.implode(', ', $alters));
+    }
+
+    // Keep a barcode snapshot on each ordered line so old orders remain scannable
+    // even if the product barcode is edited later.
+    try {
+        $orderColumns = [];
+        foreach ($pdo->query('SHOW COLUMNS FROM order_items')->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $orderColumns[$row['Field']] = true;
+        }
+        if (!isset($orderColumns['barcode'])) {
+            $pdo->exec("ALTER TABLE order_items ADD COLUMN barcode VARCHAR(100) NULL AFTER product_name");
+        }
+    } catch (Throwable $e) {
+        // Fresh installs may not have order_items yet; installer creates it later.
+    }
+"""
+          if 'orderColumns' not in s:
+              if marker not in s: raise SystemExit('schema marker not found')
+              s=s.replace(marker,add)
+              p.write_text(s)
+
+          # 2) index.php: snapshot barcode into every new order item.
+          p=root/'index.php'
+          s=p.read_text()
+          s=s.replace("SELECT id,name,price,stock,active FROM products WHERE id=? FOR UPDATE","SELECT id,name,barcode,price,stock,active FROM products WHERE id=? FOR UPDATE")
+          s=s.replace("$items[]=['id'=>(int)$p['id'],'name'=>$p['name'],'price'=>(int)$p['price'],'qty'=>(int)$qty];","$items[]=['id'=>(int)$p['id'],'name'=>$p['name'],'barcode'=>(string)($p['barcode']??''),'price'=>(int)$p['price'],'qty'=>(int)$qty];")
+          s=s.replace("INSERT INTO order_items(order_id,product_id,product_name,unit_price,quantity) VALUES(?,?,?,?,?)","INSERT INTO order_items(order_id,product_id,product_name,barcode,unit_price,quantity) VALUES(?,?,?,?,?,?)")
+          s=s.replace("$ins->execute([$orderId,$it['id'],$it['name'],$it['price'],$it['qty']]);","$ins->execute([$orderId,$it['id'],$it['name'],$it['barcode']!==''?$it['barcode']:null,$it['price'],$it['qty']]);")
+          p.write_text(s)
+
+          # 3) admin.php: show snapshot barcode, falling back to current product barcode for old orders.
+          p=root/'admin.php'
+          s=p.read_text()
+          old='SELECT order_id,product_id,product_name,unit_price,quantity FROM order_items WHERE order_id IN ($ph) ORDER BY id ASC'
+          new='SELECT oi.order_id,oi.product_id,oi.product_name,COALESCE(NULLIF(oi.barcode,\'\'),p.barcode) AS barcode,oi.unit_price,oi.quantity FROM order_items oi LEFT JOIN products p ON p.id=oi.product_id WHERE oi.order_id IN ($ph) ORDER BY oi.id ASC'
+          if old in s:
+              s=s.replace(old,new)
+
+          old_item="<div class=\"order-item\"><b><?=e($it['product_name'])?></b><span><?=number_format((int)$it['quantity'])?> عدد × <?=number_format((int)$it['unit_price'])?> تومان</span><strong><?=number_format((int)$it['quantity']*(int)$it['unit_price'])?> تومان</strong></div>"
+          new_item="""<div class=\"order-item\"><b><?=e($it['product_name'])?></b><span><?=number_format((int)$it['quantity'])?> عدد × <?=number_format((int)$it['unit_price'])?> تومان</span><strong><?=number_format((int)$it['quantity']*(int)$it['unit_price'])?> تومان</strong><?php if(!empty($it['barcode'])):?><div class=\"order-barcode-box\"><span>بارکد: <code><?=e($it['barcode'])?></code></span><svg class=\"order-barcode\" data-barcode=\"<?=e($it['barcode'])?>\"></svg></div><?php else:?><small class=\"muted block\">بارکد ثبت نشده</small><?php endif;?></div>"""
+          if old_item in s:
+              s=s.replace(old_item,new_item)
+          elif 'order-barcode-box' not in s:
+              raise SystemExit('order item markup marker not found')
+
+          old_scripts='<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script><script src="assets/admin.js?v=20261024-camera-v6"></script>'
+          new_scripts='''<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script><script>document.querySelectorAll('.order-barcode').forEach(function(el){var v=el.dataset.barcode||'';if(v&&window.JsBarcode){try{JsBarcode(el,v,{format:'CODE128',height:38,width:1.45,margin:4,displayValue:false});}catch(e){}}});</script><script src="assets/admin.js?v=20261024-camera-v6"></script>'''
+          if old_scripts in s:
+              s=s.replace(old_scripts,new_scripts)
+          elif 'JsBarcode.all.min.js' not in s:
+              raise SystemExit('script marker not found')
+          p.write_text(s)
+
+          # 4) style compactly for mobile order picking/scanning.
+          p=root/'assets/style.css'
+          s=p.read_text()
+          css="""
+.order-barcode-box{margin-top:8px;padding:7px 8px;background:#fff;border:1px solid #dfe7e1;border-radius:9px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}.order-barcode-box code{direction:ltr;unicode-bidi:bidi-override;font-size:12px;font-weight:700;letter-spacing:.5px}.order-barcode{display:block;max-width:210px;width:100%;height:50px;background:#fff}
+"""
+          if '.order-barcode-box{' not in s:
+              s+='\n'+css
+              p.write_text(s)
+
+          # 5) installer consistency for any future fresh install.
+          p=root/'install.php'
+          s=p.read_text()
+          s=s.replace('product_name VARCHAR(190) NOT NULL,unit_price BIGINT UNSIGNED NOT NULL','product_name VARCHAR(190) NOT NULL,barcode VARCHAR(100) NULL,unit_price BIGINT UNSIGNED NOT NULL')
+          p.write_text(s)
+          PY
+
+      - name: Validate PHP
+        run: |
+          set -euo pipefail
+          find TehranSupermarket -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Commit patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'openai-deploy-bot'
+          git config user.email 'openai-deploy-bot@users.noreply.github.com'
+          git add TehranSupermarket/schema.php TehranSupermarket/index.php TehranSupermarket/admin.php TehranSupermarket/assets/style.css TehranSupermarket/install.php
+          if git diff --cached --quiet; then
+            echo 'No changes needed.'
+            exit 0
+          fi
+          git commit -m 'Snapshot and display scannable barcodes in orders'
+          git push origin HEAD:websaza-hosting
