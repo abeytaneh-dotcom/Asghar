@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
 
-function ts_backup_dir(): string { return __DIR__.'/storage/backups'; }
+function ts_backup_dir(): string { return dirname(dirname(__DIR__)).'/tehran_backups'; }
+function ts_backup_status_shadow(): string { return __DIR__.'/storage/backups/backup-status.json'; }
 function ts_backup_due(): bool {
     $status=ts_backup_dir().'/backup-status.json';
     return !is_file($status) || time()-(int)@filemtime($status) > 20*3600;
@@ -17,7 +18,6 @@ function ts_schedule_auto_backup(PDO $pdo): void {
 }
 function ts_run_backup(PDO $pdo): array {
     $dir=ts_backup_dir();if(!is_dir($dir)&&!mkdir($dir,0700,true))throw new RuntimeException('backup dir');@chmod($dir,0700);
-    @file_put_contents($dir.'/.htaccess',"Require all denied\nDeny from all\nOptions -Indexes\n",LOCK_EX);
     $stamp=date('Y-m-d_His');$sqlFile=$dir.'/db-'.$stamp.'.sql';$fh=fopen($sqlFile,'wb');if(!$fh)throw new RuntimeException('backup file');
     fwrite($fh,"SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\n");
     $tables=$pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
@@ -31,5 +31,8 @@ function ts_run_backup(PDO $pdo): array {
     $uploadsFile=null;$uploads=__DIR__.'/uploads/products';$weekly=(int)date('N')===7;
     if($weekly&&is_dir($uploads)&&class_exists('ZipArchive')){$zp=$dir.'/uploads-'.date('Y-m-d').'.zip';$zip=new ZipArchive();if($zip->open($zp,ZipArchive::CREATE|ZipArchive::OVERWRITE)===true){$it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($uploads,FilesystemIterator::SKIP_DOTS));foreach($it as $f){if($f->isFile()){$full=$f->getPathname();$zip->addFile($full,substr($full,strlen($uploads)+1));}}$zip->close();@chmod($zp,0600);$uploadsFile=basename($zp);}}
     $now=time();foreach(glob($dir.'/db-*.sql*')?:[] as $f)if(is_file($f)&&$now-filemtime($f)>14*86400)@unlink($f);$zips=glob($dir.'/uploads-*.zip')?:[];usort($zips,fn($a,$b)=>filemtime($b)<=>filemtime($a));foreach(array_slice($zips,6) as $f)@unlink($f);
-    $status=['ok'=>true,'finished_at'=>date('Y-m-d H:i:s'),'database_file'=>basename($dbOut),'database_bytes'=>(int)(filesize($dbOut)?:0),'uploads_file'=>$uploadsFile];@file_put_contents($dir.'/backup-status.json',json_encode($status,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT),LOCK_EX);@chmod($dir.'/backup-status.json',0600);return $status;
+    $status=['ok'=>true,'finished_at'=>date('Y-m-d H:i:s'),'database_file'=>basename($dbOut),'database_bytes'=>(int)(filesize($dbOut)?:0),'uploads_file'=>$uploadsFile,'storage'=>'outside_webroot'];
+    $json=json_encode($status,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);@file_put_contents($dir.'/backup-status.json',$json,LOCK_EX);@chmod($dir.'/backup-status.json',0600);
+    $shadowDir=dirname(ts_backup_status_shadow());if(!is_dir($shadowDir))@mkdir($shadowDir,0700,true);@file_put_contents($shadowDir.'/.htaccess',"Require all denied\nDeny from all\nOptions -Indexes\n",LOCK_EX);@file_put_contents(ts_backup_status_shadow(),$json,LOCK_EX);@chmod(ts_backup_status_shadow(),0600);
+    return $status;
 }
