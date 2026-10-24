@@ -70,6 +70,14 @@ if($action==='barcode_lookup'){
     $st=$pdo->prepare('SELECT id,barcode,name,brand,quantity_label,category,image_path,image_source,price,stock,active FROM products WHERE barcode=? LIMIT 1');$st->execute([$barcode]);$p=$st->fetch();
     out(['ok'=>true,'found'=>(bool)$p,'product'=>$p?:null]);
 }
+if($action==='order_items'){
+    $orderId=max(0,(int)($_GET['order_id']??0));
+    if($orderId<=0)out(['ok'=>false,'error'=>'شماره سفارش نامعتبر است.'],422);
+    $st=$pdo->prepare('SELECT oi.product_id,oi.product_name,oi.unit_price,oi.quantity,p.barcode FROM order_items oi LEFT JOIN products p ON p.id=oi.product_id WHERE oi.order_id=? ORDER BY oi.id ASC');
+    $st->execute([$orderId]);
+    $items=$st->fetchAll();
+    out(['ok'=>true,'order_id'=>$orderId,'items'=>$items]);
+}
 if($action==='image_search'){
     $q=trim((string)($_GET['q']??'')); if(mb_strlen($q)<2)out(['ok'=>false,'error'=>'حداقل ۲ حرف بنویسید.'],422);
     $items=array_merge(bing_source_images($q),off_images($q));
