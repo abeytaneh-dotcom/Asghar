@@ -1,6 +1,10 @@
-# safe-errors-v15-production
+# safe-errors-v16-production
 Options -Indexes
 DirectoryIndex index.php
+<IfModule mod_rewrite.c>
+ RewriteEngine On
+ RewriteRule ^install\.php$ error.php?s=403 [END,QSA]
+</IfModule>
 ErrorDocument 403 /tehran/error.php?s=403
 ErrorDocument 404 /tehran/error.php?s=404
 ErrorDocument 413 /tehran/error.php?s=413
