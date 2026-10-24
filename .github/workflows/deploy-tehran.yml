@@ -1,4 +1,4 @@
-# Tehran production deploy + smoke tests
+# Tehran production deploy + smoke/error-contract tests
 name: Deploy Tehran Supermarket
 
 on:
@@ -38,8 +38,11 @@ jobs:
           find TehranSupermarket -type f -name '*.php' -print0 | xargs -0 -n1 php -l
           find TehranSupermarket/assets -type f -name '*.js' -print0 | xargs -0 -n1 node --check
           node --check TehranSupermarket/sw.js
+          test -s TehranSupermarket/error_bootstrap.php
+          test -s TehranSupermarket/error.php
           test -s TehranSupermarket/assets/leaflet/leaflet.js
           test -s TehranSupermarket/assets/leaflet/leaflet.css
+          ! grep -RniE 'console\.error\(' TehranSupermarket/assets --include='*.js'
       - name: Ensure target directories
         shell: bash
         run: |
@@ -87,7 +90,7 @@ jobs:
             sub="$(dirname "$rel")"; file="$(basename "$rel")"; dir="$TARGET_DIR"; [ "$sub" = '.' ] || dir="$TARGET_DIR/$sub"
             save_file "$src" "$dir" "$file"
           done < <(find TehranSupermarket -type f -print0)
-      - name: Verify production and delivery map
+      - name: Verify production, map and safe errors
         shell: bash
         run: |
           set -euo pipefail
@@ -101,9 +104,13 @@ jobs:
           LJCODE=$(get "${PUBLIC_URL}/assets/leaflet/leaflet.js?v=1.9.4" "$RUNNER_TEMP/leaflet.js")
           LCCODE=$(get "${PUBLIC_URL}/assets/leaflet/leaflet.css?v=1.9.4" "$RUNNER_TEMP/leaflet.css")
           MAPCODE=$(get "${PUBLIC_URL}/map_tile.php?z=15&x=21096&y=13254" "$RUNNER_TEMP/map.png")
-          ICODE=$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "${PUBLIC_URL}/install.php")
-          echo "HTTP home=$HCODE admin=$ACODE track=$TCODE account=$UCODE manifest=$MCODE sw=$SWCODE leaflet_js=$LJCODE leaflet_css=$LCCODE map=$MAPCODE installer=$ICODE"
-          test "$HCODE" = '200'; test "$ACODE" = '200'; test "$TCODE" = '200'; test "$UCODE" = '200'; test "$MCODE" = '200'; test "$SWCODE" = '200'; test "$LJCODE" = '200'; test "$LCCODE" = '200'; test "$MAPCODE" = '200'; test "$ICODE" = '403'
+          ICODE=$(get "${PUBLIC_URL}/install.php" "$RUNNER_TEMP/installer.html")
+          NFCode=$(get "${PUBLIC_URL}/__safe_error_probe_missing_404" "$RUNNER_TEMP/404.html")
+          SYNCCODE=$(get "${PUBLIC_URL}/pyramid_api.php?action=status" "$RUNNER_TEMP/sync.json")
+          PAYCODE=$(get "${PUBLIC_URL}/payment_start.php?t=bad" "$RUNNER_TEMP/payment.html")
+          echo "HTTP home=$HCODE admin=$ACODE track=$TCODE account=$UCODE manifest=$MCODE sw=$SWCODE leaflet_js=$LJCODE leaflet_css=$LCCODE map=$MAPCODE installer=$ICODE missing=$NFCode sync=$SYNCCODE payment=$PAYCODE"
+          test "$HCODE" = '200'; test "$ACODE" = '200'; test "$TCODE" = '200'; test "$UCODE" = '200'; test "$MCODE" = '200'; test "$SWCODE" = '200'; test "$LJCODE" = '200'; test "$LCCODE" = '200'; test "$MAPCODE" = '200'
+          test "$ICODE" = '403'; test "$NFCode" = '404'; test "$SYNCCODE" = '401'; test "$PAYCODE" = '404'
           grep -Fq 'سوپرمارکت طهران' "$RUNNER_TEMP/home.html"
           grep -Fq 'پیگیری سفارش' "$RUNNER_TEMP/home.html"
           grep -Fq 'assets/leaflet/leaflet.js' "$RUNNER_TEMP/home.html"
@@ -113,7 +120,12 @@ jobs:
           grep -Fq 'سوپرمارکت طهران' "$RUNNER_TEMP/manifest.json"
           grep -Fq "addEventListener('push'" "$RUNNER_TEMP/sw.js"
           grep -Fq 'Leaflet' "$RUNNER_TEMP/leaflet.js"
+          grep -Fq 'HTTP-403' "$RUNNER_TEMP/installer.html"
+          grep -Fq 'HTTP-404' "$RUNNER_TEMP/404.html"
+          grep -Fq 'SYNC-701' "$RUNNER_TEMP/sync.json"
+          grep -Fq 'PAY-401' "$RUNNER_TEMP/payment.html"
+          ! grep -Eiq 'SQLSTATE|Stack trace|Fatal error|Uncaught|/home/|PDOException|mysqli|vendor/' "$RUNNER_TEMP/installer.html" "$RUNNER_TEMP/404.html" "$RUNNER_TEMP/sync.json" "$RUNNER_TEMP/payment.html"
           test "$(wc -c < "$RUNNER_TEMP/leaflet.js")" -gt 50000
           test "$(wc -c < "$RUNNER_TEMP/map.png")" -gt 500
           file "$RUNNER_TEMP/map.png" | grep -Eiq 'PNG|image data'
-          echo "DEPLOY_OK map_png_bytes=$(wc -c < "$RUNNER_TEMP/map.png")"
+          echo "DEPLOY_OK map_png_bytes=$(wc -c < "$RUNNER_TEMP/map.png") safe_error_contracts=ok"
