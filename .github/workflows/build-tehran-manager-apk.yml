@@ -4,12 +4,15 @@ on:
   push:
     branches: [websaza-hosting]
     paths:
-      - 'TehranManagerApp/**'
+      - 'TehranManagerApp/app/**'
+      - 'TehranManagerApp/build.gradle'
+      - 'TehranManagerApp/settings.gradle'
+      - 'TehranManagerApp/gradle.properties'
       - '.github/workflows/build-tehran-manager-apk.yml'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -64,13 +67,32 @@ jobs:
         run: |
           set -euo pipefail
           gradle -p TehranManagerApp :app:assembleRelease --no-daemon --stacktrace
-          mkdir -p dist
+          mkdir -p dist TehranManagerApp/releases
           cp TehranManagerApp/app/build/outputs/apk/release/app-release.apk dist/TehranManager-v1.0.0.apk
+          cp dist/TehranManager-v1.0.0.apk TehranManagerApp/releases/Tehran-Manager.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs dist/TehranManager-v1.0.0.apk
-          sha256sum dist/TehranManager-v1.0.0.apk > dist/TehranManager-v1.0.0.sha256.txt
+          SHA=$(sha256sum dist/TehranManager-v1.0.0.apk | awk '{print $1}')
+          SIZE=$(stat -c%s dist/TehranManager-v1.0.0.apk)
+          printf 'version=1.0.0\nsha256=%s\nbytes=%s\nbuilt_at=%s\n' "$SHA" "$SIZE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > TehranManagerApp/releases/release-info.txt
+          printf '%s  %s\n' "$SHA" 'TehranManager-v1.0.0.apk' > dist/TehranManager-v1.0.0.sha256.txt
+          unzip -t dist/TehranManager-v1.0.0.apk >/dev/null
           test -s dist/TehranManager-v1.0.0.apk
 
-      - name: Upload APK
+      - name: Publish installable APK to branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'abeytaneh-dotcom'
+          git config user.email 'abeytaneh@gmail.com'
+          git add TehranManagerApp/releases/Tehran-Manager.apk TehranManagerApp/releases/release-info.txt
+          if git diff --cached --quiet; then
+            echo 'APK output unchanged.'
+          else
+            git commit -m 'Publish Tehran manager APK v1.0.0'
+            git push origin HEAD:websaza-hosting
+          fi
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: TehranManager-APK
