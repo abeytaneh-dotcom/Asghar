@@ -44,7 +44,7 @@ async function normalizeProductPhoto(file){
     if(!blob) return file;
     return new File([blob],`product_${Date.now()}.${ext}`,{type:blob.type||`image/${ext}`,lastModified:Date.now()});
   }catch(_e){
-    return file; // HEIC/HEIF/AVIF may be undecodable in the browser; server-side Imagick gets the original.
+    return file;
   }finally{try{source?.close?.();}catch(_e){}}
 }
 async function uploadProductPhoto(file){
@@ -106,6 +106,55 @@ $('#searchImages')?.addEventListener('click',searchImages);nameInput?.addEventLi
 imageFile?.addEventListener('change',async e=>{const f=e.target.files?.[0];if(f)await uploadProductPhoto(f);});
 productForm?.addEventListener('submit',e=>{if(productImageUploading){e.preventDefault();alert('عکس هنوز در حال تبدیل و آپلود است. بعد از نمایش پیام «عکس آماده شد» دوباره ذخیره محصول را بزنید.');return;}if(productImageUploadFailed){e.preventDefault();alert('عکس انتخاب‌شده هنوز روی سرور ذخیره نشده است. لطفاً دوباره عکس را انتخاب کنید.');}});
 $('#newProduct')?.addEventListener('click',()=>{productForm.reset();$('#product_id').value='0';$('#selected_image_url').value='';$('#selected_image_source').value='';selectedPreview.innerHTML='';results.innerHTML='';status.textContent='بعد از نوشتن نام، «نمایش عکس‌ها» را بزنید.';$('#saveProduct').textContent='ثبت محصول';productImageUploading=false;productImageUploadFailed=false;setScan('فرم آماده محصول جدید است.');barcode.focus();});
+
+let jsBarcodePromise=null;
+function loadJsBarcode(){
+  if(window.JsBarcode)return Promise.resolve();
+  if(jsBarcodePromise)return jsBarcodePromise;
+  jsBarcodePromise=new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js';
+    s.onload=()=>resolve();s.onerror=()=>reject(new Error('کتابخانه نمایش بارکد لود نشد.'));
+    document.head.appendChild(s);
+  });
+  return jsBarcodePromise;
+}
+async function decorateOrderBarcodes(){
+  const rows=[...document.querySelectorAll('.orders-table tbody tr')];
+  for(const row of rows){
+    const orderCell=row.querySelector('td b');
+    const m=(orderCell?.textContent||'').match(/(\d+)/);if(!m)continue;
+    const orderId=m[1];
+    try{
+      const r=await fetch(`api.php?action=order_items&order_id=${encodeURIComponent(orderId)}`,{cache:'no-store'});
+      const d=await r.json();if(!r.ok||!d?.ok)continue;
+      const nodes=[...row.querySelectorAll('.order-item')];
+      (d.items||[]).forEach((it,i)=>{
+        const node=nodes[i];if(!node)return;
+        const code=String(it.barcode||'').trim();
+        const box=document.createElement('div');
+        box.style.cssText='margin-top:7px;padding:7px 9px;border:1px dashed #b7c7bc;border-radius:9px;background:#fff;display:flex;gap:7px;align-items:center;flex-wrap:wrap';
+        if(!code){box.innerHTML='<small style="color:#8a958e">بارکد ثبت نشده</small>';node.appendChild(box);return;}
+        box.innerHTML=`<code style="direction:ltr;font-size:12px;font-weight:700;letter-spacing:.7px">${esc(code)}</code><button type="button" class="btn pale" style="padding:5px 8px;font-size:10px">نمایش بارکد</button>`;
+        const btn=box.querySelector('button');
+        btn.addEventListener('click',async()=>{
+          let wrap=box.querySelector('.screen-barcode');
+          if(wrap){wrap.remove();btn.textContent='نمایش بارکد';return;}
+          try{
+            await loadJsBarcode();
+            wrap=document.createElement('div');wrap.className='screen-barcode';wrap.style.cssText='width:100%;background:#fff;padding:8px;border-radius:8px;overflow:auto;text-align:center';
+            const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');wrap.appendChild(svg);box.appendChild(wrap);
+            JsBarcode(svg,code,{format:'CODE128',displayValue:true,height:48,margin:4,fontSize:14});
+            btn.textContent='بستن بارکد';
+          }catch(_e){alert('نمایش گرافیکی بارکد در این مرورگر آماده نشد؛ شماره بارکد همین بالاست: '+code);}
+        });
+        node.appendChild(box);
+      });
+    }catch(_e){}
+  }
+}
+
+decorateOrderBarcodes();
 if(scanmsg){scanmsg.innerHTML=`دو روش دارید: <b>اسکن زنده</b> یا <b>عکس بارکد</b> · ${SCANNER_VERSION}`;scanmsg.className='scan-status ok';}
 window.addEventListener('pagehide',closeScanner);
 })();
