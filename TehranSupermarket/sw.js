@@ -1,5 +1,5 @@
-const CACHE='tehran-pwa-v4';
-const SHELL=['/tehran/assets/style.css','/tehran/offline.html'];
+const CACHE='tehran-pwa-v5';
+const SHELL=['/tehran/offline.html'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL).catch(()=>{})));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});
 self.addEventListener('fetch',event=>{
@@ -9,6 +9,9 @@ self.addEventListener('fetch',event=>{
   if(/\/(admin|api|image_upload|pyramid|backup|install|track|reorder|courier|payment|account|push_)/.test(p))return;
   if(req.mode==='navigate'){
     event.respondWith(fetch(req,{cache:'no-store'}).catch(()=>caches.match('/tehran/offline.html')));return;
+  }
+  if(p==='/tehran/assets/style.css'){
+    event.respondWith(fetch(req,{cache:'no-store'}).then(r=>{if(r.ok){const copy=r.clone();caches.open(CACHE).then(c=>c.put(req,copy));}return r;}).catch(()=>caches.match(req)));return;
   }
   if(p.startsWith('/tehran/assets/')||p.includes('/uploads/products/')){
     event.respondWith(caches.match(req).then(hit=>hit||fetch(req).then(r=>{if(r.ok){const copy=r.clone();caches.open(CACHE).then(c=>c.put(req,copy));}return r;})));
