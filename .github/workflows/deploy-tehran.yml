@@ -1,4 +1,4 @@
-# deploy-trigger-2026-10-24-gps-reject-coarse
+# Tehran production deploy + smoke tests
 name: Deploy Tehran Supermarket
 
 on:
@@ -38,6 +38,8 @@ jobs:
           find TehranSupermarket -type f -name '*.php' -print0 | xargs -0 -n1 php -l
           find TehranSupermarket/assets -type f -name '*.js' -print0 | xargs -0 -n1 node --check
           node --check TehranSupermarket/sw.js
+          test -s TehranSupermarket/assets/leaflet/leaflet.js
+          test -s TehranSupermarket/assets/leaflet/leaflet.css
       - name: Ensure target directories
         shell: bash
         run: |
@@ -55,6 +57,8 @@ jobs:
           ROOT="/home/${CPANEL_USER}/public_html"
           mkdir_cp "$ROOT" tehran
           mkdir_cp "$ROOT/tehran" assets
+          mkdir_cp "$ROOT/tehran/assets" leaflet
+          mkdir_cp "$ROOT/tehran/assets/leaflet" images
           mkdir_cp "$ROOT/tehran" storage
           mkdir_cp "$ROOT/tehran" uploads
           mkdir_cp "$ROOT/tehran/uploads" products
@@ -80,7 +84,7 @@ jobs:
             sub="$(dirname "$rel")"; file="$(basename "$rel")"; dir="$TARGET_DIR"; [ "$sub" = '.' ] || dir="$TARGET_DIR/$sub"
             save_file "$src" "$dir" "$file"
           done < <(find TehranSupermarket -type f -print0)
-      - name: Verify production stays installed
+      - name: Verify production and delivery map
         shell: bash
         run: |
           set -euo pipefail
@@ -91,13 +95,22 @@ jobs:
           UCODE=$(get "${PUBLIC_URL}/account.php" "$RUNNER_TEMP/account.html")
           MCODE=$(get "${PUBLIC_URL}/manifest.webmanifest" "$RUNNER_TEMP/manifest.json")
           SWCODE=$(get "${PUBLIC_URL}/sw.js" "$RUNNER_TEMP/sw.js")
+          LJCODE=$(get "${PUBLIC_URL}/assets/leaflet/leaflet.js?v=1.9.4" "$RUNNER_TEMP/leaflet.js")
+          LCCODE=$(get "${PUBLIC_URL}/assets/leaflet/leaflet.css?v=1.9.4" "$RUNNER_TEMP/leaflet.css")
+          MAPCODE=$(get "${PUBLIC_URL}/map_tile.php?z=15&x=21096&y=13254" "$RUNNER_TEMP/map.png")
           ICODE=$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "${PUBLIC_URL}/install.php")
-          test "$HCODE" = '200'; test "$ACODE" = '200'; test "$TCODE" = '200'; test "$UCODE" = '200'; test "$MCODE" = '200'; test "$SWCODE" = '200'; test "$ICODE" = '403'
+          test "$HCODE" = '200'; test "$ACODE" = '200'; test "$TCODE" = '200'; test "$UCODE" = '200'; test "$MCODE" = '200'; test "$SWCODE" = '200'; test "$LJCODE" = '200'; test "$LCCODE" = '200'; test "$MAPCODE" = '200'; test "$ICODE" = '403'
           grep -Fq 'سوپرمارکت طهران' "$RUNNER_TEMP/home.html"
           grep -Fq 'پیگیری سفارش' "$RUNNER_TEMP/home.html"
+          grep -Fq 'انتخاب لوکیشن تحویل' "$RUNNER_TEMP/home.html"
+          grep -Fq 'assets/leaflet/leaflet.js' "$RUNNER_TEMP/home.html"
           grep -Fq 'پنل مدیریت سوپرمارکت طهران' "$RUNNER_TEMP/admin.html"
           grep -Fq 'سفارشت کجاست؟' "$RUNNER_TEMP/track.html"
           grep -Fq 'ورود امن با موبایل' "$RUNNER_TEMP/account.html"
           grep -Fq 'سوپرمارکت طهران' "$RUNNER_TEMP/manifest.json"
           grep -Fq "addEventListener('push'" "$RUNNER_TEMP/sw.js"
-          echo "DEPLOY_OK home=$HCODE admin=$ACODE track=$TCODE account=$UCODE manifest=$MCODE sw=$SWCODE installer=$ICODE"
+          grep -Fq 'Leaflet' "$RUNNER_TEMP/leaflet.js"
+          test "$(wc -c < "$RUNNER_TEMP/leaflet.js")" -gt 50000
+          test "$(wc -c < "$RUNNER_TEMP/map.png")" -gt 500
+          file "$RUNNER_TEMP/map.png" | grep -Eiq 'PNG|image data'
+          echo "DEPLOY_OK home=$HCODE admin=$ACODE track=$TCODE account=$UCODE manifest=$MCODE sw=$SWCODE leaflet_js=$LJCODE leaflet_css=$LCCODE map=$MAPCODE installer=$ICODE"
