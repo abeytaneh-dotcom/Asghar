@@ -3,10 +3,26 @@ DirectoryIndex index.html
 
 RewriteEngine On
 
-# Canonical protocol and host.
+# Canonical WebSaza host.
+RewriteCond %{HTTP_HOST} ^(?:www\.)?websaza\.ir$ [NC]
 RewriteCond %{HTTPS} !=on [OR]
-RewriteCond %{HTTP_HOST} !^websaza\.ir$ [NC]
+RewriteCond %{HTTP_HOST} ^www\.websaza\.ir$ [NC]
 RewriteRule ^ https://websaza.ir%{REQUEST_URI} [R=301,L,NE]
+
+# Canonical Niazestan host once the registered domain is delegated here.
+RewriteCond %{HTTP_HOST} ^(?:www\.)?niazestan\.ir$ [NC]
+RewriteCond %{HTTPS} !=on [OR]
+RewriteCond %{HTTP_HOST} ^www\.niazestan\.ir$ [NC]
+RewriteRule ^ https://niazestan.ir%{REQUEST_URI} [R=301,L,NE]
+
+# Unknown hosts still canonicalize to WebSaza.
+RewriteCond %{HTTP_HOST} !^websaza\.ir$ [NC]
+RewriteCond %{HTTP_HOST} !^niazestan\.ir$ [NC]
+RewriteRule ^ https://websaza.ir%{REQUEST_URI} [R=301,L,NE]
+
+# On the standalone Niazestan domain, the root opens the marketplace directly.
+RewriteCond %{HTTP_HOST} ^niazestan\.ir$ [NC]
+RewriteRule ^$ nz-entry.php [L,QSA]
 
 # Never expose internal data, backups or database files.
 RewriteRule ^\.marketplace-data(?:/|$) - [R=404,L]
