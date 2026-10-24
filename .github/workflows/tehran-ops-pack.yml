@@ -1,0 +1,54 @@
+name: Tehran Operations Pack
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/tehran-ops-pack.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Patch admin and tracking links
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/admin.php');s=p.read_text()
+          if 'admin_store.php' not in s:
+              s=s.replace('<a href="pyramid.php">🔄 پیرامید</a>','<a href="admin_store.php">⚙️ فروشگاه و ارسال</a><a href="admin_discounts.php">💸 تخفیف‌ها</a><a href="pyramid.php">🔄 پیرامید</a>')
+          if 'assets/order-alert.js' not in s:
+              i=s.rfind('</body>');s=s[:i]+'<script src="assets/order-alert.js?v=20261024"></script>'+s[i:]
+          p.write_text(s)
+
+          p=Path('TehranSupermarket/admin_orders.php');s=p.read_text()
+          if 'assets/order-alert.js' not in s:
+              i=s.rfind('</body>');s=s[:i]+'<script src="assets/order-alert.js?v=20261024"></script>'+s[i:]
+          p.write_text(s)
+
+          p=Path('TehranSupermarket/track.php');s=p.read_text()
+          old='<div class="track-card"><h3>کالاهای سفارش</h3><?php foreach($items as $it):?>'
+          new='<div class="track-card"><h3>کالاهای سفارش</h3><a class="btn wide" style="margin-bottom:12px" href="reorder.php?order=<?=(int)$order[\'id\']?>">🔁 همین خرید را دوباره انجام بده</a><?php foreach($items as $it):?>'
+          if old in s:s=s.replace(old,new,1)
+          old2='<p><b>تحویل:</b> <?=e($order[\'delivery_slot\'])?></p><p><b>آدرس:</b>'
+          new2='<p><b>تحویل:</b> <?=e($order[\'delivery_slot\'])?></p><?php if(!empty($order[\'delivery_zone_name\'])):?><p><b>محدوده:</b> <?=e($order[\'delivery_zone_name\'])?><?php if(!empty($order[\'delivery_eta\'])):?> · <?=e($order[\'delivery_eta\'])?><?php endif;?></p><?php endif;?><p><b>آدرس:</b>'
+          if old2 in s:s=s.replace(old2,new2,1)
+          p.write_text(s)
+          PY
+      - name: Validate
+        run: |
+          set -euo pipefail
+          find TehranSupermarket -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          node --check TehranSupermarket/assets/order-alert.js
+      - name: Commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name openai-deploy-bot
+          git config user.email openai-deploy-bot@users.noreply.github.com
+          git add TehranSupermarket/admin.php TehranSupermarket/admin_orders.php TehranSupermarket/track.php
+          if ! git diff --cached --quiet; then git commit -m 'Connect store settings discounts alerts and reorder UI'; git push origin HEAD:websaza-hosting; fi
