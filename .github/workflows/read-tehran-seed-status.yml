@@ -1,0 +1,31 @@
+name: Read Tehran Seed Status
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/read-tehran-seed-status'
+permissions:
+  contents: read
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran/storage
+    steps:
+      - name: Read aggregate seed status
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get \
+            --data-urlencode "dir=${TARGET_DIR}" --data-urlencode 'file=pyramid_seed_status.json' \
+            "${BASE}/execute/Fileman/get_file_content" -o "$RUNNER_TEMP/status.json"
+          CONTENT=$(jq -r '.result.data.content // .data.content // empty' "$RUNNER_TEMP/status.json")
+          test -n "$CONTENT"
+          printf '%s\n' "$CONTENT" | jq .
+          printf '%s\n' "$CONTENT" | jq -e '.ok == true and .seed_done == true and ((.products.stock10|tonumber) >= 9807)' >/dev/null
