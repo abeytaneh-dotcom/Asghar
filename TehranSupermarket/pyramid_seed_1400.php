@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+// One-time catalog seed; deployment trigger 2026-10-26.
 
 function ts_seed_pyramid_1400(): void {
     static $ran = false;
