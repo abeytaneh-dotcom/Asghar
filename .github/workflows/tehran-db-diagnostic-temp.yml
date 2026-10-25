@@ -11,33 +11,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
-      - name: Test public barcode product lookup
+      - name: Test product name lookup and image fields
         shell: bash
         run: |
           set -Eeuo pipefail
-          OUT="$RUNNER_TEMP/out"; mkdir -p "$OUT"
-          python3 - "$OUT" <<'PY'
-          import sys,json,urllib.parse,urllib.request,ssl,pathlib
-          out=pathlib.Path(sys.argv[1]);ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
+          python3 - <<'PY'
+          import json,urllib.parse,urllib.request,ssl,concurrent.futures
+          names=['جيف','شاني قوطي','آدامس فايو','روغن ذرت رويال','چايي دلفين معطر','مانستر سبز هپي','تريدنت توت فرنگي']
+          ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
           ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
-          samples=['051500255162','012000002632','022000005120','037203018518','046708899034']
-          endpoints=['/mobile/v2/product-variation/search','/mobile/v3/search','/mobile/v3/search/suggest']
-          for ep in endpoints:
-            for b in samples:
-              qs=urllib.parse.urlencode({'query':b,'latitude':'35.757453','longitude':'51.409882','page':0,'page_size':10,'size':10,'fetch_filters':1,'firstPage':'true'})
-              u='https://svc.snapp.market'+ep+'?'+qs
-              try:
-                req=urllib.request.Request(u,headers={'User-Agent':ua,'Accept':'application/json','Origin':'https://snapp.market','Referer':'https://snapp.market/'})
-                with urllib.request.urlopen(req,timeout=25,context=ctx) as r: raw=r.read(3_000_000); code=r.status
-                txt=raw.decode('utf-8','replace'); (out/f'{ep.split("/")[-1]}_{b}.json').write_text(txt,'utf-8')
-                try:
-                  d=json.loads(txt)
-                  print(ep,b,'HTTP',code,'keys',list(d)[:12],'preview',json.dumps(d,ensure_ascii=False)[:800])
-                except: print(ep,b,'HTTP',code,'text',txt[:800])
-              except Exception as e: print(ep,b,'ERROR',type(e).__name__,e)
+          def one(name):
+            qs=urllib.parse.urlencode({'query':name,'latitude':'35.757453','longitude':'51.409882','page':0,'page_size':20,'size':20,'fetch_filters':1,'firstPage':'true','origin':'search'})
+            u='https://svc.snapp.market/mobile/v3/search?'+qs
+            try:
+              req=urllib.request.Request(u,headers={'User-Agent':ua,'Accept':'application/json','Origin':'https://snapp.market','Referer':'https://snapp.market/'})
+              with urllib.request.urlopen(req,timeout=25,context=ctx) as r: d=json.loads(r.read(4_000_000))
+              vp=d.get('data',{}).get('vendor_product_variations',{}).get('items',[])
+              simplified=[]
+              for x in vp[:8]:
+                simplified.append({'keys':list(x.keys())[:30],'data':x})
+              return name,{'count':len(vp),'items':simplified}
+            except Exception as e:return name,{'error':f'{type(e).__name__}: {e}'}
+          with concurrent.futures.ThreadPoolExecutor(max_workers=7) as ex:
+            for n,res in ex.map(one,names):
+              print('===',n,'===')
+              print(json.dumps(res,ensure_ascii=False)[:9000])
           PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: barcode-product-lookup-test
-          path: ${{ runner.temp }}/out
-          retention-days: 1
