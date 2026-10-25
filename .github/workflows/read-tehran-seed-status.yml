@@ -11,47 +11,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Discover Digikala Jet search API
+      - name: Trace Digikala Jet search API method
         shell: bash
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
-          import re,urllib.request,ssl,concurrent.futures
-          base='https://www.digikalajet.com/assets/'
-          files=[
-            'x-lazy-shop-search.CR059PY-.js',
-            'x-lazy-searchia.BVK_bCcR.js',
-            'x-lazy-page-search-_shopid_-shop.CZLYKiR1.js',
-            'x-lazy-page-search.Csw-u6Nh.js',
-            'x-lazy-page-search.CxE5kxRb.js',
-            'x-lazy-page-v2-search.CP2GnKKz.js',
-            'x-lazy-page-result-v2-search.MaDV5pPa.js',
-            'x-lazy-page-shop-search.CKbu_gNC.js',
-          ]
+          import re,urllib.request,ssl
+          u='https://www.digikalajet.com/assets/x-app.DgWmlWEz.js'
           ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
-          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
-          def load(fn):
-            try:
-              q=urllib.request.Request(base+fn,headers={'User-Agent':ua,'Referer':'https://www.digikalajet.com/'})
-              with urllib.request.urlopen(q,timeout=25,context=ctx) as r:t=r.read(8_000_000).decode('utf-8','replace')
-              return fn,t,''
-            except Exception as e:return fn,'',f'{type(e).__name__}: {e}'
-          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
-            for fn,t,err in ex.map(load,files):
-              print('\n### FILE',fn,'bytes',len(t),'err',err)
-              if err:continue
-              vals=[]
-              for m in re.finditer(r'["\'`]([^"\'`]{3,260})["\'`]',t):
-                s=m.group(1).replace('\\/','/')
-                l=s.lower()
-                if any(k in l for k in ['search','product','catalog','suggest']) and ('/' in s or 'api' in l):vals.append(s)
-              for s in list(dict.fromkeys(vals))[:120]:print('PATH',s)
-              low=t.lower()
-              for key in ['/search','search?', 'query=', 'products', 'api_base_url']:
-                pos=0;cnt=0
-                while cnt<8:
-                  i=low.find(key,pos)
-                  if i<0:break
-                  print('CTX',key,re.sub(r'\s+',' ',t[max(0,i-500):i+1200]))
-                  pos=i+len(key);cnt+=1
+          q=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0 Chrome/141 Safari/537.36','Referer':'https://www.digikalajet.com/'})
+          with urllib.request.urlopen(q,timeout=30,context=ctx) as r:t=r.read(8_000_000).decode('utf-8','replace')
+          print('BYTES',len(t))
+          # Endpoint-like strings most likely used by search/product APIs.
+          vals=[]
+          for m in re.finditer(r'["\'`]([^"\'`]{2,240})["\'`]',t):
+            s=m.group(1).replace('\\/','/')
+            l=s.lower()
+            if any(k in l for k in ['search','product-list','searchia','products/search','v2/search','v3/search','shop/search']) and '/' in s:vals.append(s)
+          for s in list(dict.fromkeys(vals))[:500]:print('PATH',s)
+          # The result-v2 bundle imports Cs as the API method; find export mapping and nearby definition.
+          for pat in [r'\bCs\b',r'\bas Cs\b',r'Cs:',r'Cs=']:
+            print('PATTERN',pat)
+            for m in list(re.finditer(pat,t))[-12:]:print(re.sub(r'\s+',' ',t[max(0,m.start()-900):m.start()+1400]))
           PY
