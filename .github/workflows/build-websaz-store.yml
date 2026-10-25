@@ -15,111 +15,23 @@ jobs:
         shell: pwsh
         run: |
           dotnet build websaz-store\WebsazStore.csproj -c Release
-      - name: Package and generate embedded standalone dashboard
+      - name: Package native dashboard build
         shell: pwsh
         run: |
-          Add-Type -AssemblyName System.Drawing
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item websaz-store\bin\Release\net48\WebsazStore.exe dist\WebsazStore.exe
-
-          $W=1492; $H=1054
-          $bmp = New-Object System.Drawing.Bitmap($W,$H)
-          $g = [System.Drawing.Graphics]::FromImage($bmp)
-          $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-          $g.Clear([System.Drawing.Color]::FromArgb(241,247,255))
-          $white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-          $blue = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(27,104,218))
-          $nav = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(247,250,255))
-          $ink = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(25,49,82))
-          $muted = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(93,108,130))
-          $green = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(30,155,96))
-          $line = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(222,231,245),1)
-          $font9 = New-Object System.Drawing.Font('Tahoma',9,[System.Drawing.FontStyle]::Regular)
-          $font10 = New-Object System.Drawing.Font('Tahoma',10,[System.Drawing.FontStyle]::Bold)
-          $font12 = New-Object System.Drawing.Font('Tahoma',12,[System.Drawing.FontStyle]::Bold)
-          $font18 = New-Object System.Drawing.Font('Tahoma',18,[System.Drawing.FontStyle]::Bold)
-          $font22 = New-Object System.Drawing.Font('Tahoma',22,[System.Drawing.FontStyle]::Bold)
-          $sf = New-Object System.Drawing.StringFormat
-          $sf.Alignment=[System.Drawing.StringAlignment]::Center
-          $sf.LineAlignment=[System.Drawing.StringAlignment]::Center
-          $sf.FormatFlags=[System.Drawing.StringFormatFlags]::DirectionRightToLeft
-
-          function Box($x,$y,$w,$h,$brush){ $g.FillRectangle($brush,$x,$y,$w,$h); $g.DrawRectangle($line,$x,$y,$w,$h) }
-          function Txt($text,$x,$y,$w,$h,$font,$brush){ $g.DrawString($text,$font,$brush,(New-Object System.Drawing.RectangleF($x,$y,$w,$h)),$sf) }
-
-          Box 30 30 1432 115 $white
-          Box 1190 30 272 994 $nav
-          Txt 'وب ساز' 1235 48 180 44 $font22 $blue
-          Txt 'مدیریت کامل فروشگاه' 1230 88 190 26 $font9 $muted
-          Txt 'فروشگاه نمونه' 70 58 230 40 $font12 $ink
-          Box 420 55 470 52 $white
-          Txt 'جستجوی کالا، مشتری، فاکتور و ...' 440 62 430 35 $font9 $muted
-
-          $menus=@(
-            @('داشبورد',210),@('مهاجرت اختیاری',270),@('فروش',330),@('کالاها',390),@('انبار',450),@('حسابداری ساده',510),@('گزارش‌ها',570),@('دستگاه‌ها',625),@('اتصال سایت',685),@('تنظیمات',745)
-          )
-          foreach($m in $menus){ Txt $m[0] 1210 ([int]$m[1]) 235 48 $font10 $ink }
-
-          Txt 'داشبورد فروشگاه' 825 165 325 55 $font18 $ink
-          Txt 'مدیریت مستقل، آفلاین و قابل همگام‌سازی با سایت' 680 215 470 30 $font9 $muted
-
-          Box 70 255 1080 300 $white
-          Txt 'شروع مستقل و کامل فروشگاه' 680 278 430 55 $font22 $ink
-          Txt 'بدون نیاز به نصب یا اطلاعات هیچ نرم‌افزار دیگری' 660 338 450 35 $font12 $green
-          Txt 'دیتابیس محلی از اولین اجرا آماده است؛ کالا، موجودی، خرید، فروش، حساب‌ها و گزارش‌ها آفلاین کار می‌کنند.' 190 385 920 44 $font10 $muted
-          Txt 'اگر اطلاعات نرم‌افزار دیگری روی سیستم پیدا شود، فقط در صورت انتخاب شما وارد و با داده‌های موجود مچ می‌شود.' 190 430 920 44 $font10 $muted
-          Box 895 485 255 52 $blue
-          Txt 'انتقال اختیاری اطلاعات' 895 485 255 52 $font10 $white
-          Box 615 485 255 52 $nav
-          Txt 'بررسی اطلاعات محلی' 615 485 255 52 $font10 $blue
-
-          $xs=@(70,250,430,610,790,970)
-          $titles=@('اینترنت','کارتخوان / پوز','ترازو','فیش پرینتر','بارکدخوان','وب‌سایت')
-          $states=@('آماده','قابل اتصال','قابل اتصال','قابل اتصال','آماده','همگام‌سازی دوطرفه')
-          for($i=0;$i -lt 6;$i++){ Box $xs[$i] 590 165 105 $white; Txt $titles[$i] ($xs[$i]+5) 605 155 35 $font10 $ink; Txt $states[$i] ($xs[$i]+5) 647 155 30 $font9 $green }
-
-          Txt 'دسترسی سریع' 920 725 230 42 $font18 $ink
-          $q=@(
-            @('گزارش‌ها',70),@('حساب‌ها',255),@('خرید و ورود کالا',435),@('موجودی',620),@('کالاها',800),@('فروش جدید',980)
-          )
-          foreach($a in $q){ Box ([int]$a[1]) 790 170 150 $white; Txt $a[0] ([int]$a[1]+5) 825 160 58 $font12 $ink; Txt 'باز کردن' ([int]$a[1]+5) 890 160 28 $font9 $blue }
-
-          Box 1210 865 235 115 $white
-          Txt 'همیشه در کنار شما' 1220 875 215 35 $font10 $ink
-          Txt 'شروع مستقل' 1220 915 215 24 $font9 $green
-          Txt 'کارکرد آفلاین' 1220 942 215 24 $font9 $green
-          Txt 'همگام‌سازی سایت' 1220 969 215 24 $font9 $green
-
-          $jpgPath = Join-Path $PWD 'dist\dashboard.jpg'
-          $bmp.Save($jpgPath,[System.Drawing.Imaging.ImageFormat]::Jpeg)
-          $g.Dispose(); $bmp.Dispose()
-
-          $img = [System.IO.File]::ReadAllBytes($jpgPath)
-          $exePath = Join-Path $PWD 'dist\WebsazStore.exe'
-          $fs = [System.IO.File]::Open($exePath,[System.IO.FileMode]::Append,[System.IO.FileAccess]::Write,[System.IO.FileShare]::None)
-          try {
-            $fs.Write($img,0,$img.Length)
-            $marker = [System.Text.Encoding]::ASCII.GetBytes('WSUIJPG1')
-            $fs.Write($marker,0,$marker.Length)
-            $len = [System.BitConverter]::GetBytes([Int64]$img.Length)
-            $fs.Write($len,0,$len.Length)
-          } finally { $fs.Dispose() }
-          Remove-Item $jpgPath -Force
           Copy-Item websaz-store\server\websaz-sync.php dist\websaz-sync.php
           Copy-Item websaz-store\server\websaz-sync-config.sample.php dist\websaz-sync-config.sample.php
-      - name: Verify embedded dashboard trailer
+      - name: Verify Windows executable
         shell: pwsh
         run: |
-          $p = 'dist\WebsazStore.exe'
-          $bytes = [System.IO.File]::ReadAllBytes($p)
-          if ($bytes.Length -lt 16) { throw 'EXE too small' }
-          $marker = [System.Text.Encoding]::ASCII.GetString($bytes, $bytes.Length - 16, 8)
-          if ($marker -ne 'WSUIJPG1') { throw "Dashboard marker missing: $marker" }
-          $len = [System.BitConverter]::ToInt64($bytes, $bytes.Length - 8)
-          if ($len -le 0 -or $len -gt ($bytes.Length - 16)) { throw "Bad embedded image length: $len" }
-          Write-Host "Embedded dashboard bytes: $len"
+          $p='dist\WebsazStore.exe'
+          if(!(Test-Path $p)){ throw 'EXE missing' }
+          $bytes=[System.IO.File]::ReadAllBytes($p)
+          if($bytes.Length -lt 2 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A){ throw 'Invalid PE header' }
+          Write-Host "WebsazStore.exe bytes: $($bytes.Length)"
       - uses: actions/upload-artifact@v4
         with:
-          name: WebsazStore-Standalone-Windows
+          name: WebsazStore-Native-HDPI-Windows
           path: dist/*
           if-no-files-found: error
