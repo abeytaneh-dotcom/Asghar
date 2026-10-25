@@ -1,8 +1,8 @@
-name: Build Smart OBD Android APK
+name: Build Keep Awake Android APK
 on:
   push:
     paths:
-      - 'SmartOBDAndroid/**'
+      - 'keep-awake-app/**'
       - '.github/workflows/build-smart-obd-android.yml'
   workflow_dispatch:
 permissions:
@@ -16,20 +16,21 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.10.2'
       - name: Build debug APK
-        working-directory: SmartOBDAndroid
-        run: gradle --no-daemon assembleDebug
+        working-directory: keep-awake-app
+        run: gradle --no-daemon :app:assembleDebug
       - name: Verify APK
         run: |
-          test -f SmartOBDAndroid/app/build/outputs/apk/debug/app-debug.apk
-          ls -lh SmartOBDAndroid/app/build/outputs/apk/debug/app-debug.apk
+          test -f keep-awake-app/app/build/outputs/apk/debug/app-debug.apk
+          ls -lh keep-awake-app/app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: KhanehRemap-SmartOBD-Android
-          path: SmartOBDAndroid/app/build/outputs/apk/debug/app-debug.apk
+          name: KeepAwake-APK
+          path: keep-awake-app/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 90
-
-# refreshed long-lived artifact 2026-09-21
