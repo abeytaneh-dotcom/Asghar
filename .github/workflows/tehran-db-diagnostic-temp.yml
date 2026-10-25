@@ -9,64 +9,65 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 8
     steps:
-      - name: Discover public product search endpoints
+      - name: Targeted product API discovery
         shell: bash
         run: |
           set -Eeuo pipefail
           OUT="$RUNNER_TEMP/out"; mkdir -p "$OUT"
           python3 - "$OUT" <<'PY'
-          import sys,re,urllib.parse,urllib.request,ssl,pathlib
-          from urllib.parse import urljoin,urlparse
+          import sys,re,urllib.request,ssl,pathlib,concurrent.futures
           out=pathlib.Path(sys.argv[1])
+          urls={
+            'okala_search':'https://www.okala.com/_next/static/chunks/app/(app)/(PLP%20Multi)/search/page-73e3d9731f62c5c2.js',
+            'okala_layout':'https://www.okala.com/_next/static/chunks/app/(app)/(PLP%20Multi)/search/layout-5ebfdb23360b8315.js',
+            'snapp_main0':'https://static.snapp.express/renaissance/ui/08ab0826/js/main-0.4f48d17a2e91b70a.js',
+            'snapp_main2':'https://static.snapp.express/renaissance/ui/08ab0826/js/main-2.591d4a28641f3c37.js',
+            'snapp_main3':'https://static.snapp.express/renaissance/ui/08ab0826/js/main-3.a16ee84ac98d2a3f.js',
+            'snapp_main4':'https://static.snapp.express/renaissance/ui/08ab0826/js/main-4.263370fc0dd83e65.js',
+            'snapp_main5':'https://static.snapp.express/renaissance/ui/08ab0826/js/main-5.d4682920bcc586c1.js',
+            'snapp_7302':'https://static.snapp.express/renaissance/ui/08ab0826/js/7302.84342e2642d4b03f.js',
+            'snapp_5880':'https://static.snapp.express/renaissance/ui/08ab0826/js/5880.2e4c871514e727ef.js',
+            'digijet_app':'https://www.digikalajet.com/assets/x-app.DgWmlWEz.js',
+          }
           ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
           ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
-          q=urllib.parse.quote('کره بادام زمینی جیف')
-          sources={
-            'okala':f'https://www.okala.com/search?query={q}',
-            'snapp':f'https://snapp.market/search?query={q}',
-            'digijet':f'https://www.digikalajet.com/search/?q={q}',
-          }
-          def get(url,maxb=8_000_000):
-              req=urllib.request.Request(url,headers={'User-Agent':ua,'Accept-Language':'fa-IR,fa;q=0.9,en;q=0.5','Accept':'*/*'})
-              with urllib.request.urlopen(req,timeout=35,context=ctx) as r: return r.read(maxb),r.geturl(),r.headers.get('content-type','')
-          summary=[]
-          for name,page in sources.items():
+          def fetch(item):
+              name,u=item
               try:
-                  raw,final,ct=get(page,5_000_000); html=raw.decode('utf-8','replace')
-                  scripts=re.findall(r'<script[^>]+src=["\']([^"\']+)["\']',html,re.I)
-                  jsurls=[]
-                  for s in scripts:
-                      u=urljoin(final,s)
-                      if u.endswith('.js') or '.js?' in u: jsurls.append(u)
-                  summary.append(f'{name}: page={len(raw)} scripts={len(jsurls)} final={final}')
-                  matches=[]; contexts=[]
-                  for j,u in enumerate(jsurls[:60]):
-                      try:
-                          b,fu,jct=get(u,12_000_000); t=b.decode('utf-8','replace')
-                          for m in re.finditer(r'https?://[^\s"\'<>]{4,300}',t,re.I):
-                              v=m.group(0).replace('\\/','/')
-                              if any(k in v.lower() for k in ['api','search','product','catalog','svc.snapp','digikalajet','okala']): matches.append(v)
-                          for m in re.finditer(r'["\']([^"\']{1,260})["\']',t):
-                              v=m.group(1).replace('\\/','/')
-                              lv=v.lower()
-                              if any(k in lv for k in ['/api','/v1','/v2','/v3','search','product','catalog','sku','plp']) and ('/' in v or 'http' in lv): matches.append(v)
-                          for key in ['svc.snapp.market','api.digikalajet.ir','search','products','product-list','catalog']:
-                              pos=t.lower().find(key.lower())
-                              if pos>=0: contexts.append(f'JS={fu}\nKEY={key}\n'+t[max(0,pos-500):pos+1400])
-                      except Exception as e:
-                          contexts.append(f'JS_ERROR {u} {type(e).__name__}: {e}')
-                  uniq=[]
-                  for v in matches:
-                      if v not in uniq: uniq.append(v)
-                  (out/f'{name}_matches.txt').write_text('\n'.join(uniq[:1500]),'utf-8')
-                  (out/f'{name}_contexts.txt').write_text('\n\n=====\n\n'.join(contexts[:250]),'utf-8')
-              except Exception as e: summary.append(f'{name}: ERROR {type(e).__name__}: {e}')
-          (out/'summary.txt').write_text('\n'.join(summary),'utf-8'); print('\n'.join(summary))
+                  req=urllib.request.Request(u,headers={'User-Agent':ua,'Accept':'*/*'})
+                  with urllib.request.urlopen(req,timeout=25,context=ctx) as r: b=r.read(20_000_000)
+                  return name,u,b.decode('utf-8','replace'),None
+              except Exception as e:return name,u,'',f'{type(e).__name__}: {e}'
+          rows=[]; allm=[]; ctxs=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
+              for name,u,t,err in ex.map(fetch,urls.items()):
+                  rows.append(f'{name} bytes={len(t)} err={err or ""} url={u}')
+                  if err: continue
+                  for m in re.finditer(r'https?://[^\s"\'<>]{4,300}',t,re.I):
+                      v=m.group(0).replace('\\/','/')
+                      if any(k in v.lower() for k in ['api','search','product','catalog','svc.snapp','digikalajet','okala']):allm.append(f'{name}\t{v}')
+                  for m in re.finditer(r'["\']([^"\']{1,280})["\']',t):
+                      v=m.group(1).replace('\\/','/'); lv=v.lower()
+                      if any(k in lv for k in ['/api','/v1','/v2','/v3','search','product','catalog','sku','plp']) and '/' in v:allm.append(f'{name}\t{v}')
+                  low=t.lower()
+                  for key in ['svc.snapp.market','api.digikalajet.ir','search/products','product/search','products/search','search?','search/', 'catalog']:
+                      start=0
+                      while True:
+                          pos=low.find(key.lower(),start)
+                          if pos<0:break
+                          ctxs.append(f'FILE={name} KEY={key}\n'+t[max(0,pos-700):pos+1800])
+                          start=pos+len(key)
+                          if len(ctxs)>500:break
+          uniq=list(dict.fromkeys(allm))
+          (out/'summary.txt').write_text('\n'.join(rows),'utf-8')
+          (out/'matches.txt').write_text('\n'.join(uniq[:5000]),'utf-8')
+          (out/'contexts.txt').write_text('\n\n=====\n\n'.join(ctxs[:500]),'utf-8')
+          print('\n'.join(rows)); print('MATCHES',len(uniq),'CONTEXTS',len(ctxs))
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: product-api-discovery
+          name: targeted-product-api-discovery
           path: ${{ runner.temp }}/out
           retention-days: 1
