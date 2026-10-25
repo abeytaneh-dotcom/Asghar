@@ -5,6 +5,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>WebsazStore</AssemblyName>
     <RootNamespace>WebsazStore</RootNamespace>
+    <StartupObject>WebsazStore.ProgramModern</StartupObject>
     <LangVersion>latest</LangVersion>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
