@@ -1,0 +1,13 @@
+name: Check Niazestan DNS
+on:
+  push:
+    branches: [niazestan-cloud]
+    paths: ['.github/workflows/check-niazestan-dns.yml']
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check public DNS
+        run: |
+          echo 'GOOGLE NS'; curl -fsS 'https://dns.google/resolve?name=niazestan.ir&type=NS' | jq .
+          echo 'CLOUDFLARE NS'; curl -fsS -H 'accept: application/dns-json' 'https://cloudflare-dns.com/dns-query?name=niazestan.ir&type=NS' | jq .
