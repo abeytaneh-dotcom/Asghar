@@ -9,32 +9,26 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     env:
       CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
       BASE: https://mch4444.dnsuserver.com:2083
       USER: vt6qdx8
       DIR: public_html/tehran
     steps:
-      - name: Diagnose manifest application without secrets
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Upload image applier fix and apply queued manifests
         shell: bash
         run: |
           set -Eeuo pipefail
           AUTH="Authorization: cpanel ${USER}:${CPANEL_TOKEN}"
-          echo '--- storage files ---'
-          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${DIR}/storage" --data-urlencode 'show_hidden=1' "${BASE}/execute/Fileman/list_files" -o "$RUNNER_TEMP/list.json"
-          jq -r '(.result.data // .data // [])[] | [(.file // .name // ""),(.size // 0)] | @tsv' "$RUNNER_TEMP/list.json" | grep -E 'product_image|pyramid_seed_status' | sort || true
-          for f in pyramid_seed_status.json product_image_manifest_status.json product_image_cleanup_status.json; do
+          curl -sS --fail-with-body -H "$AUTH" --request POST --data-urlencode "dir=${DIR}" --data-urlencode 'file=product_image_seed.php' --data-urlencode 'content@TehranSupermarket/product_image_seed.php' "${BASE}/execute/Fileman/save_file_content" >/dev/null
+          for i in 1 2 3; do curl -sS -L --max-time 180 'https://websaza.ir/tehran/' >/dev/null; sleep 1; done
+          for f in product_image_manifest_status.json product_image_cleanup_status.json pyramid_seed_status.json; do
             R="$RUNNER_TEMP/$f.json"
             curl -sS -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${DIR}/storage" --data-urlencode "file=$f" "${BASE}/execute/Fileman/get_file_content" -o "$R" || true
             echo "--- $f ---"
             jq -r '.result.data.content // .data.content // "MISSING"' "$R" | head -c 5000; echo
           done
-          echo '--- live index image hook ---'
-          R="$RUNNER_TEMP/index.json"
-          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${DIR}" --data-urlencode 'file=index.php' "${BASE}/execute/Fileman/get_file_content" -o "$R"
-          jq -r '.result.data.content // .data.content // empty' "$R" | grep -nE 'product_image_seed|ts_apply_product_image_manifest' || true
-          echo '--- live applier key lines ---'
-          R="$RUNNER_TEMP/applier.json"
-          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${DIR}" --data-urlencode 'file=product_image_seed.php' "${BASE}/execute/Fileman/get_file_content" -o "$R"
-          jq -r '.result.data.content // .data.content // empty' "$R" | grep -nE 'glob|pyramid_code2|image_path|manifest' | head -40 || true
