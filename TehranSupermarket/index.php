@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__.'/pyramid_seed_1400.php';
+ts_seed_pyramid_1400();
+
 ob_start();
 require __DIR__.'/shop.php';
 $html = (string)ob_get_clean();
