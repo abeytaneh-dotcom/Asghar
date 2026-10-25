@@ -17,7 +17,9 @@ namespace WebsazStore {
   class Rec { public string T,K,H,P; public long U; }
   class MainForm:Form {
     const int BW=1492,BH=1054; Image bg; string root; bool syncing;
-    string DataFile=>Path.Combine(root,"records.sync"), Ini=>Path.Combine(root,"settings.txt"), DeviceFile=>Path.Combine(root,"device.id");
+    string DataFile=>Path.Combine(root,"records.sync");
+    string Ini=>Path.Combine(root,"settings.txt");
+    string DeviceFile=>Path.Combine(root,"device.id");
     public MainForm(){
       root=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"WebsazStore");Directory.CreateDirectory(root);
       Text="وب ساز - مدیریت ساده فروشگاه";StartPosition=FormStartPosition.CenterScreen;WindowState=FormWindowState.Maximized;DoubleBuffered=true;RightToLeft=RightToLeft.Yes;Icon=SystemIcons.Application;
