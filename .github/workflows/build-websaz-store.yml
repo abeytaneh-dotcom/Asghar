@@ -15,13 +15,37 @@ jobs:
         shell: powershell
         run: |
           dotnet build websaz-store\WebsazStore.csproj -c Release
-      - name: Package
+      - name: Package and embed dashboard artwork
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item websaz-store\bin\Release\net48\WebsazStore.exe dist\WebsazStore.exe
+          $b64 = (Get-Content websaz-store\ui-dashboard.b64 -Raw).Trim()
+          $img = [Convert]::FromBase64String($b64)
+          $exePath = Join-Path $PWD 'dist\WebsazStore.exe'
+          $fs = [System.IO.File]::Open($exePath,[System.IO.FileMode]::Append,[System.IO.FileAccess]::Write,[System.IO.FileShare]::None)
+          try {
+            $fs.Write($img,0,$img.Length)
+            $marker = [System.Text.Encoding]::ASCII.GetBytes('WSUIJPG1')
+            $fs.Write($marker,0,$marker.Length)
+            $len = [System.BitConverter]::GetBytes([Int64]$img.Length)
+            $fs.Write($len,0,$len.Length)
+          } finally {
+            $fs.Dispose()
+          }
           Copy-Item websaz-store\server\websaz-sync.php dist\websaz-sync.php
           Copy-Item websaz-store\server\websaz-sync-config.sample.php dist\websaz-sync-config.sample.php
+      - name: Verify embedded dashboard trailer
+        shell: powershell
+        run: |
+          $p = 'dist\WebsazStore.exe'
+          $bytes = [System.IO.File]::ReadAllBytes($p)
+          if ($bytes.Length -lt 16) { throw 'EXE too small' }
+          $marker = [System.Text.Encoding]::ASCII.GetString($bytes, $bytes.Length - 16, 8)
+          if ($marker -ne 'WSUIJPG1') { throw "Dashboard marker missing: $marker" }
+          $len = [System.BitConverter]::ToInt64($bytes, $bytes.Length - 8)
+          if ($len -le 0 -or $len -gt ($bytes.Length - 16)) { throw "Bad embedded image length: $len" }
+          Write-Host "Embedded dashboard bytes: $len"
       - uses: actions/upload-artifact@v4
         with:
           name: WebsazStore-Windows
