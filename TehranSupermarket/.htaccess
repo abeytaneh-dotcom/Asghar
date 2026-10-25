@@ -3,6 +3,9 @@ Options -Indexes
 DirectoryIndex index.php
 <IfModule mod_rewrite.c>
  RewriteEngine On
+ # Preserve Bearer authentication for PHP-FPM/CGI so Websaz Store desktop sync can authenticate.
+ RewriteCond %{HTTP:Authorization} ^(.+)$
+ RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
  RewriteRule ^install\.php$ error.php?s=403 [END,QSA]
 </IfModule>
 ErrorDocument 403 /tehran/error.php?s=403
