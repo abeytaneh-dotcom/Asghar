@@ -11,23 +11,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Identify Digikala Jet search function
+      - name: Test Digikala Jet public search API
         shell: bash
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
-          import re,urllib.request,ssl
-          u='https://www.digikalajet.com/assets/x-app.DgWmlWEz.js'
+          import json,urllib.parse,urllib.request,ssl
+          names=['کره بادام زمینی جیف','آدامس تریدنت آناناس','نوشیدنی انرژی زا مانستر','روغن ذرت رویال','چای دلفین معطر']
           ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
-          q=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0 Chrome/141 Safari/537.36','Referer':'https://www.digikalajet.com/'})
-          with urllib.request.urlopen(q,timeout=30,context=ctx) as r:t=r.read(8_000_000).decode('utf-8','replace')
-          for pat in [r'function\s+Kg\s*\(',r'\bKg\s*=\s*',r'[,;]Kg\s*=\s*',r'\bKg\(']:
-            print('\nPATTERN',pat)
-            ms=list(re.finditer(pat,t))
-            print('COUNT',len(ms))
-            for m in ms[:20]: print(re.sub(r'\s+',' ',t[max(0,m.start()-1800):m.start()+4200]))
-          # Print exact endpoint strings with surrounding definitions too.
-          for ep in ['/v2/search/','/search/v2/result/','/search/v2/','/products/search/','/search/']:
-            print('\nENDPOINT',ep)
-            for m in list(re.finditer(re.escape(ep),t))[:20]: print(re.sub(r'\s+',' ',t[max(0,m.start()-1400):m.start()+2600]))
+          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
+          base='https://api.digikalajet.ir/v2/search/'
+          for name in names:
+              params={'q':name,'page':1,'latitude':'35.757453','longitude':'51.409882'}
+              u=base+'?'+urllib.parse.urlencode(params)
+              try:
+                  rq=urllib.request.Request(u,headers={
+                      'User-Agent':ua,'Accept':'application/json','Accept-Language':'fa-IR,fa;q=0.9,en;q=0.5',
+                      'Origin':'https://www.digikalajet.com','Referer':'https://www.digikalajet.com/'
+                  })
+                  with urllib.request.urlopen(rq,timeout=25,context=ctx) as r:
+                      raw=r.read(4_000_000); code=r.status; ct=r.headers.get('content-type','')
+                  txt=raw.decode('utf-8','replace')
+                  print('\nQUERY',name,'HTTP',code,'TYPE',ct,'BYTES',len(raw))
+                  try:
+                      d=json.loads(txt)
+                      print('TOP_KEYS',list(d)[:20])
+                      print(json.dumps(d,ensure_ascii=False)[:10000])
+                  except Exception:
+                      print(txt[:5000])
+              except Exception as e:
+                  print('\nQUERY',name,'ERROR',type(e).__name__,e)
           PY
