@@ -1,5 +1,5 @@
 Options -Indexes
-DirectoryIndex index.html
+DirectoryIndex index.php index.html
 
 RewriteEngine On
 
