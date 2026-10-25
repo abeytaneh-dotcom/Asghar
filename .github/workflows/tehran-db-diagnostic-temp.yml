@@ -9,149 +9,76 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     env:
       CPANEL_HOST: mch4444.dnsuserver.com
       CPANEL_USER: vt6qdx8
       CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
       TARGET_DIR: public_html/tehran
-      BATCH_OFFSET: '0'
-      BATCH_SIZE: '800'
     steps:
       - uses: actions/checkout@v4
         with:
           ref: websaza-hosting
-      - name: Prepare catalog and image matches
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 -c 'import PIL' 2>/dev/null || python3 -m pip install --quiet pillow
-          mkdir -p "$RUNNER_TEMP/imgs"
-          php -r "define('TS_INTERNAL_SEED',true); echo require 'TehranSupermarket/pyramid_seed_1400_data.php';" | base64 -d | gzip -dc > "$RUNNER_TEMP/products.jsonl"
-          python3 - "$RUNNER_TEMP/products.jsonl" "$RUNNER_TEMP/imgs" "$RUNNER_TEMP/manifest.jsonl" "$BATCH_OFFSET" "$BATCH_SIZE" <<'PY'
-          import sys,json,re,unicodedata,urllib.parse,urllib.request,ssl,concurrent.futures,hashlib,io,os,time
-          from difflib import SequenceMatcher
-          from PIL import Image
-          seed,imgdir,manifest,offset,size=sys.argv[1],sys.argv[2],sys.argv[3],int(sys.argv[4]),int(sys.argv[5])
-          rows=[]
-          with open(seed,encoding='utf-8') as f:
-              for line in f:
-                  try: rows.append(json.loads(line))
-                  except: pass
-          batch=rows[offset:offset+size]
-          trans=str.maketrans({'ي':'ی','ى':'ی','ك':'ک','ۀ':'ه','ة':'ه','ؤ':'و','أ':'ا','إ':'ا','ٱ':'ا','‌':' '})
-          stop={'بسته','عددی','عددي','عدد','گرم','گرمی','گرمي','کیلو','کیلویی','کيلويي','کیلوگرم','کيلوگرم','میلی','ميلي','لیتر','ليتر','لیتری','ليتري','سی','سي','میل','ميل'}
-          def norm(s):
-              s=unicodedata.normalize('NFKC',str(s or '')).translate(trans).lower()
-              s=re.sub(r'[ًٌٍَُِّْـ]','',s)
-              s=re.sub(r'[^0-9a-zآ-ی]+',' ',s)
-              return re.sub(r'\s+',' ',s).strip()
-          def tokens(s): return [x for x in norm(s).split() if len(x)>1 and x not in stop and not x.isdigit()]
-          ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
-          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
-          def req_json(name):
-              q=urllib.parse.urlencode({'query':name,'latitude':'35.757453','longitude':'51.409882','page':0,'page_size':20,'size':20,'fetch_filters':1,'firstPage':'true','origin':'search'})
-              u='https://svc.snapp.market/mobile/v3/search?'+q
-              rq=urllib.request.Request(u,headers={'User-Agent':ua,'Accept':'application/json','Origin':'https://snapp.market','Referer':'https://snapp.market/'})
-              with urllib.request.urlopen(rq,timeout=15,context=ctx) as r:return json.loads(r.read(4_000_000))
-          def candidates(d):
-              out={}
-              for v in d.get('data',{}).get('vendor_product_variations',{}).get('items',[]) or []:
-                  for p in v.get('products',[]) or []:
-                      ims=p.get('images') or []
-                      if not ims: continue
-                      url=(ims[0] or {}).get('main') or (ims[0] or {}).get('thumb') or ''
-                      if not isinstance(url,str) or not url.startswith('https://static.snapp.express/'):continue
-                      key=str(p.get('id') or '')+'|'+norm(p.get('title'))+'|'+url
-                      out[key]=(p,url)
-              return list(out.values())
-          def score(row,p,url):
-              target=norm(row.get('name')); title=norm(p.get('title')); brand=norm(p.get('brand'))
-              bar=re.sub(r'\D','',str(row.get('barcode') or ''))
-              urlnums=re.findall(r'\d{8,16}',url)
-              exact=bool(bar and any(bar==x or (len(bar)>=10 and bar.lstrip('0')==x.lstrip('0')) for x in urlnums))
-              if exact:return 1.5
-              tt=tokens(target); ct=tokens(title)
-              if len(set(tt))<2:return 0.0
-              ts=set(tt); cs=set(ct); inter=len(ts&cs); cov=inter/max(1,len(ts)); prec=inter/max(1,len(cs))
-              seq=SequenceMatcher(None,target,title).ratio(); bm=1.0 if brand and brand in target else 0.0
-              sc=.56*cov+.15*min(1.0,prec*2)+.19*seq+.10*bm
-              if inter<2 or cov<0.74:return 0.0
-              return sc
-          def choose(row):
-              name=str(row.get('name') or '').strip()
-              if not name:return None
-              try:d=req_json(name)
-              except Exception:return None
-              ranked=[]
-              for p,u in candidates(d):
-                  s=score(row,p,u)
-                  if s>=0.72:ranked.append((s,p,u))
-              if not ranked:return None
-              ranked.sort(key=lambda x:x[0],reverse=True)
-              best=ranked[0]
-              if best[0]<1.4 and len(ranked)>1:
-                  # Skip ambiguous variants unless the same image/title won repeatedly.
-                  a=norm(best[1].get('title')); b=norm(ranked[1][1].get('title'))
-                  if a!=b and best[0]-ranked[1][0]<0.075:return None
-              return best
-          results=[]
-          def lookup(row):
-              c=choose(row)
-              return row,c
-          with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
-              for i,(row,c) in enumerate(ex.map(lookup,batch),1):
-                  if c:results.append((row,c))
-                  if i%100==0:print('LOOKUP',i,'MATCHED',len(results),flush=True)
-          def download_convert(item):
-              row,(sc,p,url)=item
-              try:
-                  rq=urllib.request.Request(url,headers={'User-Agent':ua,'Referer':'https://snapp.market/'})
-                  with urllib.request.urlopen(rq,timeout=20,context=ctx) as r: raw=r.read(8_000_000)
-                  im=Image.open(io.BytesIO(raw)); im.load()
-                  if im.width<80 or im.height<80:return None
-                  if im.mode not in ('RGB','RGBA'):im=im.convert('RGBA' if 'transparency' in im.info else 'RGB')
-                  im.thumbnail((720,720),Image.Resampling.LANCZOS)
-                  safe=re.sub(r'[^A-Za-z0-9_-]','_',str(row.get('code2') or row.get('barcode') or hashlib.sha1(url.encode()).hexdigest()[:14]))[:70]
-                  fn=f'auto_snp_{safe}.webp'; path=os.path.join(imgdir,fn)
-                  im.save(path,'WEBP',quality=80,method=6,optimize=True)
-                  if os.path.getsize(path)>140000:
-                      im.save(path,'WEBP',quality=72,method=6,optimize=True)
-                  if os.path.getsize(path)>180000:
-                      im.thumbnail((600,600),Image.Resampling.LANCZOS); im.save(path,'WEBP',quality=70,method=6,optimize=True)
-                  return {'code2':str(row.get('code2') or ''),'barcode':str(row.get('barcode') or ''),'path':'uploads/products/'+fn,'source':'snapp.market|'+url,'bytes':os.path.getsize(path),'score':round(sc,4),'title':p.get('title','')}
-              except Exception:return None
-          done=[]
-          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
-              for x in ex.map(download_convert,results):
-                  if x:done.append(x)
-          with open(manifest,'w',encoding='utf-8') as f:
-              for x in done:f.write(json.dumps({k:x[k] for k in ('code2','barcode','path','source')},ensure_ascii=False)+'\n')
-          report={'offset':offset,'batch':len(batch),'matched':len(results),'downloaded':len(done),'total_bytes':sum(x['bytes'] for x in done),'avg_bytes':round(sum(x['bytes'] for x in done)/max(1,len(done))),'max_bytes':max([x['bytes'] for x in done] or [0]),'samples':done[:15]}
-          with open(os.path.join(imgdir,'report.json'),'w',encoding='utf-8') as f:json.dump(report,f,ensure_ascii=False,indent=2)
-          print(json.dumps(report,ensure_ascii=False))
-          PY
-      - name: Upload compressed images and apply manifest
+      - name: Recheck first batch with exact barcode evidence
         shell: bash
         run: |
           set -Eeuo pipefail
           BASE="https://${CPANEL_HOST}:2083"; AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
-          # Ensure the small manifest applier itself is live even if the full deploy queue is busy.
+          php -r "define('TS_INTERNAL_SEED',true); echo require 'TehranSupermarket/pyramid_seed_1400_data.php';" | base64 -d | gzip -dc > "$RUNNER_TEMP/products.jsonl"
+          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${TARGET_DIR}/storage" --data-urlencode 'file=product_image_manifest.jsonl' "${BASE}/execute/Fileman/get_file_content" -o "$RUNNER_TEMP/live.json"
+          jq -r '.result.data.content // .data.content // empty' "$RUNNER_TEMP/live.json" > "$RUNNER_TEMP/old_manifest.jsonl"
+          python3 - "$RUNNER_TEMP/products.jsonl" "$RUNNER_TEMP/old_manifest.jsonl" "$RUNNER_TEMP/cleanup.jsonl" <<'PY'
+          import sys,json,re,urllib.parse,urllib.request,ssl,concurrent.futures
+          seed,oldf,outf=sys.argv[1:4]
+          rows=[]
+          with open(seed,encoding='utf-8') as f:
+            for i,line in enumerate(f):
+              if i>=800:break
+              try:rows.append(json.loads(line))
+              except:pass
+          old=[]
+          with open(oldf,encoding='utf-8') as f:
+            for line in f:
+              try:old.append(json.loads(line))
+              except:pass
+          old_codes={str(x.get('code2') or '') for x in old if x.get('code2')}
+          ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
+          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
+          def exact(row):
+            bar=re.sub(r'\D','',str(row.get('barcode') or ''))
+            if len(bar)<8:return None
+            q=urllib.parse.urlencode({'query':str(row.get('name') or ''),'latitude':'35.757453','longitude':'51.409882','page':0,'page_size':20,'size':20,'fetch_filters':1,'firstPage':'true','origin':'search'})
+            u='https://svc.snapp.market/mobile/v3/search?'+q
+            try:
+              rq=urllib.request.Request(u,headers={'User-Agent':ua,'Accept':'application/json','Origin':'https://snapp.market','Referer':'https://snapp.market/'})
+              with urllib.request.urlopen(rq,timeout=15,context=ctx) as r:d=json.loads(r.read(4_000_000))
+              for v in d.get('data',{}).get('vendor_product_variations',{}).get('items',[]) or []:
+                for p in v.get('products',[]) or []:
+                  for im in p.get('images') or []:
+                    url=(im or {}).get('main') or (im or {}).get('thumb') or ''
+                    nums=re.findall(r'\d{8,16}',url)
+                    if any(bar==n or bar.lstrip('0')==n.lstrip('0') for n in nums):return str(row.get('code2') or '')
+            except Exception:pass
+            return None
+          safe=set()
+          targets=[r for r in rows if str(r.get('code2') or '') in old_codes]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=14) as ex:
+            for c in ex.map(exact,targets):
+              if c:safe.add(c)
+          cleanup=sorted(old_codes-safe)
+          with open(outf,'w',encoding='utf-8') as f:
+            for c in cleanup:f.write(json.dumps({'code2':c},ensure_ascii=False)+'\n')
+          print(json.dumps({'old_manifest':len(old_codes),'exact_safe':len(safe),'cleanup':len(cleanup)},ensure_ascii=False))
+          PY
+      - name: Apply cleanup safely
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          BASE="https://${CPANEL_HOST}:2083"; AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
           for f in product_image_seed.php index.php; do
             curl -sS --fail-with-body -H "$AUTH" --request POST --data-urlencode "dir=${TARGET_DIR}" --data-urlencode "file=${f}" --data-urlencode "content@TehranSupermarket/${f}" "${BASE}/execute/Fileman/save_file_content" >/dev/null
           done
-          mapfile -t files < <(find "$RUNNER_TEMP/imgs" -maxdepth 1 -type f -name '*.webp' | sort)
-          echo "FILES_TO_UPLOAD=${#files[@]}"
-          for ((i=0;i<${#files[@]};i+=20)); do
-            args=()
-            n=1
-            for f in "${files[@]:i:20}"; do args+=( -F "file-${n}=@${f};filename=$(basename "$f")" ); n=$((n+1)); done
-            R="$RUNNER_TEMP/upload.json"
-            curl -sS --fail-with-body -H "$AUTH" "${args[@]}" -F "dir=${TARGET_DIR}/uploads/products" -F 'overwrite=1' "${BASE}/execute/Fileman/upload_files" -o "$R"
-            test "$(jq -r '.result.status // .status // 0' "$R")" = 1
-          done
-          curl -sS --fail-with-body -H "$AUTH" --request POST --data-urlencode "dir=${TARGET_DIR}/storage" --data-urlencode 'file=product_image_manifest.jsonl' --data-urlencode "content@$RUNNER_TEMP/manifest.jsonl" "${BASE}/execute/Fileman/save_file_content" >/dev/null
+          curl -sS --fail-with-body -H "$AUTH" --request POST --data-urlencode "dir=${TARGET_DIR}/storage" --data-urlencode 'file=product_image_cleanup_0_800.jsonl' --data-urlencode "content@$RUNNER_TEMP/cleanup.jsonl" "${BASE}/execute/Fileman/save_file_content" >/dev/null
           curl -sS -L --max-time 120 'https://websaza.ir/tehran/' >/dev/null
           sleep 2
-          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${TARGET_DIR}/storage" --data-urlencode 'file=product_image_manifest_status.json' "${BASE}/execute/Fileman/get_file_content" | jq -r '.result.data.content // .data.content // empty'
-          cat "$RUNNER_TEMP/imgs/report.json"
+          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${TARGET_DIR}/storage" --data-urlencode 'file=product_image_cleanup_status.json' "${BASE}/execute/Fileman/get_file_content" | jq -r '.result.data.content // .data.content // empty'
