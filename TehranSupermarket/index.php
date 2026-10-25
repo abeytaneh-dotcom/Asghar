@@ -9,7 +9,7 @@ require __DIR__.'/shop.php';
 $html = (string)ob_get_clean();
 
 $oldBrand = '<span class="logo">🛒</span><span><b>سوپرمارکت طهران</b><small>خرید سریع محلی</small></span>';
-$newBrand = '<span class="tehran-market-logo"><img src="pwa-icon.php?size=512&amp;v=20261026" alt="طهران مارکت"></span>';
+$newBrand = '<span class="tehran-market-logo"><img src="pwa-icon.php?size=512&amp;v=20261026-gold" alt="طهران مارکت"></span>';
 $html = str_replace($oldBrand, $newBrand, $html);
 $html = str_replace('<title>سوپرمارکت طهران</title>', '<title>طهران مارکت</title>', $html);
 $html = str_replace('سوپرمارکت طهران · بهارستان اصفهان', 'طهران مارکت · بهارستان اصفهان', $html);
