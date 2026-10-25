@@ -9,65 +9,35 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 6
     steps:
-      - name: Targeted product API discovery
+      - name: Test public barcode product lookup
         shell: bash
         run: |
           set -Eeuo pipefail
           OUT="$RUNNER_TEMP/out"; mkdir -p "$OUT"
           python3 - "$OUT" <<'PY'
-          import sys,re,urllib.request,ssl,pathlib,concurrent.futures
-          out=pathlib.Path(sys.argv[1])
-          urls={
-            'okala_search':'https://www.okala.com/_next/static/chunks/app/(app)/(PLP%20Multi)/search/page-73e3d9731f62c5c2.js',
-            'okala_layout':'https://www.okala.com/_next/static/chunks/app/(app)/(PLP%20Multi)/search/layout-5ebfdb23360b8315.js',
-            'snapp_main0':'https://static.snapp.express/renaissance/ui/08ab0826/js/main-0.4f48d17a2e91b70a.js',
-            'snapp_main2':'https://static.snapp.express/renaissance/ui/08ab0826/js/main-2.591d4a28641f3c37.js',
-            'snapp_main3':'https://static.snapp.express/renaissance/ui/08ab0826/js/main-3.a16ee84ac98d2a3f.js',
-            'snapp_main4':'https://static.snapp.express/renaissance/ui/08ab0826/js/main-4.263370fc0dd83e65.js',
-            'snapp_main5':'https://static.snapp.express/renaissance/ui/08ab0826/js/main-5.d4682920bcc586c1.js',
-            'snapp_7302':'https://static.snapp.express/renaissance/ui/08ab0826/js/7302.84342e2642d4b03f.js',
-            'snapp_5880':'https://static.snapp.express/renaissance/ui/08ab0826/js/5880.2e4c871514e727ef.js',
-            'digijet_app':'https://www.digikalajet.com/assets/x-app.DgWmlWEz.js',
-          }
-          ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
+          import sys,json,urllib.parse,urllib.request,ssl,pathlib
+          out=pathlib.Path(sys.argv[1]);ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
           ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
-          def fetch(item):
-              name,u=item
+          samples=['051500255162','012000002632','022000005120','037203018518','046708899034']
+          endpoints=['/mobile/v2/product-variation/search','/mobile/v3/search','/mobile/v3/search/suggest']
+          for ep in endpoints:
+            for b in samples:
+              qs=urllib.parse.urlencode({'query':b,'latitude':'35.757453','longitude':'51.409882','page':0,'page_size':10,'size':10,'fetch_filters':1,'firstPage':'true'})
+              u='https://svc.snapp.market'+ep+'?'+qs
               try:
-                  req=urllib.request.Request(u,headers={'User-Agent':ua,'Accept':'*/*'})
-                  with urllib.request.urlopen(req,timeout=25,context=ctx) as r: b=r.read(20_000_000)
-                  return name,u,b.decode('utf-8','replace'),None
-              except Exception as e:return name,u,'',f'{type(e).__name__}: {e}'
-          rows=[]; allm=[]; ctxs=[]
-          with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-              for name,u,t,err in ex.map(fetch,urls.items()):
-                  rows.append(f'{name} bytes={len(t)} err={err or ""} url={u}')
-                  if err: continue
-                  for m in re.finditer(r'https?://[^\s"\'<>]{4,300}',t,re.I):
-                      v=m.group(0).replace('\\/','/')
-                      if any(k in v.lower() for k in ['api','search','product','catalog','svc.snapp','digikalajet','okala']):allm.append(f'{name}\t{v}')
-                  for m in re.finditer(r'["\']([^"\']{1,280})["\']',t):
-                      v=m.group(1).replace('\\/','/'); lv=v.lower()
-                      if any(k in lv for k in ['/api','/v1','/v2','/v3','search','product','catalog','sku','plp']) and '/' in v:allm.append(f'{name}\t{v}')
-                  low=t.lower()
-                  for key in ['svc.snapp.market','api.digikalajet.ir','search/products','product/search','products/search','search?','search/', 'catalog']:
-                      start=0
-                      while True:
-                          pos=low.find(key.lower(),start)
-                          if pos<0:break
-                          ctxs.append(f'FILE={name} KEY={key}\n'+t[max(0,pos-700):pos+1800])
-                          start=pos+len(key)
-                          if len(ctxs)>500:break
-          uniq=list(dict.fromkeys(allm))
-          (out/'summary.txt').write_text('\n'.join(rows),'utf-8')
-          (out/'matches.txt').write_text('\n'.join(uniq[:5000]),'utf-8')
-          (out/'contexts.txt').write_text('\n\n=====\n\n'.join(ctxs[:500]),'utf-8')
-          print('\n'.join(rows)); print('MATCHES',len(uniq),'CONTEXTS',len(ctxs))
+                req=urllib.request.Request(u,headers={'User-Agent':ua,'Accept':'application/json','Origin':'https://snapp.market','Referer':'https://snapp.market/'})
+                with urllib.request.urlopen(req,timeout=25,context=ctx) as r: raw=r.read(3_000_000); code=r.status
+                txt=raw.decode('utf-8','replace'); (out/f'{ep.split("/")[-1]}_{b}.json').write_text(txt,'utf-8')
+                try:
+                  d=json.loads(txt)
+                  print(ep,b,'HTTP',code,'keys',list(d)[:12],'preview',json.dumps(d,ensure_ascii=False)[:800])
+                except: print(ep,b,'HTTP',code,'text',txt[:800])
+              except Exception as e: print(ep,b,'ERROR',type(e).__name__,e)
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: targeted-product-api-discovery
+          name: barcode-product-lookup-test
           path: ${{ runner.temp }}/out
           retention-days: 1
