@@ -1,0 +1,37 @@
+name: Diagnose Piramyd Stock Temp
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/diagnose-piramyd-stock-temp'
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Restore backup and compare inventory sources
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OUT="$RUNNER_TEMP/out"; mkdir -p "$OUT" "$RUNNER_TEMP/ext" "$RUNNER_TEMP/sqlbackup"
+          curl -fL --retry 2 --connect-timeout 20 --max-time 600 'https://htaelec.ir/piramyd/ManagerBack1400.rar' -o "$RUNNER_TEMP/a.rar"
+          7z x -y -o"$RUNNER_TEMP/ext" "$RUNNER_TEMP/a.rar" >/dev/null
+          BAK=$(find "$RUNNER_TEMP/ext" -type f -iname '*.bak' | head -n1); cp "$BAK" "$RUNNER_TEMP/sqlbackup/a.bak"; chmod -R a+rX "$RUNNER_TEMP/sqlbackup"
+          SA_PASS="Aa1!$(openssl rand -hex 16)"
+          docker run -d --name psql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD="$SA_PASS" -v "$RUNNER_TEMP/sqlbackup:/backup:ro" mcr.microsoft.com/mssql/server:2022-latest >/dev/null
+          for i in $(seq 1 90); do docker logs psql 2>&1 | grep -q 'SQL Server is now ready for client connections' && break; sleep 2; done
+          SQLCMD=$(docker exec psql sh -lc "if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then echo /opt/mssql-tools18/bin/sqlcmd; else echo /opt/mssql-tools/bin/sqlcmd; fi")
+          q(){ docker exec psql "$SQLCMD" -C -S localhost -U sa -P "$SA_PASS" -W -s $'\t' -h-1 -Q "$1"; }
+          q "RESTORE DATABASE [P] FROM DISK=N'/backup/a.bak' WITH FILE=2, MOVE N'anbar_Data' TO N'/var/opt/mssql/data/p.mdf', MOVE N'anbar_Log' TO N'/var/opt/mssql/data/p.ldf', RECOVERY;" >/dev/null
+          q "USE P; SET NOCOUNT ON; SELECT 'ANBAR_STATS',COUNT(*),SUM(CASE WHEN Mojodi>0 THEN 1 ELSE 0 END),SUM(CASE WHEN Mojodi=0 THEN 1 ELSE 0 END),SUM(CASE WHEN Mojodi<0 THEN 1 ELSE 0 END),MIN(Mojodi),MAX(Mojodi),SUM(Mojodi) FROM Anbar; SELECT 'STATUS_STATS',COUNT(*),SUM(CASE WHEN Mojodi>0 THEN 1 ELSE 0 END),SUM(CASE WHEN Mojodi=0 THEN 1 ELSE 0 END),SUM(CASE WHEN Mojodi<0 THEN 1 ELSE 0 END),MIN(Mojodi),MAX(Mojodi),SUM(Mojodi) FROM StatusAnbar; SELECT 'STOCK_STATS',COUNT(*),SUM(CASE WHEN Mojodi>0 THEN 1 ELSE 0 END),SUM(CASE WHEN Mojodi=0 THEN 1 ELSE 0 END),SUM(CASE WHEN Mojodi<0 THEN 1 ELSE 0 END),MIN(Mojodi),MAX(Mojodi),SUM(Mojodi) FROM Stock;" > "$OUT/stats.tsv" || true
+          q "USE P; SET NOCOUNT ON; SELECT TOP 80 k.K_Code,k.Barcode,k.Name1,a.Mojodi,a.Resive_Fa,a.Exit_Fa,a.Price_Forosh,s.Mojodi AS StatusMojodi FROM KalaId k LEFT JOIN Anbar a ON a.K_Code=k.K_Code AND a.A_Code='103' LEFT JOIN StatusAnbar s ON s.K_Code=k.K_Code AND s.A_Code='103' WHERE a.Mojodi<>0 ORDER BY ABS(a.Mojodi) DESC;" > "$OUT/sample.tsv" || true
+          q "USE P; SET NOCOUNT ON; SELECT TOP 200 o.name FROM sys.objects o JOIN sys.sql_modules m ON m.object_id=o.object_id WHERE m.definition LIKE '%Mojodi%' AND m.definition LIKE '%Anbar%' ORDER BY o.name;" > "$OUT/modules.tsv" || true
+          q "USE P; SET NOCOUNT ON; SELECT TOP 50 o.name,REPLACE(REPLACE(SUBSTRING(m.definition,1,3500),CHAR(13),' '),CHAR(10),' ') FROM sys.objects o JOIN sys.sql_modules m ON m.object_id=o.object_id WHERE m.definition LIKE '%Anbar.Mojodi%' OR m.definition LIKE '%Update Anbar%' OR m.definition LIKE '%UPDATE Anbar%' ORDER BY o.name;" > "$OUT/module-snippets.tsv" || true
+          docker rm -f psql >/dev/null 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: piramyd-stock-diagnostic-temp
+          path: ${{ runner.temp }}/out
+          retention-days: 1
