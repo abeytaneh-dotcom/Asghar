@@ -18,6 +18,19 @@ function ts_seed_pyramid_1400_write_status(PDO $pdo, ?string $marker): void {
     }
 }
 
+function ts_force_all_active_stock_10_once(PDO $pdo): void {
+    $key='all_active_stock_10_v1';
+    $q=$pdo->prepare('SELECT setting_value FROM store_settings WHERE setting_key=? LIMIT 1');
+    $q->execute([$key]);
+    if ((string)($q->fetchColumn() ?: '') !== '') return;
+    $st=$pdo->prepare('UPDATE products SET stock=10,updated_at=NOW() WHERE active=1 AND stock<>10');
+    $st->execute();
+    $changed=$st->rowCount();
+    $value=json_encode(['done'=>true,'changed'=>$changed,'stock'=>10,'finished_at'=>date(DATE_ATOM)],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    $save=$pdo->prepare('INSERT INTO store_settings(setting_key,setting_value,updated_at) VALUES(?,?,NOW()) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value),updated_at=NOW()');
+    $save->execute([$key,$value]);
+}
+
 function ts_seed_pyramid_1400(): void {
     static $ran = false;
     if ($ran) return;
@@ -39,6 +52,7 @@ function ts_seed_pyramid_1400(): void {
 
         require_once __DIR__.'/schema.php';
         ensure_product_schema($pdo);
+        ts_force_all_active_stock_10_once($pdo);
 
         $markerKey = 'pyramid_seed_1400_v1';
         $marker = $pdo->prepare('SELECT setting_value FROM store_settings WHERE setting_key=? LIMIT 1');
