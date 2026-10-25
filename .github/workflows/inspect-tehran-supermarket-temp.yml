@@ -9,46 +9,23 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 5
     env:
       CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
       BASE: https://mch4444.dnsuserver.com:2083
       USER: vt6qdx8
       DIR: public_html/tehran
     steps:
-      - name: Inspect live integration without exposing secrets
+      - name: Refresh and read aggregate catalog status
         shell: bash
         run: |
           set -Eeuo pipefail
-          test -n "${CPANEL_TOKEN:-}"
           AUTH="Authorization: cpanel ${USER}:${CPANEL_TOKEN}"
-          OUT="$RUNNER_TEMP/out"; mkdir -p "$OUT/raw"
-          LIST="$RUNNER_TEMP/list.json"
-          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=$DIR" --data-urlencode 'show_hidden=1' "$BASE/execute/Fileman/list_files" -o "$LIST"
-          jq -r '(.result.data // .data // [])[] | [(.file // .name // .path // ""),(.type // ""),(.size // "")] | @tsv' "$LIST" > "$OUT/files.tsv"
-          mapfile -t names < <(jq -r '(.result.data // .data // [])[] | (.file // .name // "")' "$LIST" | grep -E '(^|/)(pyramid(_api)?\.php|config\.php|schema\.php|db\.php|database\.php|admin\.php|.*product.*\.php|.*store.*\.php|.*sync.*\.php)$' | sed 's#^.*/##' | sort -u)
-          for f in "${names[@]}"; do
-            J="$RUNNER_TEMP/read.json"
-            curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=$DIR" --data-urlencode "file=$f" "$BASE/execute/Fileman/get_file_content" -o "$J" || continue
-            jq -r '.result.data.content // .data.content // empty' "$J" > "$OUT/raw/$f"
-          done
-          python3 - "$OUT/raw" "$OUT" <<'PY'
-          import pathlib,re,sys
-          raw=pathlib.Path(sys.argv[1]); out=pathlib.Path(sys.argv[2])
-          for p in raw.glob('*'):
-              if not p.is_file(): continue
-              s=p.read_text('utf-8','replace')
-              s=re.sub(r"(?im)(\$?[A-Za-z0-9_]*(?:password|passwd|secret|token|sync[_-]?key|api[_-]?key|pairing[_-]?key)[A-Za-z0-9_]*\s*=\s*)(['\"])[^'\"\r\n]*\2", r"\1'<REDACTED>'", s)
-              s=re.sub(r"(?im)(['\"](?:password|passwd|secret|token|sync[_-]?key|api[_-]?key|pairing[_-]?key)['\"]\s*=>\s*)(['\"])[^'\"\r\n]*\2", r"\1'<REDACTED>'", s)
-              s=re.sub(r'(?<![A-Za-z0-9])[A-Za-z0-9+/=_-]{48,}(?![A-Za-z0-9])','<REDACTED_LONG_VALUE>',s)
-              (out/(p.name+'.sanitized.txt')).write_text(s,'utf-8')
-          PY
-          rm -rf "$OUT/raw"
-          echo "files=$(wc -l < "$OUT/files.tsv")" > "$OUT/summary.txt"
-          ls -1 "$OUT" >> "$OUT/summary.txt"
-      - name: Upload sanitized inspection
-        uses: actions/upload-artifact@v4
-        with:
-          name: tehran-supermarket-inspect-temp
-          path: ${{ runner.temp }}/out
-          retention-days: 1
+          curl -sS -L --max-time 120 'https://websaza.ir/tehran/' >/dev/null
+          sleep 1
+          curl -sS -L --max-time 120 'https://websaza.ir/tehran/' >/dev/null
+          R="$RUNNER_TEMP/status.json"
+          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${DIR}/storage" --data-urlencode 'file=pyramid_seed_status.json' "${BASE}/execute/Fileman/get_file_content" -o "$R"
+          C=$(jq -r '.result.data.content // .data.content // empty' "$R")
+          test -n "$C"
+          printf '%s\n' "$C" | jq '{ok,products,seed_done,checked_at}'
