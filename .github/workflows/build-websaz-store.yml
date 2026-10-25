@@ -1,0 +1,31 @@
+name: Build Websaz Store Windows EXE
+on:
+  push:
+    branches: [websaz-store-desktop-v1]
+    paths:
+      - 'websaz-store/**'
+      - '.github/workflows/build-websaz-store.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Windows executable
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat"
+          cd websaz-store
+          csc /nologo /target:winexe /optimize+ /platform:anycpu /out:WebsazStore.exe Program.cs /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Data.dll
+      - name: Package
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item websaz-store\WebsazStore.exe dist\WebsazStore.exe
+          Copy-Item websaz-store\server\websaz-sync.php dist\websaz-sync.php
+          Copy-Item websaz-store\server\websaz-sync-config.sample.php dist\websaz-sync-config.sample.php
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WebsazStore-Windows
+          path: dist/*
+          if-no-files-found: error
