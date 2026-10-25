@@ -24,12 +24,27 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Reconstruct project
+      - name: Reconstruct and patch project
         shell: bash
         run: |
           mkdir -p zandiyeh-src
           cat zandiyeh_payload/part00 zandiyeh_payload/part01 zandiyeh_payload/part02 zandiyeh_payload/part03_05 zandiyeh_payload/part06_08 zandiyeh_payload/part09_12 | base64 -d > /tmp/zandiyeh.zip
           unzip -q /tmp/zandiyeh.zip -d zandiyeh-src
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('zandiyeh-src/app/build.gradle')
+          s=p.read_text()
+          s=s.replace("applicationId 'ir.zandiyeh.accounting'", "applicationId 'ir.zandiyeh.accounting.v2'")
+          s=s.replace('minSdk 29','minSdk 24')
+          s=s.replace('targetSdk 35','targetSdk 33')
+          s=s.replace('JavaVersion.VERSION_17','JavaVersion.VERSION_1_8')
+          p.write_text(s)
+          m=Path('zandiyeh-src/app/src/main/AndroidManifest.xml')
+          s=m.read_text().replace('android:fullBackupContent="true"\n        ','')
+          for name in ['ReportsActivity','LedgerActivity','PendingActivity','CardsActivity','AddTransactionActivity','MainActivity','SmsReceiver']:
+              s=s.replace(f'android:name=".{name}"', f'android:name="ir.zandiyeh.accounting.{name}"')
+          m.write_text(s)
+          PY
 
       - name: Install Android SDK packages
         shell: bash
@@ -47,11 +62,15 @@ jobs:
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: gradle --no-daemon :app:assembleDebug
 
-      - name: Prepare APK
-        run: cp zandiyeh-src/app/build/outputs/apk/debug/app-debug.apk Zandiyeh-Accounting.apk
+      - name: Prepare and verify APK
+        shell: bash
+        run: |
+          cp zandiyeh-src/app/build/outputs/apk/debug/app-debug.apk Zandiyeh-Accounting-Fixed.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner verify --verbose --print-certs Zandiyeh-Accounting-Fixed.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/aapt dump badging Zandiyeh-Accounting-Fixed.apk | head -20
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Zandiyeh-Accounting-APK
-          path: Zandiyeh-Accounting.apk
+          name: Zandiyeh-Accounting-Fixed-APK
+          path: Zandiyeh-Accounting-Fixed.apk
           if-no-files-found: error
