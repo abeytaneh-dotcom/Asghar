@@ -7,38 +7,182 @@ on:
 permissions:
   contents: read
 jobs:
-  read:
+  strict-images:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - offset: 0
+            size: 1650
+          - offset: 1650
+            size: 1650
+          - offset: 3300
+            size: 1650
+          - offset: 4950
+            size: 1650
+          - offset: 6600
+            size: 1650
+          - offset: 8250
+            size: 1557
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 30
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
     steps:
-      - name: Test Digikala Jet public search API
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Match unique high-confidence Snapp Market products
         shell: bash
+        env:
+          BATCH_OFFSET: ${{ matrix.offset }}
+          BATCH_SIZE: ${{ matrix.size }}
         run: |
           set -Eeuo pipefail
-          python3 - <<'PY'
-          import json,urllib.parse,urllib.request,ssl
-          names=['کره بادام زمینی جیف','آدامس تریدنت آناناس','نوشیدنی انرژی زا مانستر','روغن ذرت رویال','چای دلفین معطر']
+          python3 -c 'import PIL' 2>/dev/null || python3 -m pip install --quiet pillow
+          mkdir -p "$RUNNER_TEMP/imgs"
+          php -r "define('TS_INTERNAL_SEED',true); echo require 'TehranSupermarket/pyramid_seed_1400_data.php';" | base64 -d | gzip -dc > "$RUNNER_TEMP/products.jsonl"
+          python3 - "$RUNNER_TEMP/products.jsonl" "$RUNNER_TEMP/imgs" "$RUNNER_TEMP/manifest.jsonl" "$BATCH_OFFSET" "$BATCH_SIZE" <<'PY'
+          import sys,json,re,unicodedata,urllib.parse,urllib.request,ssl,concurrent.futures,io,os
+          from difflib import SequenceMatcher
+          from PIL import Image
+          seed,imgdir,manifest,offset,size=sys.argv[1],sys.argv[2],sys.argv[3],int(sys.argv[4]),int(sys.argv[5])
+          rows=[]
+          with open(seed,encoding='utf-8') as f:
+            for line in f:
+              try: rows.append(json.loads(line))
+              except: pass
+          batch=rows[offset:offset+size]
+          trans=str.maketrans({'ي':'ی','ى':'ی','ك':'ک','ۀ':'ه','ة':'ه','ؤ':'و','أ':'ا','إ':'ا','ٱ':'ا','‌':' ','ة':'ه'})
+          units={'گرم','گرمی','کیلو','کیلویی','کیلوگرم','میلی','میلیلیتر','لیتر','لیتری','عدد','عددی','بسته','قوطی','بطری','پاکت','ساشه','ورق','تایی','حلقه','میل','سیسی'}
+          generic={'محصول','اصل','اصلی','خارجی','ایرانی','جدید','بزرگ','کوچک','متوسط'}
+          flavor_words={'انبه','هلو','سیب','آناناس','پرتقال','لیمو','توت','فرنگی','هندوانه','نعنا','نعنایی','دارچین','قهوه','شکلات','وانیل','نارگیل','توتفرنگی','گیلاس','آلبالو','موز','طالبی','بلوبری','تمشک','کولا','زنجبیل','جینسینگ','سبز','قرمز','آبی','مشکی','سفید'}
+          def norm(s):
+            s=unicodedata.normalize('NFKC',str(s or '')).translate(trans).lower()
+            s=re.sub(r'[ًٌٍَُِّْـ]','',s)
+            s=s.replace('میلی لیتر','میلیلیتر').replace('توت فرنگی','توتفرنگی')
+            s=re.sub(r'[^0-9a-zآ-ی]+',' ',s)
+            return re.sub(r'\s+',' ',s).strip()
+          def toks(s):
+            return [x for x in norm(s).split() if len(x)>1 and x not in units and x not in generic and not x.isdigit()]
+          def nums(s):
+            return [x.lstrip('0') or '0' for x in re.findall(r'\d+(?:[.,]\d+)?',norm(s))]
+          def title_key(s):return norm(s)
           ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
           ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
-          base='https://api.digikalajet.ir/v2/search/'
-          for name in names:
-              params={'q':name,'page':1,'latitude':'35.757453','longitude':'51.409882'}
-              u=base+'?'+urllib.parse.urlencode(params)
-              try:
-                  rq=urllib.request.Request(u,headers={
-                      'User-Agent':ua,'Accept':'application/json','Accept-Language':'fa-IR,fa;q=0.9,en;q=0.5',
-                      'Origin':'https://www.digikalajet.com','Referer':'https://www.digikalajet.com/'
-                  })
-                  with urllib.request.urlopen(rq,timeout=25,context=ctx) as r:
-                      raw=r.read(4_000_000); code=r.status; ct=r.headers.get('content-type','')
-                  txt=raw.decode('utf-8','replace')
-                  print('\nQUERY',name,'HTTP',code,'TYPE',ct,'BYTES',len(raw))
-                  try:
-                      d=json.loads(txt)
-                      print('TOP_KEYS',list(d)[:20])
-                      print(json.dumps(d,ensure_ascii=False)[:10000])
-                  except Exception:
-                      print(txt[:5000])
-              except Exception as e:
-                  print('\nQUERY',name,'ERROR',type(e).__name__,e)
+          def search(name):
+            q=urllib.parse.urlencode({'query':name,'latitude':'35.757453','longitude':'51.409882','page':0,'page_size':20,'size':20,'fetch_filters':1,'firstPage':'true','origin':'search'})
+            u='https://svc.snapp.market/mobile/v3/search?'+q
+            rq=urllib.request.Request(u,headers={'User-Agent':ua,'Accept':'application/json','Origin':'https://snapp.market','Referer':'https://snapp.market/'})
+            with urllib.request.urlopen(rq,timeout=13,context=ctx) as r:return json.loads(r.read(4_000_000))
+          def candidates(d):
+            by={}
+            for v in d.get('data',{}).get('vendor_product_variations',{}).get('items',[]) or []:
+              for p in v.get('products',[]) or []:
+                ims=p.get('images') or []
+                if not ims:continue
+                url=(ims[0] or {}).get('main') or (ims[0] or {}).get('thumb') or ''
+                if not isinstance(url,str) or not url.startswith('https://static.snapp.express/'):continue
+                k=str(p.get('id') or '')+'|'+title_key(p.get('title') or '')
+                if k not in by:by[k]=(p,url)
+            return list(by.values())
+          def calc(target,p):
+            title=str(p.get('title') or ''); tt=toks(target); ct=toks(title)
+            if len(set(tt))<3:return None
+            ts=set(tt);cs=set(ct); common=ts&cs
+            cov=len(common)/len(ts); rev=len(common)/max(1,len(cs)); seq=SequenceMatcher(None,norm(target),norm(title)).ratio()
+            tn=nums(target);cn=nums(title)
+            # Every explicit target number (weight/volume/count) must occur in candidate.
+            if tn and any(n not in cn for n in tn):return None
+            # Flavor/color words mentioned by target may not disappear or be contradicted.
+            tf={x for x in tt if x in flavor_words}; cf={x for x in ct if x in flavor_words}
+            if tf and not tf.issubset(cf):return None
+            # Strong lexical agreement. Allow a few generic source-side extras.
+            if cov < 0.94:return None
+            if len(ts)==3 and rev<0.60:return None
+            if len(ts)>=4 and rev<0.55:return None
+            score=.60*cov+.18*min(1.0,rev/.80)+.22*seq
+            return score
+          def choose(row):
+            name=str(row.get('name') or '').strip()
+            if len(set(toks(name)))<3:return None
+            try:d=search(name)
+            except Exception:return None
+            ranked=[]
+            bar=re.sub(r'\D','',str(row.get('barcode') or ''))
+            for p,url in candidates(d):
+              # Barcode in source image is still an automatic strongest match.
+              ns=re.findall(r'\d{8,16}',url)
+              exact=bool(len(bar)>=8 and any(bar==n or bar.lstrip('0')==n.lstrip('0') for n in ns))
+              sc=1.5 if exact else calc(name,p)
+              if sc is not None and sc>=0.86:ranked.append((sc,p,url,exact))
+            if not ranked:return None
+            ranked.sort(key=lambda x:x[0],reverse=True)
+            # Collapse identical titles; vendors often repeat the same product.
+            distinct=[]; seen=set()
+            for x in ranked:
+              k=title_key(x[1].get('title') or '')
+              if k in seen:continue
+              seen.add(k);distinct.append(x)
+            best=distinct[0]
+            if not best[3]:
+              if best[0]<0.90:return None
+              if len(distinct)>1 and best[0]-distinct[1][0] < 0.08:return None
+            return row,best[1],best[2],best[0]
+          found=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
+            for i,x in enumerate(ex.map(choose,batch),1):
+              if x:found.append(x)
+              if i%275==0:print('LOOKUP',offset+i,'STRICT',len(found),flush=True)
+          def convert(x):
+            row,p,url,score=x
+            try:
+              rq=urllib.request.Request(url,headers={'User-Agent':ua,'Referer':'https://snapp.market/'})
+              with urllib.request.urlopen(rq,timeout=18,context=ctx) as r:raw=r.read(8_000_000)
+              im=Image.open(io.BytesIO(raw));im.load()
+              if im.width<100 or im.height<100:return None
+              if im.mode not in ('RGB','RGBA'):im=im.convert('RGBA' if 'transparency' in im.info else 'RGB')
+              im.thumbnail((720,720),Image.Resampling.LANCZOS)
+              code=re.sub(r'[^A-Za-z0-9_-]','_',str(row.get('code2') or row.get('barcode') or 'product'))[:70]
+              fn=f'auto_snp_strict_{code}.webp';path=os.path.join(imgdir,fn)
+              im.save(path,'WEBP',quality=80,method=6,optimize=True)
+              if os.path.getsize(path)>140000:im.save(path,'WEBP',quality=72,method=6,optimize=True)
+              if os.path.getsize(path)>180000:
+                im.thumbnail((600,600),Image.Resampling.LANCZOS);im.save(path,'WEBP',quality=70,method=6,optimize=True)
+              return {'code2':str(row.get('code2') or ''),'barcode':str(row.get('barcode') or ''),'path':'uploads/products/'+fn,'source':'snapp.market|'+url,'bytes':os.path.getsize(path),'score':round(score,4),'target':str(row.get('name') or ''),'title':str(p.get('title') or '')}
+            except Exception:return None
+          done=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            for x in ex.map(convert,found):
+              if x:done.append(x)
+          with open(manifest,'w',encoding='utf-8') as f:
+            for x in done:f.write(json.dumps({k:x[k] for k in ('code2','barcode','path','source')},ensure_ascii=False)+'\n')
+          report={'offset':offset,'batch':len(batch),'strict_found':len(found),'downloaded':len(done),'avg_bytes':round(sum(x['bytes'] for x in done)/max(1,len(done))),'max_bytes':max([x['bytes'] for x in done] or [0]),'samples':[{k:x[k] for k in ('target','title','score','bytes')} for x in done[:12]]}
+          with open(os.path.join(imgdir,'report.json'),'w',encoding='utf-8') as f:json.dump(report,f,ensure_ascii=False,indent=2)
+          print(json.dumps(report,ensure_ascii=False),flush=True)
           PY
+      - name: Upload strict images and manifest
+        shell: bash
+        env:
+          BATCH_OFFSET: ${{ matrix.offset }}
+        run: |
+          set -Eeuo pipefail
+          BASE="https://${CPANEL_HOST}:2083"; AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          mapfile -t files < <(find "$RUNNER_TEMP/imgs" -maxdepth 1 -type f -name '*.webp' | sort)
+          echo "STRICT_UPLOAD offset=${BATCH_OFFSET} count=${#files[@]}"
+          for ((i=0;i<${#files[@]};i+=20)); do
+            args=();n=1
+            for f in "${files[@]:i:20}";do args+=( -F "file-${n}=@${f};filename=$(basename "$f")" );n=$((n+1));done
+            R="$RUNNER_TEMP/u.json";curl -sS --fail-with-body -H "$AUTH" "${args[@]}" -F "dir=${TARGET_DIR}/uploads/products" -F 'overwrite=1' "${BASE}/execute/Fileman/upload_files" -o "$R"
+            test "$(jq -r '.result.status // .status // 0' "$R")" = 1
+          done
+          mf="product_image_manifest_snapp_strict_${BATCH_OFFSET}.jsonl"
+          curl -sS --fail-with-body -H "$AUTH" --request POST --data-urlencode "dir=${TARGET_DIR}/storage" --data-urlencode "file=${mf}" --data-urlencode "content@$RUNNER_TEMP/manifest.jsonl" "${BASE}/execute/Fileman/save_file_content" >/dev/null
+          curl -sS -L --max-time 120 'https://websaza.ir/tehran/' >/dev/null
+          sleep 1
+          curl -sS -L --max-time 120 'https://websaza.ir/tehran/' >/dev/null
+          cat "$RUNNER_TEMP/imgs/report.json"
