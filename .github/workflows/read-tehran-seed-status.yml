@@ -9,34 +9,28 @@ permissions:
 jobs:
   read:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 5
     steps:
-      - name: Test Digikala Jet barcode search
+      - name: Inspect Snapp product barcode fields
         shell: bash
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
-          import json,urllib.parse,urllib.request,ssl
-          bars=['051500255162','012000002632','022000005120','037203018518','046708899034']
+          import json,urllib.parse,urllib.request,ssl,re
+          name='آدامس تریدنت آناناس'
           ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
-          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
-          for bar in bars:
-              u='https://api.digikalajet.ir/v2/search/?'+urllib.parse.urlencode({'q':bar,'page':1,'latitude':'35.757453','longitude':'51.409882'})
-              try:
-                  rq=urllib.request.Request(u,headers={'User-Agent':ua,'Accept':'application/json','Origin':'https://www.digikalajet.com','Referer':'https://www.digikalajet.com/'})
-                  with urllib.request.urlopen(rq,timeout=25,context=ctx) as r:d=json.loads(r.read(4_000_000))
-                  results=[]
-                  data=d.get('data') or {}
-                  # Flatten any product-shaped dictionaries and report barcode/image/title fields only.
-                  def walk(x):
-                      if isinstance(x,dict):
-                          if any(k in x for k in ['serial_barcode','barcode']) and any(k in x for k in ['title','name','media','image']):
-                              results.append({k:x.get(k) for k in ['id','title','name','serial_barcode','barcode','media','image'] if k in x})
-                          for v in x.values():walk(v)
-                      elif isinstance(x,list):
-                          for v in x:walk(v)
-                  walk(data)
-                  print('BAR',bar,'RESULTS',len(results))
-                  print(json.dumps(results[:10],ensure_ascii=False)[:8000])
-              except Exception as e:print('BAR',bar,'ERROR',type(e).__name__,e)
+          q=urllib.parse.urlencode({'query':name,'latitude':'35.757453','longitude':'51.409882','page':0,'page_size':20,'size':20,'fetch_filters':1,'firstPage':'true','origin':'search'})
+          u='https://svc.snapp.market/mobile/v3/search?'+q
+          rq=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0 Chrome/141 Safari/537.36','Accept':'application/json','Origin':'https://snapp.market','Referer':'https://snapp.market/'})
+          with urllib.request.urlopen(rq,timeout=25,context=ctx) as r:d=json.loads(r.read(4_000_000))
+          ps=[]
+          for v in d.get('data',{}).get('vendor_product_variations',{}).get('items',[]) or []:
+            for p in v.get('products',[]) or []:
+              ps.append(p)
+          print('PRODUCTS',len(ps))
+          for p in ps[:5]:
+            print('TITLE',p.get('title'))
+            print('KEYS',sorted(p.keys()))
+            print('BARLIKE',{k:v for k,v in p.items() if any(x in k.lower() for x in ['bar','ean','upc','serial','sku','code'])})
+            print('IMAGE',((p.get('images') or [{}])[0] or {}).get('main'))
           PY
