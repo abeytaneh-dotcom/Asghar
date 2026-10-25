@@ -22,8 +22,8 @@ namespace WebsazStore {
       root=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"WebsazStore");Directory.CreateDirectory(root);
       Text="وب ساز - مدیریت ساده فروشگاه";StartPosition=FormStartPosition.CenterScreen;WindowState=FormWindowState.Maximized;DoubleBuffered=true;RightToLeft=RightToLeft.Yes;Icon=SystemIcons.Application;
       bg=LoadOverlayImage();MouseUp+=ClickUI;Paint+=DrawUI;Resize+=(s,e)=>Invalidate();
-      var tm=new System.Windows.Forms.Timer();tm.Interval=60000;tm.Tick+=(s,e)=>{if(!syncing)new Thread(()=>Sync(false)){IsBackground=true}.Start();};tm.Start();
-      Shown+=(s,e)=>{new Thread(()=>{Thread.Sleep(8000);Sync(false);}){IsBackground=true}.Start();};
+      var tm=new System.Windows.Forms.Timer();tm.Interval=60000;tm.Tick+=(s,e)=>{if(!syncing)(new Thread(()=>Sync(false)){IsBackground=true}).Start();};tm.Start();
+      Shown+=(s,e)=>{(new Thread(()=>{Thread.Sleep(8000);Sync(false);}){IsBackground=true}).Start();};
     }
     Image LoadOverlayImage(){try{var exe=Application.ExecutablePath;using(var f=File.OpenRead(exe)){if(f.Length<16)return null;f.Seek(-16,SeekOrigin.End);var m=new byte[8];f.Read(m,0,8);var lenb=new byte[8];f.Read(lenb,0,8);if(Encoding.ASCII.GetString(m)!="WSUIJPG1")return null;long len=BitConverter.ToInt64(lenb,0);if(len<=0||len>f.Length)return null;f.Seek(-16-len,SeekOrigin.End);var b=new byte[len];f.Read(b,0,b.Length);using(var ms=new MemoryStream(b))return new Bitmap(ms);}}catch{return null;}}
     Rectangle UiRect(){double s=Math.Min((double)ClientSize.Width/BW,(double)ClientSize.Height/BH);int w=(int)(BW*s),h=(int)(BH*s);return new Rectangle((ClientSize.Width-w)/2,(ClientSize.Height-h)/2,w,h);}
