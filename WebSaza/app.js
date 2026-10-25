@@ -105,3 +105,13 @@
     document.addEventListener('keydown',e=>{if(e.key==='Escape')setOpen(false)});
   }
 })();
+
+/* Public customer order form loader */
+(()=>{
+  if(document.querySelector('script[data-ws-order-loader]'))return;
+  const s=document.createElement('script');
+  s.src='/order-widget-v1.js?v=20261025-1';
+  s.defer=true;
+  s.dataset.wsOrderLoader='1';
+  document.head.appendChild(s);
+})();
