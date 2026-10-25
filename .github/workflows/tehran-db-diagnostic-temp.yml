@@ -9,40 +9,49 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
-    env:
-      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
-      BASE: https://mch4444.dnsuserver.com:2083
-      USER: vt6qdx8
-      DIR: public_html/tehran
+    timeout-minutes: 10
     steps:
-      - name: Run self-deleting product schema diagnostic
+      - name: Probe approved supermarket image sources
         shell: bash
         run: |
           set -Eeuo pipefail
-          AUTH="Authorization: cpanel ${USER}:${CPANEL_TOKEN}"
-          TOKEN=$(openssl rand -hex 32); NAME=".diag-$(openssl rand -hex 10).php"
-          cat > "$RUNNER_TEMP/$NAME" <<'PHP'
-          <?php
-declare(strict_types=1);header('Content-Type: application/json; charset=utf-8');header('Cache-Control:no-store');
-$token='__TOKEN__';if(!hash_equals($token,(string)($_SERVER['HTTP_X_DIAG_TOKEN']??''))){http_response_code(403);exit;}
-@unlink(__FILE__);
-$c=require __DIR__.'/config.php';$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
-$cols=$pdo->query('SHOW COLUMNS FROM products')->fetchAll();$idx=$pdo->query('SHOW INDEX FROM products')->fetchAll();
-$stats=$pdo->query("SELECT COUNT(*) total,SUM(active=1) active,SUM(pyramid_barcode_generated=1) generated,SUM(barcode IS NULL OR barcode='') blank_barcode,SUM(image_path IS NULL OR image_path='') noimage,SUM(price=0) price0 FROM products")->fetch();
-echo json_encode(['ok'=>true,'columns'=>$cols,'indexes'=>$idx,'stats'=>$stats],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
-PHP
-          sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$NAME"
-          RES=$(curl -sS --fail-with-body -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$NAME;filename=$NAME" -F "dir=$DIR" -F 'overwrite=1' "$BASE/execute/Fileman/upload_files")
-          echo "$RES" | jq -e '(.result.status // .status)==1' >/dev/null
-          CODE=$(curl -sS --max-time 30 -o "$RUNNER_TEMP/result.json" -w '%{http_code}' -X POST -H "X-Diag-Token: $TOKEN" "https://websaza.ir/tehran/$NAME")
-          test "$CODE" = 200
-          jq . "$RUNNER_TEMP/result.json" > "$RUNNER_TEMP/db-diagnostic.json"
-          # Prove file self-deleted using cPanel listing.
-          L="$RUNNER_TEMP/list.json"; curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=$DIR" --data-urlencode 'show_hidden=1' "$BASE/execute/Fileman/list_files" -o "$L"
-          ! jq -e --arg n "$NAME" '(.result.data // .data // [])[] | select((.file // .name // "") | endswith($n))' "$L" >/dev/null
+          OUT="$RUNNER_TEMP/out"
+          mkdir -p "$OUT"
+          python3 - "$OUT" <<'PY'
+          import sys,re,urllib.parse,urllib.request,ssl,pathlib
+          out=pathlib.Path(sys.argv[1])
+          q=urllib.parse.quote('کره بادام زمینی جیف')
+          urls=[
+              f'https://www.okala.com/search?query={q}',
+              f'https://snapp.market/search?query={q}',
+              f'https://www.digikalajet.com/search/?q={q}',
+              f'https://www.modiseh.com/search?q={q}',
+          ]
+          ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
+          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
+          summary=[]
+          for i,u in enumerate(urls,1):
+              try:
+                  req=urllib.request.Request(u,headers={'User-Agent':ua,'Accept-Language':'fa-IR,fa;q=0.9,en;q=0.5'})
+                  with urllib.request.urlopen(req,timeout=30,context=ctx) as r:
+                      raw=r.read(5_000_000); code=r.status; final=r.geturl(); ctype=r.headers.get('content-type','')
+                  text=raw.decode('utf-8','replace')
+                  (out/f'body_{i}.html').write_text(text,'utf-8')
+                  m=re.search(r'<title[^>]*>(.*?)</title>',text,re.I|re.S)
+                  title=re.sub(r'\s+',' ',m.group(1)).strip() if m else ''
+                  vals=[]
+                  for m in re.finditer(r'https?://[^\s"<>]+',text,re.I):
+                      v=m.group(0).replace('\\u002F','/').replace('\\/','/')
+                      if re.search(r'\.(?:jpe?g|png|webp)(?:\?|$)',v,re.I) or any(x in v.lower() for x in ['image','product','cdn']): vals.append(v)
+                  (out/f'urls_{i}.txt').write_text('\n'.join(dict.fromkeys(vals[:200])),'utf-8')
+                  summary.append(f'[{i}] code={code} bytes={len(raw)} type={ctype} title={title} final={final} source={u}')
+              except Exception as e:
+                  summary.append(f'[{i}] ERROR {type(e).__name__}: {e} source={u}')
+          (out/'summary.txt').write_text('\n'.join(summary),'utf-8')
+          print('\n'.join(summary))
+          PY
       - uses: actions/upload-artifact@v4
         with:
-          name: tehran-db-diagnostic-temp
-          path: ${{ runner.temp }}/db-diagnostic.json
+          name: product-image-source-probe
+          path: ${{ runner.temp }}/out
           retention-days: 1
