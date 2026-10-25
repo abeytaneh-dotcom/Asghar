@@ -9,23 +9,28 @@ permissions:
 jobs:
   read:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
-    env:
-      CPANEL_HOST: mch4444.dnsuserver.com
-      CPANEL_USER: vt6qdx8
-      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
-      TARGET_DIR: public_html/tehran/storage
+    timeout-minutes: 8
     steps:
-      - name: Read aggregate seed status
+      - name: Probe Digikala Fresh image search
         shell: bash
         run: |
           set -Eeuo pipefail
-          BASE="https://${CPANEL_HOST}:2083"
-          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
-          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get \
-            --data-urlencode "dir=${TARGET_DIR}" --data-urlencode 'file=pyramid_seed_status.json' \
-            "${BASE}/execute/Fileman/get_file_content" -o "$RUNNER_TEMP/status.json"
-          CONTENT=$(jq -r '.result.data.content // .data.content // empty' "$RUNNER_TEMP/status.json")
-          test -n "$CONTENT"
-          printf '%s\n' "$CONTENT" | jq .
-          printf '%s\n' "$CONTENT" | jq -e '.ok == true and .seed_done == true and ((.products.stock10|tonumber) >= 9807)' >/dev/null
+          python3 -m pip install --quiet curl_cffi
+          python3 - <<'PY'
+          import json
+          from curl_cffi import requests
+          names=['کره بادام زمینی جیف 454','آدامس آناناس تریدنت 14 عددی','نوشیدنی انرژی زا مانستر 500','چای دلفین معطر','روغن ذرت رویال']
+          h={'Accept':'application/json','Accept-Language':'fa-IR,fa;q=0.9,en;q=0.8','Origin':'https://www.digikala.com','Referer':'https://www.digikala.com/','x-web-client':'desktop','x-web-client-id':'web'}
+          s=requests.Session(impersonate='chrome')
+          for name in names:
+            try:
+              r=s.get('https://api.digikala.com/fresh/v1/search/',params={'q':name,'page':1,'sort':22,'has_selling_stock':1},headers=h,timeout=25)
+              print('HTTP',r.status_code,'QUERY',name)
+              d=r.json(); ps=((d.get('data') or {}).get('products') or [])[:5]
+              out=[]
+              for p in ps:
+                imgs=((p.get('images') or {}).get('main') or {}).get('url') or []
+                out.append({'id':p.get('id'),'title_fa':p.get('title_fa'),'title_en':p.get('title_en'),'image':next((u for u in imgs if isinstance(u,str) and u.startswith('https://')),None)})
+              print(json.dumps(out,ensure_ascii=False))
+            except Exception as e:print('ERROR',name,type(e).__name__,e)
+          PY
