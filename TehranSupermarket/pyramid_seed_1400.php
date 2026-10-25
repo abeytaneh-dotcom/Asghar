@@ -2,6 +2,22 @@
 declare(strict_types=1);
 // One-time catalog seed; deployment trigger 2026-10-26.
 
+function ts_seed_pyramid_1400_write_status(PDO $pdo, ?string $marker): void {
+    try {
+        $row = $pdo->query("SELECT COUNT(*) total,SUM(stock=10) stock10,SUM(stock<>10) other_stock,SUM(image_path IS NULL OR image_path='') noimage,SUM(barcode IS NOT NULL AND barcode<>'') barcoded,SUM(pyramid_code2 IS NOT NULL AND pyramid_code2<>'') coded,SUM(price=0) price0 FROM products WHERE active=1")->fetch(PDO::FETCH_ASSOC);
+        $status = [
+            'ok'=>true,
+            'products'=>$row,
+            'seed_done'=>($marker !== null && $marker !== ''),
+            'seed_summary'=>$marker ? json_decode($marker, true) : null,
+            'checked_at'=>date(DATE_ATOM),
+        ];
+        @file_put_contents(__DIR__.'/storage/pyramid_seed_status.json', json_encode($status, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES), LOCK_EX);
+    } catch (Throwable $e) {
+        @file_put_contents(__DIR__.'/storage/pyramid_seed_status.json', json_encode(['ok'=>false,'checked_at'=>date(DATE_ATOM)]), LOCK_EX);
+    }
+}
+
 function ts_seed_pyramid_1400(): void {
     static $ran = false;
     if ($ran) return;
@@ -27,7 +43,11 @@ function ts_seed_pyramid_1400(): void {
         $markerKey = 'pyramid_seed_1400_v1';
         $marker = $pdo->prepare('SELECT setting_value FROM store_settings WHERE setting_key=? LIMIT 1');
         $marker->execute([$markerKey]);
-        if ((string)($marker->fetchColumn() ?: '') !== '') return;
+        $markerValue = (string)($marker->fetchColumn() ?: '');
+        if ($markerValue !== '') {
+            ts_seed_pyramid_1400_write_status($pdo, $markerValue);
+            return;
+        }
 
         if (!defined('TS_INTERNAL_SEED')) define('TS_INTERNAL_SEED', true);
         $encoded = require $dataFile;
@@ -108,9 +128,11 @@ function ts_seed_pyramid_1400(): void {
         $save = $pdo->prepare('INSERT INTO store_settings(setting_key,setting_value,updated_at) VALUES(?,?,NOW()) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value),updated_at=NOW()');
         $save->execute([$markerKey, $summary]);
         $pdo->commit();
+        ts_seed_pyramid_1400_write_status($pdo, $summary);
     } catch (Throwable $e) {
         if ($pdo instanceof PDO && $pdo->inTransaction()) $pdo->rollBack();
         if (function_exists('ts_log_internal')) ts_log_internal($e, 'CAT-1400');
         else error_log('CAT-1400 '.$e->getMessage());
+        if ($pdo instanceof PDO) ts_seed_pyramid_1400_write_status($pdo, null);
     }
 }
