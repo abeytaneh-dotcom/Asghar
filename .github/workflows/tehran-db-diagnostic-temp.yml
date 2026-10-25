@@ -9,49 +9,64 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
-      - name: Probe approved supermarket image sources
+      - name: Discover public product search endpoints
         shell: bash
         run: |
           set -Eeuo pipefail
-          OUT="$RUNNER_TEMP/out"
-          mkdir -p "$OUT"
+          OUT="$RUNNER_TEMP/out"; mkdir -p "$OUT"
           python3 - "$OUT" <<'PY'
           import sys,re,urllib.parse,urllib.request,ssl,pathlib
+          from urllib.parse import urljoin,urlparse
           out=pathlib.Path(sys.argv[1])
-          q=urllib.parse.quote('کره بادام زمینی جیف')
-          urls=[
-              f'https://www.okala.com/search?query={q}',
-              f'https://snapp.market/search?query={q}',
-              f'https://www.digikalajet.com/search/?q={q}',
-              f'https://www.modiseh.com/search?q={q}',
-          ]
           ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
           ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
+          q=urllib.parse.quote('کره بادام زمینی جیف')
+          sources={
+            'okala':f'https://www.okala.com/search?query={q}',
+            'snapp':f'https://snapp.market/search?query={q}',
+            'digijet':f'https://www.digikalajet.com/search/?q={q}',
+          }
+          def get(url,maxb=8_000_000):
+              req=urllib.request.Request(url,headers={'User-Agent':ua,'Accept-Language':'fa-IR,fa;q=0.9,en;q=0.5','Accept':'*/*'})
+              with urllib.request.urlopen(req,timeout=35,context=ctx) as r: return r.read(maxb),r.geturl(),r.headers.get('content-type','')
           summary=[]
-          for i,u in enumerate(urls,1):
+          for name,page in sources.items():
               try:
-                  req=urllib.request.Request(u,headers={'User-Agent':ua,'Accept-Language':'fa-IR,fa;q=0.9,en;q=0.5'})
-                  with urllib.request.urlopen(req,timeout=30,context=ctx) as r:
-                      raw=r.read(5_000_000); code=r.status; final=r.geturl(); ctype=r.headers.get('content-type','')
-                  text=raw.decode('utf-8','replace')
-                  (out/f'body_{i}.html').write_text(text,'utf-8')
-                  m=re.search(r'<title[^>]*>(.*?)</title>',text,re.I|re.S)
-                  title=re.sub(r'\s+',' ',m.group(1)).strip() if m else ''
-                  vals=[]
-                  for m in re.finditer(r'https?://[^\s"<>]+',text,re.I):
-                      v=m.group(0).replace('\\u002F','/').replace('\\/','/')
-                      if re.search(r'\.(?:jpe?g|png|webp)(?:\?|$)',v,re.I) or any(x in v.lower() for x in ['image','product','cdn']): vals.append(v)
-                  (out/f'urls_{i}.txt').write_text('\n'.join(dict.fromkeys(vals[:200])),'utf-8')
-                  summary.append(f'[{i}] code={code} bytes={len(raw)} type={ctype} title={title} final={final} source={u}')
-              except Exception as e:
-                  summary.append(f'[{i}] ERROR {type(e).__name__}: {e} source={u}')
-          (out/'summary.txt').write_text('\n'.join(summary),'utf-8')
-          print('\n'.join(summary))
+                  raw,final,ct=get(page,5_000_000); html=raw.decode('utf-8','replace')
+                  scripts=re.findall(r'<script[^>]+src=["\']([^"\']+)["\']',html,re.I)
+                  jsurls=[]
+                  for s in scripts:
+                      u=urljoin(final,s)
+                      if u.endswith('.js') or '.js?' in u: jsurls.append(u)
+                  summary.append(f'{name}: page={len(raw)} scripts={len(jsurls)} final={final}')
+                  matches=[]; contexts=[]
+                  for j,u in enumerate(jsurls[:60]):
+                      try:
+                          b,fu,jct=get(u,12_000_000); t=b.decode('utf-8','replace')
+                          for m in re.finditer(r'https?://[^\s"\'<>]{4,300}',t,re.I):
+                              v=m.group(0).replace('\\/','/')
+                              if any(k in v.lower() for k in ['api','search','product','catalog','svc.snapp','digikalajet','okala']): matches.append(v)
+                          for m in re.finditer(r'["\']([^"\']{1,260})["\']',t):
+                              v=m.group(1).replace('\\/','/')
+                              lv=v.lower()
+                              if any(k in lv for k in ['/api','/v1','/v2','/v3','search','product','catalog','sku','plp']) and ('/' in v or 'http' in lv): matches.append(v)
+                          for key in ['svc.snapp.market','api.digikalajet.ir','search','products','product-list','catalog']:
+                              pos=t.lower().find(key.lower())
+                              if pos>=0: contexts.append(f'JS={fu}\nKEY={key}\n'+t[max(0,pos-500):pos+1400])
+                      except Exception as e:
+                          contexts.append(f'JS_ERROR {u} {type(e).__name__}: {e}')
+                  uniq=[]
+                  for v in matches:
+                      if v not in uniq: uniq.append(v)
+                  (out/f'{name}_matches.txt').write_text('\n'.join(uniq[:1500]),'utf-8')
+                  (out/f'{name}_contexts.txt').write_text('\n\n=====\n\n'.join(contexts[:250]),'utf-8')
+              except Exception as e: summary.append(f'{name}: ERROR {type(e).__name__}: {e}')
+          (out/'summary.txt').write_text('\n'.join(summary),'utf-8'); print('\n'.join(summary))
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: product-image-source-probe
+          name: product-api-discovery
           path: ${{ runner.temp }}/out
           retention-days: 1
