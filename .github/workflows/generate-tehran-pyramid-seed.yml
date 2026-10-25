@@ -1,0 +1,86 @@
+name: Generate Tehran Pyramid Seed
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/generate-tehran-pyramid-seed'
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+          fetch-depth: 0
+      - name: Download and restore Pyramid backup
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/ext" "$RUNNER_TEMP/sqlbackup"
+          curl -fL --retry 2 --connect-timeout 20 --max-time 600 'https://htaelec.ir/piramyd/ManagerBack1400.rar' -o "$RUNNER_TEMP/ManagerBack1400.rar"
+          7z x -y -o"$RUNNER_TEMP/ext" "$RUNNER_TEMP/ManagerBack1400.rar" >/dev/null
+          BAK=$(find "$RUNNER_TEMP/ext" -type f -iname '*.bak' | head -n1)
+          test -n "$BAK"
+          cp "$BAK" "$RUNNER_TEMP/sqlbackup/ManagerBack1400.Bak"
+          chmod -R a+rX "$RUNNER_TEMP/sqlbackup"
+          SA_PASS="Aa1!$(openssl rand -hex 16)"
+          echo "SA_PASS=$SA_PASS" >> "$GITHUB_ENV"
+          docker run -d --name piramyd-sql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD="$SA_PASS" -v "$RUNNER_TEMP/sqlbackup:/backup:ro" mcr.microsoft.com/mssql/server:2022-latest >/dev/null
+          for i in $(seq 1 90); do
+            docker logs piramyd-sql 2>&1 | grep -q 'SQL Server is now ready for client connections' && break
+            sleep 2
+          done
+          SQLCMD=$(docker exec piramyd-sql sh -lc "if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then echo /opt/mssql-tools18/bin/sqlcmd; else echo /opt/mssql-tools/bin/sqlcmd; fi")
+          echo "SQLCMD=$SQLCMD" >> "$GITHUB_ENV"
+          docker exec piramyd-sql "$SQLCMD" -C -S localhost -U sa -P "$SA_PASS" -Q "RESTORE DATABASE [Pyramid_1400] FROM DISK=N'/backup/ManagerBack1400.Bak' WITH FILE=2, MOVE N'anbar_Data' TO N'/var/opt/mssql/data/Pyramid_1400.mdf', MOVE N'anbar_Log' TO N'/var/opt/mssql/data/Pyramid_1400_log.ldf', RECOVERY;" >/dev/null
+      - name: Export products and build protected seed data
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker exec piramyd-sql "$SQLCMD" -C -S localhost -U sa -P "$SA_PASS" -W -s $'\t' -h-1 -Q "USE [Pyramid_1400]; SET NOCOUNT ON; SELECT CAST(k.K_Code AS nvarchar(50)),REPLACE(REPLACE(COALESCE(k.Barcode,''),CHAR(9),' '),CHAR(13)+CHAR(10),' '),REPLACE(REPLACE(COALESCE(k.Name1,N''),CHAR(9),N' '),CHAR(13)+CHAR(10),N' '),CAST(COALESCE(a.price_forosh,0) AS nvarchar(50)) FROM KalaId k OUTER APPLY (SELECT MAX(COALESCE(Price_Forosh,0)) price_forosh FROM Anbar x WHERE x.K_Code=k.K_Code) a ORDER BY k.K_Code;" > "$RUNNER_TEMP/products.tsv"
+          python3 - <<'PY'
+          import base64,gzip,json,decimal,pathlib
+          src=pathlib.Path(__import__('os').environ['RUNNER_TEMP'])/'products.tsv'
+          rows=[]
+          real=0
+          with src.open('r',encoding='utf-8-sig',errors='replace') as f:
+              for line in f:
+                  if line.startswith('Changed database context'): continue
+                  parts=line.rstrip('\r\n').split('\t')
+                  if len(parts)!=4: continue
+                  code2,barcode,name,raw_price=parts
+                  code2=code2.strip(); barcode=barcode.strip(); name=name.strip()
+                  if not code2 or not name: continue
+                  try: rial=decimal.Decimal(raw_price.strip() or '0')
+                  except: rial=decimal.Decimal(0)
+                  price=max(0,int(rial/decimal.Decimal(10)))
+                  if barcode: real+=1
+                  rows.append({'code2':code2,'barcode':barcode,'name':name,'price':price,'stock':10})
+          if len(rows)!=9807:
+              raise SystemExit(f'unexpected row count: {len(rows)}')
+          if real!=9781:
+              raise SystemExit(f'unexpected barcode count: {real}')
+          payload='\n'.join(json.dumps(r,ensure_ascii=False,separators=(',',':')) for r in rows).encode('utf-8')
+          enc=base64.b64encode(gzip.compress(payload,compresslevel=9)).decode('ascii')
+          out=pathlib.Path('TehranSupermarket/pyramid_seed_1400_data.php')
+          out.write_text("<?php\ndeclare(strict_types=1);\nif (!defined('TS_INTERNAL_SEED')) { http_response_code(403); exit; }\nreturn '"+enc+"';\n",encoding='utf-8')
+          print(f'rows={len(rows)} real_barcodes={real} stock=10 data_bytes={out.stat().st_size}')
+          PY
+          php -l TehranSupermarket/pyramid_seed_1400_data.php
+          docker rm -f piramyd-sql >/dev/null 2>&1 || true
+      - name: Commit seed data
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/pyramid_seed_1400_data.php
+          if git diff --cached --quiet; then
+            echo 'Seed data already current.'
+            exit 0
+          fi
+          git commit -m 'Add Pyramid 1400 product seed data'
+          git push origin HEAD:websaza-hosting
