@@ -26,9 +26,9 @@ function couponNorm(string $s):string{$s=mb_strtoupper(trim($s),'UTF-8');return 
 function couponRows():array{if(!is_file(CPN))@file_put_contents(CPN,"[]\\n");return j(CPN);}
 function couponGenerate():string{do{$c='WEB'.random_int(100000,999999);$used=false;foreach(couponRows() as $r)if(couponNorm((string)($r['code']??''))===$c){$used=true;break;}}while($used);return $c;}
 '''
-anchor = "if(($_GET['system_tick']??'')==='1')"
+anchor = "if(post('register'))"
 if anchor not in s:
-    raise SystemExit('coupon patch: system tick marker missing')
+    raise SystemExit('coupon patch: register action marker missing')
 s = s.replace(anchor, helpers + "\n" + anchor, 1)
 
 actions = r'''
