@@ -4,6 +4,7 @@ import subprocess
 import sys
 
 # Deployment marker: landing order = tutorial, registration, explanatory content.
+# V14 also adds customer-order coupon management to the central admin.
 root = Path(__file__).resolve().parent
 steps = [
     'build-patch.py',
