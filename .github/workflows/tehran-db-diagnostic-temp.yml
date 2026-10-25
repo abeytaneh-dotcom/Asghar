@@ -1,0 +1,48 @@
+name: Tehran DB Diagnostic Temp
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/tehran-db-diagnostic-temp'
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      BASE: https://mch4444.dnsuserver.com:2083
+      USER: vt6qdx8
+      DIR: public_html/tehran
+    steps:
+      - name: Run self-deleting product schema diagnostic
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${USER}:${CPANEL_TOKEN}"
+          TOKEN=$(openssl rand -hex 32); NAME=".diag-$(openssl rand -hex 10).php"
+          cat > "$RUNNER_TEMP/$NAME" <<'PHP'
+          <?php
+declare(strict_types=1);header('Content-Type: application/json; charset=utf-8');header('Cache-Control:no-store');
+$token='__TOKEN__';if(!hash_equals($token,(string)($_SERVER['HTTP_X_DIAG_TOKEN']??''))){http_response_code(403);exit;}
+@unlink(__FILE__);
+$c=require __DIR__.'/config.php';$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+$cols=$pdo->query('SHOW COLUMNS FROM products')->fetchAll();$idx=$pdo->query('SHOW INDEX FROM products')->fetchAll();
+$stats=$pdo->query("SELECT COUNT(*) total,SUM(active=1) active,SUM(pyramid_barcode_generated=1) generated,SUM(barcode IS NULL OR barcode='') blank_barcode,SUM(image_path IS NULL OR image_path='') noimage,SUM(price=0) price0 FROM products")->fetch();
+echo json_encode(['ok'=>true,'columns'=>$cols,'indexes'=>$idx,'stats'=>$stats],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+PHP
+          sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$NAME"
+          RES=$(curl -sS --fail-with-body -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$NAME;filename=$NAME" -F "dir=$DIR" -F 'overwrite=1' "$BASE/execute/Fileman/upload_files")
+          echo "$RES" | jq -e '(.result.status // .status)==1' >/dev/null
+          CODE=$(curl -sS --max-time 30 -o "$RUNNER_TEMP/result.json" -w '%{http_code}' -X POST -H "X-Diag-Token: $TOKEN" "https://websaza.ir/tehran/$NAME")
+          test "$CODE" = 200
+          jq . "$RUNNER_TEMP/result.json" > "$RUNNER_TEMP/db-diagnostic.json"
+          # Prove file self-deleted using cPanel listing.
+          L="$RUNNER_TEMP/list.json"; curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=$DIR" --data-urlencode 'show_hidden=1' "$BASE/execute/Fileman/list_files" -o "$L"
+          ! jq -e --arg n "$NAME" '(.result.data // .data // [])[] | select((.file // .name // "") | endswith($n))' "$L" >/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tehran-db-diagnostic-temp
+          path: ${{ runner.temp }}/db-diagnostic.json
+          retention-days: 1
