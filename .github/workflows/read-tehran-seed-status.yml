@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Trace Digikala Jet search API method
+      - name: Identify Digikala Jet search function
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -21,16 +21,13 @@ jobs:
           ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
           q=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0 Chrome/141 Safari/537.36','Referer':'https://www.digikalajet.com/'})
           with urllib.request.urlopen(q,timeout=30,context=ctx) as r:t=r.read(8_000_000).decode('utf-8','replace')
-          print('BYTES',len(t))
-          # Endpoint-like strings most likely used by search/product APIs.
-          vals=[]
-          for m in re.finditer(r'["\'`]([^"\'`]{2,240})["\'`]',t):
-            s=m.group(1).replace('\\/','/')
-            l=s.lower()
-            if any(k in l for k in ['search','product-list','searchia','products/search','v2/search','v3/search','shop/search']) and '/' in s:vals.append(s)
-          for s in list(dict.fromkeys(vals))[:500]:print('PATH',s)
-          # The result-v2 bundle imports Cs as the API method; find export mapping and nearby definition.
-          for pat in [r'\bCs\b',r'\bas Cs\b',r'Cs:',r'Cs=']:
-            print('PATTERN',pat)
-            for m in list(re.finditer(pat,t))[-12:]:print(re.sub(r'\s+',' ',t[max(0,m.start()-900):m.start()+1400]))
+          for pat in [r'function\s+Kg\s*\(',r'\bKg\s*=\s*',r'[,;]Kg\s*=\s*',r'\bKg\(']:
+            print('\nPATTERN',pat)
+            ms=list(re.finditer(pat,t))
+            print('COUNT',len(ms))
+            for m in ms[:20]: print(re.sub(r'\s+',' ',t[max(0,m.start()-1800):m.start()+4200]))
+          # Print exact endpoint strings with surrounding definitions too.
+          for ep in ['/v2/search/','/search/v2/result/','/search/v2/','/products/search/','/search/']:
+            print('\nENDPOINT',ep)
+            for m in list(re.finditer(re.escape(ep),t))[:20]: print(re.sub(r'\s+',' ',t[max(0,m.start()-1400):m.start()+2600]))
           PY
