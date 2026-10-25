@@ -8,6 +8,9 @@ ob_start();
 require __DIR__.'/shop.php';
 $html = (string)ob_get_clean();
 
+require_once __DIR__.'/product_image_seed.php';
+if(isset($pdo) && $pdo instanceof PDO) ts_apply_product_image_manifest($pdo);
+
 $oldBrand = '<span class="logo">🛒</span><span><b>سوپرمارکت طهران</b><small>خرید سریع محلی</small></span>';
 $newBrand = '<span class="tehran-market-logo"><img src="pwa-icon.php?size=512&amp;v=20261026-gold" alt="طهران مارکت"></span>';
 $html = str_replace($oldBrand, $newBrand, $html);
