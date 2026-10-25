@@ -11,26 +11,47 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Probe Digikala Fresh image search
+      - name: Discover Digikala Jet search API
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m pip install --quiet curl_cffi
           python3 - <<'PY'
-          import json
-          from curl_cffi import requests
-          names=['کره بادام زمینی جیف 454','آدامس آناناس تریدنت 14 عددی','نوشیدنی انرژی زا مانستر 500','چای دلفین معطر','روغن ذرت رویال']
-          h={'Accept':'application/json','Accept-Language':'fa-IR,fa;q=0.9,en;q=0.8','Origin':'https://www.digikala.com','Referer':'https://www.digikala.com/','x-web-client':'desktop','x-web-client-id':'web'}
-          s=requests.Session(impersonate='chrome')
-          for name in names:
+          import re,urllib.request,ssl,concurrent.futures
+          base='https://www.digikalajet.com/assets/'
+          files=[
+            'x-lazy-shop-search.CR059PY-.js',
+            'x-lazy-searchia.BVK_bCcR.js',
+            'x-lazy-page-search-_shopid_-shop.CZLYKiR1.js',
+            'x-lazy-page-search.Csw-u6Nh.js',
+            'x-lazy-page-search.CxE5kxRb.js',
+            'x-lazy-page-v2-search.CP2GnKKz.js',
+            'x-lazy-page-result-v2-search.MaDV5pPa.js',
+            'x-lazy-page-shop-search.CKbu_gNC.js',
+          ]
+          ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
+          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
+          def load(fn):
             try:
-              r=s.get('https://api.digikala.com/fresh/v1/search/',params={'q':name,'page':1,'sort':22,'has_selling_stock':1},headers=h,timeout=25)
-              print('HTTP',r.status_code,'QUERY',name)
-              d=r.json(); ps=((d.get('data') or {}).get('products') or [])[:5]
-              out=[]
-              for p in ps:
-                imgs=((p.get('images') or {}).get('main') or {}).get('url') or []
-                out.append({'id':p.get('id'),'title_fa':p.get('title_fa'),'title_en':p.get('title_en'),'image':next((u for u in imgs if isinstance(u,str) and u.startswith('https://')),None)})
-              print(json.dumps(out,ensure_ascii=False))
-            except Exception as e:print('ERROR',name,type(e).__name__,e)
+              q=urllib.request.Request(base+fn,headers={'User-Agent':ua,'Referer':'https://www.digikalajet.com/'})
+              with urllib.request.urlopen(q,timeout=25,context=ctx) as r:t=r.read(8_000_000).decode('utf-8','replace')
+              return fn,t,''
+            except Exception as e:return fn,'',f'{type(e).__name__}: {e}'
+          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            for fn,t,err in ex.map(load,files):
+              print('\n### FILE',fn,'bytes',len(t),'err',err)
+              if err:continue
+              vals=[]
+              for m in re.finditer(r'["\'`]([^"\'`]{3,260})["\'`]',t):
+                s=m.group(1).replace('\\/','/')
+                l=s.lower()
+                if any(k in l for k in ['search','product','catalog','suggest']) and ('/' in s or 'api' in l):vals.append(s)
+              for s in list(dict.fromkeys(vals))[:120]:print('PATH',s)
+              low=t.lower()
+              for key in ['/search','search?', 'query=', 'products', 'api_base_url']:
+                pos=0;cnt=0
+                while cnt<8:
+                  i=low.find(key,pos)
+                  if i<0:break
+                  print('CTX',key,re.sub(r'\s+',' ',t[max(0,i-500):i+1200]))
+                  pos=i+len(key);cnt+=1
           PY
