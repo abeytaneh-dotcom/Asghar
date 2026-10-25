@@ -1,0 +1,64 @@
+name: Hotfix customer order
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/hotfix-customer-order.yml'
+  workflow_dispatch:
+
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate order files
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l WebSaza/index.php
+          php -l WebSaza/customer-order.php
+          node --check WebSaza/app.js
+          node --check WebSaza/order-widget-v1.js
+          grep -F 'DirectoryIndex index.php index.html' WebSaza/.htaccess >/dev/null
+
+      - name: Deploy order files
+        shell: bash
+        env:
+          CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CPANEL_TOKEN"
+          deploy_file(){
+            local file="$1" name
+            name=$(basename "$file")
+            RESPONSE=$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: cpanel vt6qdx8:$CPANEL_TOKEN" \
+              --request POST \
+              --data-urlencode "dir=public_html" \
+              --data-urlencode "file=$name" \
+              --data-urlencode "content@$file" \
+              "https://mch4444.dnsuserver.com:2083/execute/Fileman/save_file_content")
+            echo "$RESPONSE" | jq -e '.status == 1' >/dev/null
+          }
+          deploy_file WebSaza/index.php
+          deploy_file WebSaza/.htaccess
+          deploy_file WebSaza/customer-order.php
+          deploy_file WebSaza/order-widget-v1.js
+          deploy_file WebSaza/app.js
+
+      - name: Verify order form live
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 3
+          HOME=$(curl -fsS --max-time 20 "https://websaza.ir/?order_hotfix=${GITHUB_SHA}")
+          grep -F 'order-widget-v1.js?v=20261025-2' <<<"$HOME" >/dev/null
+          grep -F 'استخدام در وب سازا' <<<"$HOME" >/dev/null
+          curl -fsS --max-time 20 "https://websaza.ir/order-widget-v1.js?v=${GITHUB_SHA}" | grep -F 'WEBSAZA_ORDER_WIDGET_V1' >/dev/null
+          curl -fsS --max-time 20 "https://websaza.ir/app.js?v=${GITHUB_SHA}" | grep -F 'Public customer order form loader' >/dev/null
+          curl -fsS --max-time 20 "https://websaza.ir/customer-order.php?check=${GITHUB_SHA}" | jq -e '.ok == true and .status == "ready"' >/dev/null
+          curl -fsS --max-time 20 -X POST -H 'Content-Type: application/json' --data '{"action":"check_coupon","coupon":"__INVALID_CI__"}' https://websaza.ir/customer-order.php | jq -e '.ok == true and .valid == false' >/dev/null
