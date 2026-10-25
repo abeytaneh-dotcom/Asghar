@@ -16,34 +16,48 @@ jobs:
         run: |
           set -Eeuo pipefail
           OUT="$RUNNER_TEMP/out"; mkdir -p "$OUT"
-          Q=$(python3 - <<'PY'
-          import urllib.parse
-          print(urllib.parse.quote('کره بادام زمینی جیف'))
+          python3 - "$OUT" <<'PY'
+          import sys,re,urllib.parse,urllib.request,ssl,pathlib
+          out=pathlib.Path(sys.argv[1])
+          q=urllib.parse.quote('کره بادام زمینی جیف')
+          urls=[
+            f'https://www.okala.com/search?query={q}',
+            f'https://okala.com/search?query={q}',
+            f'https://snapp.market/search?query={q}',
+            f'https://snapp.market/search?q={q}',
+            f'https://www.digikalajet.com/search/?q={q}',
+            f'https://www.digikalajet.com/search?q={q}',
+            f'https://www.modiseh.com/search?q={q}',
+            f'https://www.modiseh.com/search?query={q}',
+          ]
+          ctx=ssl.create_default_context();ctx.check_hostname=False;ctx.verify_mode=ssl.CERT_NONE
+          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
+          summary=[]
+          for i,u in enumerate(urls,1):
+              try:
+                  req=urllib.request.Request(u,headers={'User-Agent':ua,'Accept-Language':'fa-IR,fa;q=0.9,en;q=0.5'})
+                  with urllib.request.urlopen(req,timeout=30,context=ctx) as r:
+                      raw=r.read(5_000_000); code=r.status; final=r.geturl(); ctype=r.headers.get('content-type','')
+                  text=raw.decode('utf-8','replace')
+                  (out/f'body_{i}.html').write_text(text,'utf-8')
+                  title=(re.search(r'<title[^>]*>(.*?)</title>',text,re.I|re.S) or [None,''])[1]
+                  title=re.sub(r'\s+',' ',title).strip()
+                  imgs=[]
+                  for m in re.finditer(r'https?://[^\s"<>]+',text,re.I):
+                      v=m.group(0).replace('\\u002F','/').replace('\\/','/')
+                      if re.search(r'\.(?:jpe?g|png|webp)(?:\?|$)',v,re.I) or any(x in v.lower() for x in ['image','product','cdn']):
+                          imgs.append(v)
+                  paths=[]
+                  for m in re.finditer(r'["\']([^"\']*(?:search|product|api|graphql)[^"\']*)["\']',text,re.I):
+                      paths.append(m.group(1))
+                  (out/f'urls_{i}.txt').write_text('\n'.join(dict.fromkeys(imgs[:100])),'utf-8')
+                  (out/f'paths_{i}.txt').write_text('\n'.join(dict.fromkeys(paths[:150])),'utf-8')
+                  summary.append(f'[{i}] code={code} bytes={len(raw)} type={ctype} title={title} final={final} source={u}')
+              except Exception as e:
+                  summary.append(f'[{i}] ERROR {type(e).__name__}: {e} source={u}')
+          (out/'summary.txt').write_text('\n'.join(summary),'utf-8')
+          print('\n'.join(summary))
           PY
-          )
-          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
-          urls=(
-            "https://www.okala.com/search?query=$Q"
-            "https://okala.com/search?query=$Q"
-            "https://snapp.market/search?query=$Q"
-            "https://snapp.market/search?q=$Q"
-            "https://www.digikalajet.com/search/?q=$Q"
-            "https://www.digikalajet.com/search?q=$Q"
-            "https://www.modiseh.com/search?q=$Q"
-            "https://www.modiseh.com/search?query=$Q"
-          )
-          : > "$OUT/summary.txt"
-          i=0
-          for u in "${urls[@]}"; do
-            i=$((i+1)); body="$OUT/body_$i.html"; hdr="$OUT/hdr_$i.txt"
-            code=$(curl -L -k -sS --compressed --connect-timeout 12 --max-time 35 -A "$UA" -D "$hdr" -o "$body" -w '%{http_code}' "$u" || true)
-            bytes=$(wc -c < "$body" 2>/dev/null || echo 0)
-            title=$(grep -oiE '<title[^>]*>[^<]+' "$body" | head -n1 | sed 's/<title[^>]*>//I' | tr '\n' ' ' || true)
-            echo "[$i] code=$code bytes=$bytes title=$title url=$u" >> "$OUT/summary.txt"
-            grep -Eo 'https?://[^"'"' <>]+' "$body" | grep -Ei '\.(jpg|jpeg|png|webp)(\?|$)|image|product|cdn' | head -n 40 > "$OUT/urls_$i.txt" || true
-            grep -Eio '(/[^"'"' <>]*(search|product|api|graphql)[^"'"' <>]*)' "$body" | head -n 80 > "$OUT/paths_$i.txt" || true
-          done
-          cat "$OUT/summary.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: product-image-source-probe
