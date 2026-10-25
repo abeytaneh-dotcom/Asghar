@@ -16,16 +16,25 @@ jobs:
       USER: vt6qdx8
       DIR: public_html/tehran
     steps:
-      - name: Refresh and read aggregate catalog status
+      - name: Diagnose manifest application without secrets
         shell: bash
         run: |
           set -Eeuo pipefail
           AUTH="Authorization: cpanel ${USER}:${CPANEL_TOKEN}"
-          curl -sS -L --max-time 120 'https://websaza.ir/tehran/' >/dev/null
-          sleep 1
-          curl -sS -L --max-time 120 'https://websaza.ir/tehran/' >/dev/null
-          R="$RUNNER_TEMP/status.json"
-          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${DIR}/storage" --data-urlencode 'file=pyramid_seed_status.json' "${BASE}/execute/Fileman/get_file_content" -o "$R"
-          C=$(jq -r '.result.data.content // .data.content // empty' "$R")
-          test -n "$C"
-          printf '%s\n' "$C" | jq '{ok,products,seed_done,checked_at}'
+          echo '--- storage files ---'
+          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${DIR}/storage" --data-urlencode 'show_hidden=1' "${BASE}/execute/Fileman/list_files" -o "$RUNNER_TEMP/list.json"
+          jq -r '(.result.data // .data // [])[] | [(.file // .name // ""),(.size // 0)] | @tsv' "$RUNNER_TEMP/list.json" | grep -E 'product_image|pyramid_seed_status' | sort || true
+          for f in pyramid_seed_status.json product_image_manifest_status.json product_image_cleanup_status.json; do
+            R="$RUNNER_TEMP/$f.json"
+            curl -sS -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${DIR}/storage" --data-urlencode "file=$f" "${BASE}/execute/Fileman/get_file_content" -o "$R" || true
+            echo "--- $f ---"
+            jq -r '.result.data.content // .data.content // "MISSING"' "$R" | head -c 5000; echo
+          done
+          echo '--- live index image hook ---'
+          R="$RUNNER_TEMP/index.json"
+          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${DIR}" --data-urlencode 'file=index.php' "${BASE}/execute/Fileman/get_file_content" -o "$R"
+          jq -r '.result.data.content // .data.content // empty' "$R" | grep -nE 'product_image_seed|ts_apply_product_image_manifest' || true
+          echo '--- live applier key lines ---'
+          R="$RUNNER_TEMP/applier.json"
+          curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=${DIR}" --data-urlencode 'file=product_image_seed.php' "${BASE}/execute/Fileman/get_file_content" -o "$R"
+          jq -r '.result.data.content // .data.content // empty' "$R" | grep -nE 'glob|pyramid_code2|image_path|manifest' | head -40 || true
