@@ -26,14 +26,12 @@ jobs:
           LIST="$RUNNER_TEMP/list.json"
           curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=$DIR" --data-urlencode 'show_hidden=1' "$BASE/execute/Fileman/list_files" -o "$LIST"
           jq -r '(.result.data // .data // [])[] | [(.file // .name // .path // ""),(.type // ""),(.size // "")] | @tsv' "$LIST" > "$OUT/files.tsv"
-          # Fetch likely source/config files discovered in directory. Raw copies remain runner-only.
-          mapfile -t names < <(jq -r '(.result.data // .data // [])[] | (.file // .name // "")' "$LIST" | grep -E '(^|/)(pyramid(_api)?\.php|config\.php|db\.php|database\.php|admin\.php|.*product.*\.php|.*store.*\.php|.*sync.*\.php)$' | sed 's#^.*/##' | sort -u)
+          mapfile -t names < <(jq -r '(.result.data // .data // [])[] | (.file // .name // "")' "$LIST" | grep -E '(^|/)(pyramid(_api)?\.php|config\.php|schema\.php|db\.php|database\.php|admin\.php|.*product.*\.php|.*store.*\.php|.*sync.*\.php)$' | sed 's#^.*/##' | sort -u)
           for f in "${names[@]}"; do
             J="$RUNNER_TEMP/read.json"
             curl -sS --fail-with-body -H "$AUTH" -H 'Accept: application/json' --get --data-urlencode "dir=$DIR" --data-urlencode "file=$f" "$BASE/execute/Fileman/get_file_content" -o "$J" || continue
             jq -r '.result.data.content // .data.content // empty' "$J" > "$OUT/raw/$f"
           done
-          # Create heavily sanitized inspection copies: redact assignment values for secret/password/token/key vars and obvious long tokens.
           python3 - "$OUT/raw" "$OUT" <<'PY'
           import pathlib,re,sys
           raw=pathlib.Path(sys.argv[1]); out=pathlib.Path(sys.argv[2])
