@@ -11,12 +11,16 @@ function ts_image_marker_save(PDO $pdo,string $key,array $data): void {
     $s=$pdo->prepare('INSERT INTO store_settings(setting_key,setting_value,updated_at) VALUES(?,?,NOW()) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value),updated_at=NOW()');
     $s->execute([$key,$json]);
 }
+function ts_image_marker_key(string $prefix,string $hash): string {
+    // store_settings.setting_key is VARCHAR(80); keep manifest markers safely below that limit.
+    return $prefix.substr($hash,0,48);
+}
 function ts_apply_product_image_cleanup(PDO $pdo): void {
     $files=glob(__DIR__.'/storage/product_image_cleanup*.jsonl')?:[];
     sort($files);
     foreach($files as $file){
         $hash=hash_file('sha256',$file);if(!is_string($hash)||$hash==='')continue;
-        $key='product_image_cleanup_'.$hash;if(ts_image_marker_done($pdo,$key))continue;
+        $key=ts_image_marker_key('product_image_cleanup_',$hash);if(ts_image_marker_done($pdo,$key))continue;
         $st=$pdo->prepare("UPDATE products SET image_path=NULL,image_source=NULL,updated_at=NOW() WHERE active=1 AND pyramid_code2=? AND image_source LIKE 'snapp.market|%'");
         $received=0;$cleared=0;$fh=fopen($file,'rb');if(!$fh)continue;
         $pdo->beginTransaction();
@@ -37,7 +41,7 @@ function ts_apply_product_image_manifest(PDO $pdo): void {
         $files=glob(__DIR__.'/storage/product_image_manifest*.jsonl')?:[];sort($files);
         foreach($files as $file){
             $hash=hash_file('sha256',$file);if(!is_string($hash)||$hash==='')continue;
-            $key='product_image_manifest_'.$hash;if(ts_image_marker_done($pdo,$key))continue;
+            $key=ts_image_marker_key('product_image_manifest_',$hash);if(ts_image_marker_done($pdo,$key))continue;
             $byCode=$pdo->prepare("UPDATE products SET image_path=?,image_source=?,updated_at=NOW() WHERE active=1 AND pyramid_code2=? AND (image_path IS NULL OR image_path='')");
             $byBarcode=$pdo->prepare("UPDATE products SET image_path=?,image_source=?,updated_at=NOW() WHERE active=1 AND barcode=? AND (image_path IS NULL OR image_path='')");
             $fh=fopen($file,'rb');if(!$fh)continue;$received=0;$updated=0;$pdo->beginTransaction();
