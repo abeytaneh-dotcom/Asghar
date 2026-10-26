@@ -25,7 +25,7 @@ jobs:
           ref: websaza-hosting
           fetch-depth: 0
 
-      - name: Switch storefront to v4
+      - name: Switch storefront to v4 and force mobile hero fix
         shell: bash
         run: |
           set -euo pipefail
@@ -34,11 +34,18 @@ jobs:
           p=Path('TehranSupermarket/shop.php')
           s=p.read_text(encoding='utf-8')
           s=s.replace('assets/tehran-reference-v3.css?v=20261027-3','assets/tehran-reference-v4.css?v=20261027-4')
+          fix='<link rel="stylesheet" href="assets/tehran-reference-v4-mobilefix.css?v=20261027-1">'
+          if fix not in s:
+              anchor='<link rel="stylesheet" href="assets/tehran-reference-v4.css?v=20261027-4">'
+              if anchor not in s:
+                  raise SystemExit('v4 css anchor missing')
+              s=s.replace(anchor,anchor+fix,1)
           p.write_text(s,encoding='utf-8')
           PY
           php -l TehranSupermarket/shop.php
           grep -Fq 'tehran-reference-v4.css?v=20261027-4' TehranSupermarket/shop.php
-          grep -Fq 'reference-faithful storefront v4' TehranSupermarket/assets/tehran-reference-v4.css
+          grep -Fq 'tehran-reference-v4-mobilefix.css?v=20261027-1' TehranSupermarket/shop.php
+          grep -Fq 'tm-v4-mobilefix-hero-visible' TehranSupermarket/assets/tehran-reference-v4-mobilefix.css
 
       - name: Persist storefront switch
         shell: bash
@@ -48,7 +55,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add TehranSupermarket/shop.php
           if ! git diff --cached --quiet; then
-            git commit -m 'Switch Tehran storefront to reference v4'
+            git commit -m 'Enable Tehran v4 mobile hero hard fix'
             git push origin HEAD:websaza-hosting
           fi
 
@@ -67,15 +74,19 @@ jobs:
           }
           upload TehranSupermarket/shop.php "$TARGET_DIR" shop.php
           upload TehranSupermarket/assets/tehran-reference-v4.css "$TARGET_DIR/assets" tehran-reference-v4.css
+          upload TehranSupermarket/assets/tehran-reference-v4-mobilefix.css "$TARGET_DIR/assets" tehran-reference-v4-mobilefix.css
+          upload TehranSupermarket/assets/tehran-storefront-v2.svg "$TARGET_DIR/assets" tehran-storefront-v2.svg
 
-      - name: Verify live v4 storefront
+      - name: Verify live v4 storefront and visible mobile hero
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-4" -o "$RUNNER_TEMP/home.html"
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-reference-v4.css?v=20261027-4" -o "$RUNNER_TEMP/v4.css"
-          grep -Fq 'tehran-reference-v4.css?v=20261027-4' "$RUNNER_TEMP/home.html"
-          grep -Fq 'reference-faithful storefront v4' "$RUNNER_TEMP/v4.css"
-          grep -Fq 'background:#fff!important' "$RUNNER_TEMP/v4.css"
-          grep -Fq "tehran-storefront-v2.svg" "$RUNNER_TEMP/v4.css"
-          echo 'REFERENCE_V4_LIVE_OK hero=black-gold products=light cards=white mobile=ok'
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-5" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-reference-v4-mobilefix.css?v=20261027-1" -o "$RUNNER_TEMP/mobilefix.css"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-v2.svg?v=20261027-1" -o "$RUNNER_TEMP/store.svg"
+          grep -Fq 'tehran-reference-v4-mobilefix.css?v=20261027-1' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-v4-mobilefix-hero-visible' "$RUNNER_TEMP/mobilefix.css"
+          grep -Fq 'visibility:visible!important' "$RUNNER_TEMP/mobilefix.css"
+          grep -Fq 'tehran-storefront-v2.svg' "$RUNNER_TEMP/mobilefix.css"
+          grep -Fq 'نمای فروشگاه شیشه‌ای مدرن طهران مارکت' "$RUNNER_TEMP/store.svg"
+          echo 'REFERENCE_V4_MOBILEFIX_LIVE_OK hero_text=visible storefront=visible legacy_hide=overridden'
