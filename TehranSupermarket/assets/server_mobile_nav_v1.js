@@ -1,5 +1,7 @@
 (function(){
 'use strict';
+var p=(location.pathname||'').replace(/\/+$/,'');
+if(!(p==='/tehran'||p==='/tehran/index.php'))return;
 var NAV_ID='tm-server-mobile-nav';
 var active='home';
 
