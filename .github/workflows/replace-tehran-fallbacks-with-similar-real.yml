@@ -1,0 +1,60 @@
+name: Replace Tehran Fallbacks With Similar Real Images
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/replace-tehran-fallbacks-with-similar-real'
+
+permissions:
+  contents: read
+
+jobs:
+  replace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_BASE: https://mch4444.dnsuserver.com:2083
+      CPANEL_USER: vt6qdx8
+      SITE_DIR: public_html/tehran
+      SITE_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Upload and execute in-site matcher
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          TOKEN=$(openssl rand -hex 32)
+          NAME="similar_real_$(openssl rand -hex 8).php"
+          cp .github/scripts/tehran_replace_all_fallbacks_with_similar_real.php "$RUNNER_TEMP/$NAME"
+          sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$NAME"
+          curl -sS --fail-with-body --retry 2 -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$NAME;filename=$NAME" -F "dir=$SITE_DIR" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null
+          code=$(curl -sS -o "$RUNNER_TEMP/result.json" -w '%{http_code}' --max-time 1200 -X POST -H "X-Import-Token: $TOKEN" "$SITE_URL/$NAME")
+          test "$code" = 200
+          jq -e '.ok==true and .remaining_generated==0' "$RUNNER_TEMP/result.json" >/dev/null
+          cat "$RUNNER_TEMP/result.json"
+      - name: Verify all products still have images
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          TOKEN=$(openssl rand -hex 32)
+          NAME="verify_images_$(openssl rand -hex 8).php"
+          cp .github/scripts/tehran_image_verify.php "$RUNNER_TEMP/$NAME"
+          sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$NAME"
+          curl -sS --fail-with-body -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$NAME;filename=$NAME" -F "dir=$SITE_DIR" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null
+          curl -sS -o "$RUNNER_TEMP/verify.json" -X POST -H "X-Verify-Token: $TOKEN" "$SITE_URL/$NAME"
+          jq -e '.ok==true and (.products.no_image|tonumber)==0' "$RUNNER_TEMP/verify.json" >/dev/null
+          cat "$RUNNER_TEMP/verify.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tehran-similar-real-image-report
+          path: |
+            ${{ runner.temp }}/result.json
+            ${{ runner.temp }}/verify.json
+          retention-days: 3
