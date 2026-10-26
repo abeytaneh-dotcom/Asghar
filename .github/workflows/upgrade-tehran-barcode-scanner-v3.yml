@@ -1,0 +1,55 @@
+name: Upgrade Tehran Barcode Scanner V3
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/upgrade-tehran-barcode-scanner-v3'
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_BASE: https://mch4444.dnsuserver.com:2083
+      CPANEL_USER: vt6qdx8
+      SITE_DIR: public_html/tehran
+      SITE_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Download barcode engine
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -L --fail --retry 3 --max-time 60 \
+            'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js' \
+            -o "$RUNNER_TEMP/html5-qrcode.min.js"
+          test -s "$RUNNER_TEMP/html5-qrcode.min.js"
+          grep -q 'Html5Qrcode' "$RUNNER_TEMP/html5-qrcode.min.js"
+      - name: Deploy scanner engine and app
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){ local file="$1" dir="$2" name="$3"; curl -sS --fail-with-body -H "$AUTH" -F "file-1=@${file};filename=${name}" -F "dir=${dir}" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null; }
+          upload "$RUNNER_TEMP/html5-qrcode.min.js" "$SITE_DIR/assets" 'html5-qrcode.min.js'
+          upload 'TehranSupermarket/barcode_scanner_v2.js' "$SITE_DIR" 'barcode_scanner_v2.js'
+      - name: Verify V3 is live
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -sS --fail --max-time 30 "$SITE_URL/barcode_scanner_v2.js?v=$(date +%s)" -o "$RUNNER_TEMP/scanner.js"
+          grep -q 'html5-qrcode.min.js' "$RUNNER_TEMP/scanner.js"
+          grep -q 'تغییر لنز' "$RUNNER_TEMP/scanner.js"
+          grep -q 'عکس بارکد' "$RUNNER_TEMP/scanner.js"
+          curl -sS --fail --max-time 30 "$SITE_URL/assets/html5-qrcode.min.js?v=$(date +%s)" -o "$RUNNER_TEMP/engine.js"
+          test $(wc -c < "$RUNNER_TEMP/engine.js") -gt 100000
+          code=$(curl -sS -o "$RUNNER_TEMP/lookup.json" -w '%{http_code}' --get --data-urlencode 'barcode=6260161501830' "$SITE_URL/barcode_lookup.php")
+          test "$code" = 200
+          jq -e 'has("ok")' "$RUNNER_TEMP/lookup.json" >/dev/null
