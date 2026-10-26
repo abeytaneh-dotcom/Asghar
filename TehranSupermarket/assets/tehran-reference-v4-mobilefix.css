@@ -1,0 +1,78 @@
+/* Tehran Market v4 mobile hero hard fix - marker: tm-v4-mobilefix-hero-visible */
+@media (max-width:800px){
+  body:has(#products):not(.tm-shell-ready) .hero.tmx-hero,
+  body:has(#products) .hero.tmx-hero{
+    display:flex!important;
+    visibility:visible!important;
+    opacity:1!important;
+    min-height:390px!important;
+    margin:0!important;
+    padding:24px 16px 20px!important;
+    align-items:flex-end!important;
+    justify-content:flex-start!important;
+    border-radius:0 0 22px 22px!important;
+    overflow:hidden!important;
+    background:
+      linear-gradient(0deg,#050608 0%,rgba(5,6,8,.92) 43%,rgba(5,6,8,.35) 72%,rgba(5,6,8,.08) 100%),
+      url('tehran-storefront-v2.svg') 68% center/cover no-repeat!important;
+  }
+  body:has(#products):not(.tm-shell-ready) .hero.tmx-hero .tmx-hero-copy,
+  body:has(#products) .hero.tmx-hero .tmx-hero-copy{
+    display:block!important;
+    visibility:visible!important;
+    opacity:1!important;
+    width:100%!important;
+    position:relative!important;
+    z-index:20!important;
+    transform:none!important;
+  }
+  body:has(#products) .hero.tmx-hero .tmx-eyebrow{
+    display:inline-flex!important;
+    visibility:visible!important;
+    opacity:1!important;
+    color:#efc341!important;
+    background:rgba(8,10,12,.78)!important;
+    border:1px solid rgba(255,255,255,.15)!important;
+  }
+  body:has(#products) .hero.tmx-hero h1{
+    display:block!important;
+    visibility:visible!important;
+    opacity:1!important;
+    color:#fff!important;
+    font-size:28px!important;
+    line-height:1.34!important;
+    margin:10px 0 7px!important;
+    font-weight:950!important;
+  }
+  body:has(#products) .hero.tmx-hero h1 strong{
+    display:block!important;
+    color:#efc341!important;
+  }
+  body:has(#products) .hero.tmx-hero p{
+    display:block!important;
+    visibility:visible!important;
+    opacity:1!important;
+    color:#e0e3e5!important;
+    font-size:10.5px!important;
+    line-height:1.9!important;
+    margin:0 0 11px!important;
+  }
+  body:has(#products) .hero.tmx-hero .tmx-hero-actions{
+    display:flex!important;
+    visibility:visible!important;
+    opacity:1!important;
+    gap:8px!important;
+    flex-wrap:wrap!important;
+  }
+  body:has(#products):not(.tm-shell-ready) main,
+  body:has(#products) main{
+    background:#f5f3ee!important;
+    color:#20262b!important;
+    padding:30px 10px 14px!important;
+  }
+  body:has(#products) .tmx-smart-row{
+    position:relative!important;
+    z-index:30!important;
+    margin:-14px auto 0!important;
+  }
+}
