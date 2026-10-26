@@ -129,7 +129,7 @@ $html = str_replace('</body>', $barcodeUi.'</body>', $html);
 $barcodeV2 = '<script src="barcode_camera_v8.js?v=20261026-1"></script><script src="barcode_scanner_v2.js?v=20261026-8"></script>';
 $html = str_replace('</body>', $barcodeV2.'</body>', $html);
 
-$aiAssistant = '<script src="assets/ai_assistant.js?v=20261026-1"></script>';
+$aiAssistant = '<script src="assets/ai_assistant_v2.js?v=20261026-2"></script>';
 $html = str_replace('</body>', $aiAssistant.'</body>', $html);
 
 echo $html;
