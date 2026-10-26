@@ -8,6 +8,9 @@ if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&!window.__tehran
     c=c||{};var v=c.video;if(v===true||!v||typeof v!=='object')v={};var nv={};
     Object.keys(v).forEach(function(k){if(k!=='deviceId'&&k!=='facingMode')nv[k]=v[k];});
     nv.facingMode=exact?{exact:'environment'}:{ideal:'environment'};
+    if(!nv.width)nv.width={ideal:1920};
+    if(!nv.height)nv.height={ideal:1080};
+    if(!nv.frameRate)nv.frameRate={ideal:30};
     return {video:nv,audio:false};
   }
   navigator.mediaDevices.getUserMedia=function(constraints){
@@ -75,9 +78,15 @@ ready(function(){
     var v=reader.querySelector('video');track=v&&v.srcObject&&v.srcObject.getVideoTracks?v.srcObject.getVideoTracks()[0]:null;if(!track)return;
     var caps={};try{caps=track.getCapabilities?track.getCapabilities():{};}catch(e){}
     var adv=[];if(caps.focusMode&&caps.focusMode.indexOf('continuous')>=0)adv.push({focusMode:'continuous'});if(caps.exposureMode&&caps.exposureMode.indexOf('continuous')>=0)adv.push({exposureMode:'continuous'});if(caps.whiteBalanceMode&&caps.whiteBalanceMode.indexOf('continuous')>=0)adv.push({whiteBalanceMode:'continuous'});
+    try{await track.applyConstraints({width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30}});}catch(e){}
     try{if(adv.length)await track.applyConstraints({advanced:adv});}catch(e){}
-    if(caps.zoom&&typeof caps.zoom.min==='number'){zoomWrap.hidden=false;zoomInput.min=caps.zoom.min;zoomInput.max=caps.zoom.max;zoomInput.step=caps.zoom.step||.1;var z=Math.min(caps.zoom.max,Math.max(caps.zoom.min,1.15));zoomInput.value=z;try{await track.applyConstraints({advanced:[{zoom:z}]});}catch(e){}}else zoomWrap.hidden=true;
+    if(caps.zoom&&typeof caps.zoom.min==='number'){zoomWrap.hidden=false;zoomInput.min=caps.zoom.min;zoomInput.max=caps.zoom.max;zoomInput.step=caps.zoom.step||.1;var z=Math.min(caps.zoom.max,Math.max(caps.zoom.min,1));zoomInput.value=z;try{await track.applyConstraints({advanced:[{zoom:z}]});}catch(e){}}else zoomWrap.hidden=true;
     torchBtn.hidden=!caps.torch;
+    if(caps.focusMode&&caps.focusMode.indexOf('single-shot')>=0){try{await track.applyConstraints({advanced:[{focusMode:'single-shot'}]});}catch(e){}setTimeout(function(){if(track&&caps.focusMode.indexOf('continuous')>=0)track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(function(){});},650);}
+    if(caps.torch){
+      var turnLightOn=async function(){try{await track.applyConstraints({advanced:[{torch:true}]});torch=true;torchBtn.textContent='🔦 خاموش';return true;}catch(e){return false;}};
+      if(!(await turnLightOn()))setTimeout(function(){if(track&&!torch)turnLightOn();},500);
+    }
     getRearDevices().catch(function(){});
   }
   async function startScanner(useRearIndex){
