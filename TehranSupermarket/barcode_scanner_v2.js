@@ -1,6 +1,25 @@
 (function(){
 'use strict';
-var LIB='assets/html5-qrcode.min.js?v=2.3.8-3';
+if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&!window.__tehranRearCameraLockInstalled){
+  window.__tehranRearCameraLockInstalled=true;
+  var __tehranOriginalGUM=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  function __tehranScannerOpen(){var s=document.getElementById('barcode-sheet');return !!(s&&!s.hidden);}
+  function __tehranRearConstraints(c,exact){
+    c=c||{};var v=c.video;if(v===true||!v||typeof v!=='object')v={};var nv={};
+    Object.keys(v).forEach(function(k){if(k!=='deviceId'&&k!=='facingMode')nv[k]=v[k];});
+    nv.facingMode=exact?{exact:'environment'}:{ideal:'environment'};
+    return {video:nv,audio:false};
+  }
+  navigator.mediaDevices.getUserMedia=function(constraints){
+    if(!__tehranScannerOpen())return __tehranOriginalGUM(constraints);
+    return __tehranOriginalGUM(__tehranRearConstraints(constraints,true)).catch(function(){return __tehranOriginalGUM(__tehranRearConstraints(constraints,false));});
+  };
+}
+})();
+
+(function(){
+'use strict';
+var LIB='assets/html5-qrcode.min.js?v=2.3.8-4';
 function ready(fn){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn,{once:true});else fn();}
 function loadLib(){
   if(window.Html5Qrcode)return Promise.resolve();
@@ -24,7 +43,7 @@ ready(function(){
   tools.innerHTML='<button type="button" id="barcode-lens">🔄 تغییر لنز پشت</button><button type="button" id="barcode-focus">◎ فوکوس</button><button type="button" id="barcode-torch">🔦 نور</button><label id="barcode-zoom-wrap">زوم <input id="barcode-zoom" type="range" min="1" max="4" step="0.1" value="1"></label><button type="button" id="barcode-photo">📷 عکس بارکد</button><input id="barcode-photo-input" type="file" accept="image/*" capture="environment" hidden>';
   camera.insertAdjacentElement('afterend',tools);
   var lensBtn=tools.querySelector('#barcode-lens'),focusBtn=tools.querySelector('#barcode-focus'),torchBtn=tools.querySelector('#barcode-torch'),zoomWrap=tools.querySelector('#barcode-zoom-wrap'),zoomInput=tools.querySelector('#barcode-zoom'),photoBtn=tools.querySelector('#barcode-photo'),photoInput=tools.querySelector('#barcode-photo-input');
-  var style=document.createElement('style');style.id='barcode-scanner-v5-style';style.textContent='\
+  var style=document.createElement('style');style.id='barcode-scanner-v6-style';style.textContent='\
 .barcode-camera{aspect-ratio:16/10!important;min-height:285px!important;background:#07100b!important}.barcode-reader-v3{width:100%;height:100%;min-height:285px;overflow:hidden;border-radius:18px}.barcode-reader-v3 video{width:100%!important;height:100%!important;object-fit:cover!important}.barcode-reader-v3 img{max-width:100%!important;max-height:100%!important;object-fit:contain!important}.barcode-v3-tools{display:flex;align-items:center;gap:7px;margin-top:8px;overflow-x:auto;padding-bottom:2px}.barcode-v3-tools button,.barcode-v3-tools label{border:1px solid #cfe0d3;background:#fff;color:#17472e;border-radius:10px;padding:8px 10px;font:inherit;font-size:12px;font-weight:800;white-space:nowrap}.barcode-v3-tools label{display:flex;gap:6px;align-items:center;min-width:150px}.barcode-v3-tools input[type=range]{width:100px}.barcode-status.scan-good{background:#e9faee;color:#12642c}.barcode-status.scan-warn{background:#fff7df;color:#765c0b}#barcode-reader-v3__scan_region{min-height:285px!important;position:relative}#barcode-reader-v3__scan_region video{border-radius:18px}#barcode-reader-v3__dashboard{display:none!important}#barcode-reader-v3__scan_region:after{content:"بارکد را هر جای تصویر بگیر";position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;border-radius:999px;padding:6px 11px;font-size:11px;white-space:nowrap;pointer-events:none}';document.head.appendChild(style);
 
   var scanner=null,active=false,devices=[],deviceIndex=0,track=null,torch=false,lastCode='',lastAt=0;
@@ -68,11 +87,11 @@ ready(function(){
     var cameraConfig;
     if(useRearIndex&&devices.length){cameraConfig={deviceId:{exact:devices[deviceIndex%devices.length].id}};}
     else cameraConfig={facingMode:{exact:'environment'}};
-    var config={fps:24,disableFlip:true,aspectRatio:1.7777778,videoConstraints:{width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30,min:20}}};
+    var config={fps:24,disableFlip:true,aspectRatio:1.7777778};
     try{
       await scanner.start(cameraConfig,config,function(text){lookup(text);},function(){});active=true;setStatus('دوربین پشت فعال است؛ بارکد را جلوی دوربین بگیر.');setTimeout(tuneTrack,300);
     }catch(e){
-      try{scanner=new Html5Qrcode('barcode-reader-v3',{formatsToSupport:fs,useBarCodeDetectorIfSupported:false,verbose:false});await scanner.start({facingMode:'environment'},{fps:20,disableFlip:true,aspectRatio:1.7777778},function(text){lookup(text);},function(){});active=true;setStatus('دوربین پشت فعال است؛ بارکد را جلوی دوربین بگیر.');setTimeout(tuneTrack,300);return;}catch(x){}
+      try{scanner=new Html5Qrcode('barcode-reader-v3',{formatsToSupport:fs,useBarCodeDetectorIfSupported:false,verbose:false});await scanner.start({facingMode:{ideal:'environment'}},{fps:20,disableFlip:true,aspectRatio:1.7777778},function(text){lookup(text);},function(){});active=true;setStatus('دوربین پشت فعال است؛ بارکد را جلوی دوربین بگیر.');setTimeout(tuneTrack,300);return;}catch(x){}
       setStatus('دوربین پشت باز نشد. از «عکس بارکد» استفاده کن.','scan-warn');
     }
   }
