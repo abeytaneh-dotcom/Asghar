@@ -1,0 +1,37 @@
+/* Tehran Market standalone storefront base v8 — no legacy green shell */
+:root{--tm-gold:#efc341;--tm-gold2:#ffd86a;--tm-black:#07090b;--tm-dark:#111418;--tm-ink:#20262b;--tm-muted:#7d858b;--tm-bg:#f5f3ee;--tm-line:#e9e6df;--tm-white:#fff}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;background:var(--tm-bg)}
+body{margin:0;background:var(--tm-bg);font-family:Tahoma,Arial,sans-serif;color:var(--tm-ink);overflow-x:hidden;padding-bottom:74px}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+input,select,textarea{width:100%;min-width:0;padding:12px;border:1px solid #dedbd4;border-radius:11px;background:#fff;color:#252b2f;outline:none}
+input:focus,select:focus,textarea:focus{border-color:#c89a24;box-shadow:0 0 0 3px rgba(239,195,65,.12)}
+.btn{border:0;border-radius:11px;background:#11161a;color:var(--tm-gold);padding:11px 16px;display:inline-flex;align-items:center;justify-content:center;font-weight:800}
+.wide{width:100%;grid-column:1/-1}
+.muted{color:var(--tm-muted);font-size:12px}
+.notice,.success{padding:12px 14px;border-radius:12px;line-height:1.9;font-size:12px;margin:12px 0}
+.notice{background:#fff3ed;border:1px solid #f1c7b8;color:#864b3c}.success{background:#eef7ef;border:1px solid #d2e6d5;color:#416449}
+.search{display:flex;gap:8px;margin:12px 0 16px}.search input{flex:1}
+.grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.card,.panel,.cartbox{background:#fff;border:1px solid var(--tm-line);border-radius:18px;padding:14px;margin-bottom:17px}
+.product-photo{height:160px;border-radius:14px;background:#faf9f6;display:grid;place-items:center;overflow:hidden}.product-photo img{width:100%;height:100%;object-fit:contain;padding:8px}
+.emoji{height:160px;display:grid;place-items:center;background:#faf9f6;border-radius:14px;font-size:50px}
+.card h3{font-size:13px;margin:10px 0 5px;line-height:1.7}.product-meta{font-size:10px;color:var(--tm-muted);margin:0 0 4px}
+.price-row{display:flex;justify-content:space-between;align-items:center;gap:8px}.price-row b{font-size:12px;color:#a87800}.old{text-decoration:line-through;color:#9da3a7;font-size:9px}
+.add{border:1px solid #eadca7;background:#fff7d7;color:#866200;border-radius:9px;padding:7px 9px;font-weight:850}
+.qty{display:flex;align-items:center;gap:4px;background:#f5f2e8;border:1px solid #ece6d4;border-radius:10px;padding:3px}.qty form{margin:0}.qty button{width:31px;height:31px;border:0;border-radius:8px;background:#fff;color:#9d7400;font-size:18px}
+.off{position:absolute;top:8px;right:8px;background:#d94945;color:#fff;border-radius:999px;padding:4px 7px;font-size:10px;font-weight:800;z-index:2}
+.checkout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.checkout label{display:flex;flex-direction:column;gap:6px;font-size:12px}
+.cartline{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:12px 0;border-bottom:1px solid #ece8e0;font-size:12px}.cartmain{display:flex;gap:8px;align-items:center;flex:1}.cartmain img{width:45px;height:45px;object-fit:contain}
+.hint{background:#f7f5ef;color:#72797d;border:1px solid #e8e3d8;border-radius:11px;padding:10px;font-size:11px}
+.pager{display:flex;justify-content:center;align-items:center;gap:8px;margin:18px 0}.pager a{background:#fff;border:1px solid #e5e1d9;border-radius:10px;padding:9px 14px;font-weight:700}
+footer{margin-top:30px;background:#0a0c0f;color:#9aa0a4;padding:28px 6% 92px}
+/* delivery location */
+.delivery-location{display:block}.location-main-btn{width:100%;border:1px solid #e8dfc2;background:#fffdf7;border-radius:16px;padding:15px 16px;display:flex;align-items:center;gap:12px;text-align:right;color:#2c3236}.location-main-icon{font-size:25px}.location-main-text{display:flex;flex-direction:column;gap:3px;flex:1}.location-main-text b{font-size:14px}.location-main-text small{font-size:10px;color:#888f93}.location-main-arrow{font-size:28px;color:#a77b00}.location-picked{margin-top:8px;padding:10px 12px;border-radius:12px;background:#fff8dd;color:#725500;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:11px}.location-picked button{border:0;background:#fff;color:#8d6900;border-radius:9px;padding:7px 10px;font-weight:700}
+.location-sheet[hidden]{display:none!important}.location-sheet{position:fixed;inset:0;z-index:99999;background:#fff;display:flex;flex-direction:column}.location-sheet-card{height:100%;display:flex;flex-direction:column;background:#fff}.location-sheet-head{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid #ece9e1;background:#fff;z-index:3}.location-sheet-head>div{display:flex;flex-direction:column;gap:3px}.location-sheet-head b{font-size:16px}.location-sheet-head small{font-size:11px;color:#7d858b}.location-close{width:40px;height:40px;border:0;border-radius:12px;background:#f5f3ee;color:#30363a;font-size:26px}.location-map-wrap{position:relative;flex:1;min-height:360px;background:#eef0f1;overflow:hidden}.delivery-map-full{position:absolute;inset:0}.location-center-pin{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);font-size:42px;z-index:600;pointer-events:none}.location-me{position:absolute;right:14px;bottom:16px;width:52px;height:52px;border:0;border-radius:50%;background:#11161a;color:var(--tm-gold);font-size:28px;box-shadow:0 4px 16px #0003;z-index:650}.location-sheet-status{padding:9px 14px;background:#f7f6f2;color:#656d72;font-size:11px;text-align:center;border-top:1px solid #ece9e1;min-height:38px;display:flex;align-items:center;justify-content:center}.location-confirm{margin:10px 14px calc(10px + env(safe-area-inset-bottom));width:calc(100% - 28px);padding:15px;font-size:15px}.location-sheet-open{overflow:hidden!important}
+.leaflet-container{font-family:inherit}.leaflet-control-attribution{font-size:8px!important;opacity:.72}
+@media(max-width:1050px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:800px){body{padding-bottom:76px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.card{padding:8px;border-radius:14px}.product-photo,.emoji{height:124px}.checkout{grid-template-columns:1fr}.checkout .wide{grid-column:auto}.search{flex-wrap:wrap}.search>*{width:100%}.location{display:none}.sticky{bottom:72px!important}.location-sheet{background:#fff}}
+@media(min-width:700px){.location-sheet{background:#0007;align-items:center;justify-content:center;padding:24px}.location-sheet-card{width:min(680px,100%);height:min(760px,92vh);border-radius:20px;overflow:hidden}.location-map-wrap{min-height:450px}}
