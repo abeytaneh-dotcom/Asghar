@@ -27,9 +27,9 @@ $html = str_replace('</head>', $brandCss.'</head>', $html);
 $serverShellHead = <<<'HTML'
 <!-- tm-direct-server-shell-v1 -->
 <script id="tm-storefront-direct-class">document.documentElement.classList.add('tm-storefront-server');</script>
-<link rel="stylesheet" href="assets/server_storefront_critical_v1.css?v=20261027-12">
-<link rel="stylesheet" href="assets/server_mobile_nav_v1.css?v=20261027-12">
-<script defer src="assets/server_mobile_nav_v1.js?v=20261027-12"></script>
+<link rel="stylesheet" href="assets/server_storefront_critical_v1.css?v=20261027-30">
+<link rel="stylesheet" href="assets/server_mobile_nav_v1.css?v=20261027-30">
+<script defer src="assets/server_mobile_nav_v1.js?v=20261027-30"></script>
 HTML;
 $html = str_replace('</head>', $serverShellHead.'</head>', $html);
 
@@ -157,7 +157,7 @@ $html = str_replace('</body>', $customerMemory.'</body>', $html);
 $aiLocation = '<script src="assets/ai_location_checkout.js?v=20261026-2"></script>';
 $html = str_replace('</body>', $aiLocation.'</body>', $html);
 
-$aiEntry = '<script src="assets/ai_entry_flow.js?v=20261027-105"></script>';
+$aiEntry = '<script src="assets/ai_entry_flow.js?v=20261027-106"></script>';
 $html = str_replace('</body>', $aiEntry.'</body>', $html);
 
 $aiLearning = '<script src="assets/ai_learning.js?v=20261026-1"></script>';
