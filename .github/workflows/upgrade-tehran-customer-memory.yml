@@ -1,0 +1,88 @@
+name: Upgrade Tehran Customer Memory
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/upgrade-tehran-customer-memory.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Wire customer memory before AI checkout
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('TehranSupermarket/index.php')
+          s=p.read_text(encoding='utf-8')
+          marker="$aiLocation = '<script src=\"assets/ai_location_checkout.js?v=20261026-2\"></script>';"
+          block="$customerMemory = '<script src=\"assets/customer_memory.js?v=20261026-1\"></script>';\n$html = str_replace('</body>', $customerMemory.'</body>', $html);\n\n"
+          if 'assets/customer_memory.js?v=20261026-1' not in s:
+              if marker not in s: raise SystemExit('AI location marker not found')
+              s=s.replace(marker,block+marker,1)
+              p.write_text(s,encoding='utf-8')
+      - name: Validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l TehranSupermarket/index.php
+          node --check TehranSupermarket/assets/customer_memory.js
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('TehranSupermarket/index.php').read_text(encoding='utf-8')
+          assert s.index('assets/customer_memory.js') < s.index('assets/ai_location_checkout.js')
+          PY
+      - name: Commit wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- TehranSupermarket/index.php; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/index.php
+          git commit -m 'Enable opt-in remembered checkout details'
+          git push origin HEAD:websaza-hosting
+      - name: Deploy focused files
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          save_file(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          save_file TehranSupermarket/index.php "$TARGET_DIR" index.php
+          save_file TehranSupermarket/assets/customer_memory.js "$TARGET_DIR/assets" customer_memory.js
+      - name: Verify live
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/?v=customer-memory-1" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/customer_memory.js?v=customer-memory-1" -o "$RUNNER_TEMP/memory.js"
+          grep -Fq 'assets/customer_memory.js?v=20261026-1' "$RUNNER_TEMP/home.html"
+          grep -Fq 'همین مشخصات و آدرس' "$RUNNER_TEMP/memory.js"
+          grep -Fq 'از آدرس دیگری استفاده می‌کنم' "$RUNNER_TEMP/memory.js"
+          grep -Fq 'مشخصاتم را روی این دستگاه به خاطر بسپار' "$RUNNER_TEMP/memory.js"
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('/tmp/home.html').read_text(encoding='utf-8',errors='ignore') if Path('/tmp/home.html').exists() else ''
+          PY
+          echo CUSTOMER_MEMORY_LIVE_OK
