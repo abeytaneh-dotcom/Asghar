@@ -1,0 +1,71 @@
+name: Fix Tehran AI Precise Search V2
+on:
+  push:
+    branches: [websaza-hosting]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'Refine Tehran AI exact product search'
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Expand candidate set without loosening final match
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/ai_assistant.php')
+          s=p.read_text(encoding='utf-8')
+          anchor="$genericCat=$genericCategories[$nq]??'';"
+          add="""$genericCat=$genericCategories[$nq]??'';\n\n    $candidateCategories=[\n        'شیر'=>'لبنیات و صبحانه','ماست'=>'لبنیات و صبحانه','کشک'=>'لبنیات و صبحانه','پنیر'=>'لبنیات و صبحانه','کره'=>'لبنیات و صبحانه','خامه'=>'لبنیات و صبحانه','دوغ'=>'نوشیدنی',\n        'آبمیوه'=>'نوشیدنی','آب میوه'=>'نوشیدنی','نوشابه'=>'نوشیدنی','آب معدنی'=>'نوشیدنی','انرژی زا'=>'نوشیدنی',\n        'چیپس'=>'تنقلات و شیرینی','پفک'=>'تنقلات و شیرینی','شکلات'=>'تنقلات و شیرینی','بیسکویت'=>'تنقلات و شیرینی',\n        'روغن'=>'مواد غذایی','برنج'=>'مواد غذایی','ماکارونی'=>'مواد غذایی','شامپو'=>'بهداشت شخصی','پوشک'=>'کودک',\n        'سیگار'=>'دخانیات','تنباکو'=>'دخانیات'\n    ];\n    $candidateCat='';\n    foreach($candidateCategories as $k=>$v){if(str_contains($nq,ai_norm($k))){$candidateCat=$v;break;}}"""
+          if '$candidateCategories=[' not in s:
+              if anchor not in s: raise SystemExit('genericCat anchor missing')
+              s=s.replace(anchor,add,1)
+          old="""    }else{\n        foreach(array_slice($terms,0,10) as $term){"""
+          new="""    }else{\n        if($candidateCat!==''){ $where[]='category=?'; $params[]=$candidateCat; }\n        foreach(array_slice($terms,0,10) as $term){"""
+          if old in s:
+              s=s.replace(old,new,1)
+          s=s.replace("') LIMIT 180';","') LIMIT 2000';",1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          php -l TehranSupermarket/ai_assistant.php
+      - name: Commit precise search refinement
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/ai_assistant.php
+          if ! git diff --cached --quiet; then
+            git commit -m 'Refine Tehran AI exact product search'
+            git push origin HEAD:websaza-hosting
+          fi
+      - name: Deploy search API
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"; AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"; OUT="$RUNNER_TEMP/save.json"
+          curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+            --data-urlencode "dir=${TARGET_DIR}" --data-urlencode 'file=ai_assistant.php' --data-urlencode 'content@TehranSupermarket/ai_assistant.php' \
+            "${BASE}/execute/Fileman/save_file_content" -o "$OUT"
+          test "$(jq -r '.result.status // .status // 0' "$OUT")" = '1'
+      - name: Test live search results
+        shell: bash
+        run: |
+          set -euo pipefail
+          for q in 'شیر' 'آبمیوه'; do
+            curl -sS -L --max-time 30 --get --data-urlencode 'action=search' --data-urlencode "q=$q" "${PUBLIC_URL}/ai_assistant.php" -o "$RUNNER_TEMP/$q.json"
+            echo "=== $q ==="; cat "$RUNNER_TEMP/$q.json"; echo
+          done
+          jq -e '.ok==true and (.items|length)>0' "$RUNNER_TEMP/شیر.json" >/dev/null
+          jq -e '.ok==true and (.items|length)>0' "$RUNNER_TEMP/آبمیوه.json" >/dev/null
+          if jq -r '.items[].name' "$RUNNER_TEMP/شیر.json" | grep -Eq 'ماست|کشک'; then exit 1; fi
