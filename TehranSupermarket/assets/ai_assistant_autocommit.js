@@ -133,3 +133,15 @@ document.addEventListener('submit',function(e){
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadCartManager,{once:true});else loadCartManager();
 })();
+
+(function(){
+  function loadSpellHelper(){
+    if(document.querySelector('script[data-tehran-ai-spell-helper]'))return;
+    var s=document.createElement('script');
+    s.src='assets/ai_spell_helper.js?v=20261026-1';
+    s.async=false;
+    s.setAttribute('data-tehran-ai-spell-helper','1');
+    document.head.appendChild(s);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadSpellHelper,{once:true});else loadSpellHelper();
+})();
