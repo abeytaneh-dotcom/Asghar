@@ -1,0 +1,74 @@
+name: Deploy Tehran Scanner V8
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/deploy-tehran-scanner-v8'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_BASE: https://mch4444.dnsuserver.com:2083
+      CPANEL_USER: vt6qdx8
+      SITE_DIR: public_html/tehran
+      SITE_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Load V8 before scanner and bust cache
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/index.php')
+          s=p.read_text(encoding='utf-8')
+          old='$barcodeV2 = \'<script src="barcode_scanner_v2.js?v=20261026-3"></script>\';'
+          new='$barcodeV2 = \'<script src="barcode_camera_v8.js?v=20261026-1"></script><script src="barcode_scanner_v2.js?v=20261026-8"></script>\';'
+          if old in s:
+              s=s.replace(old,new)
+          elif 'barcode_camera_v8.js' not in s:
+              raise SystemExit('scanner loader marker not found')
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit loader change
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/index.php
+          if ! git diff --cached --quiet; then
+            git commit -m 'Load Tehran barcode camera V8'
+            git push origin HEAD:websaza-hosting
+          fi
+      - name: Deploy scanner V8
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){ local file="$1" dir="$2" name="$3"; curl -sS --fail-with-body -H "$AUTH" -F "file-1=@${file};filename=${name}" -F "dir=${dir}" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null; }
+          upload 'TehranSupermarket/barcode_camera_v8.js' "$SITE_DIR" 'barcode_camera_v8.js'
+          upload 'TehranSupermarket/barcode_scanner_v2.js' "$SITE_DIR" 'barcode_scanner_v2.js'
+          upload 'TehranSupermarket/index.php' "$SITE_DIR" 'index.php'
+      - name: Verify V8 live
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -sS --fail --max-time 30 "$SITE_URL/?v=$(date +%s)" -o "$RUNNER_TEMP/home.html"
+          grep -q 'barcode_camera_v8.js?v=20261026-1' "$RUNNER_TEMP/home.html"
+          grep -q 'barcode_scanner_v2.js?v=20261026-8' "$RUNNER_TEMP/home.html"
+          curl -sS --fail --max-time 30 "$SITE_URL/barcode_camera_v8.js?v=$(date +%s)" -o "$RUNNER_TEMP/v8.js"
+          grep -q 'tehran_best_rear_camera_v8' "$RUNNER_TEMP/v8.js"
+          grep -q 'torch:true' "$RUNNER_TEMP/v8.js"
+          grep -q 'decodeFromCanvas' "$RUNNER_TEMP/v8.js"
+          code=$(curl -sS -o "$RUNNER_TEMP/lookup.json" -w '%{http_code}' --get --data-urlencode 'barcode=8996001414002' "$SITE_URL/barcode_lookup.php")
+          test "$code" = 200
+          jq -e 'has("ok")' "$RUNNER_TEMP/lookup.json" >/dev/null
