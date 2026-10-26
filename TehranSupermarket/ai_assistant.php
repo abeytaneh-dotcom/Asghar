@@ -119,6 +119,16 @@ if($action==='search'){
     ];
     $genericCat=$genericCategories[$nq]??'';
 
+    $candidateCategories=[
+        'شیر'=>'لبنیات و صبحانه','ماست'=>'لبنیات و صبحانه','کشک'=>'لبنیات و صبحانه','پنیر'=>'لبنیات و صبحانه','کره'=>'لبنیات و صبحانه','خامه'=>'لبنیات و صبحانه','دوغ'=>'نوشیدنی',
+        'آبمیوه'=>'نوشیدنی','آب میوه'=>'نوشیدنی','نوشابه'=>'نوشیدنی','آب معدنی'=>'نوشیدنی','انرژی زا'=>'نوشیدنی',
+        'چیپس'=>'تنقلات و شیرینی','پفک'=>'تنقلات و شیرینی','شکلات'=>'تنقلات و شیرینی','بیسکویت'=>'تنقلات و شیرینی',
+        'روغن'=>'مواد غذایی','برنج'=>'مواد غذایی','ماکارونی'=>'مواد غذایی','شامپو'=>'بهداشت شخصی','پوشک'=>'کودک',
+        'سیگار'=>'دخانیات','تنباکو'=>'دخانیات'
+    ];
+    $candidateCat='';
+    foreach($candidateCategories as $k=>$v){if(str_contains($nq,ai_norm($k))){$candidateCat=$v;break;}}
+
     $aliases=[
         'آبمیوه'=>['آبمیوه','آب میوه'],'آب میوه'=>['آبمیوه','آب میوه'],
         'آبمعدنی'=>['آبمعدنی','آب معدنی'],'آب معدنی'=>['آبمعدنی','آب معدنی'],
@@ -138,13 +148,14 @@ if($action==='search'){
         $where[]='name LIKE ?';$params[]='%'.$nq.'%';
         $where[]='brand LIKE ?';$params[]='%'.$nq.'%';
     }else{
+        if($candidateCat!==''){ $where[]='category=?'; $params[]=$candidateCat; }
         foreach(array_slice($terms,0,10) as $term){
             $where[]='(name LIKE ? OR brand LIKE ? OR quantity_label LIKE ?)';
             $like='%'.$term.'%';array_push($params,$like,$like,$like);
         }
     }
     if(!$where) ai_out(['ok'=>true,'query'=>$q,'items'=>[]]);
-    $sql='SELECT id,name,brand,quantity_label,category,image_path,price,stock,active FROM products WHERE active=1 AND price>0 AND ('.implode(' OR ',$where).') LIMIT 180';
+    $sql='SELECT id,name,brand,quantity_label,category,image_path,price,stock,active FROM products WHERE active=1 AND price>0 AND ('.implode(' OR ',$where).') LIMIT 2000';
     $st=$pdo->prepare($sql);$st->execute($params);$rows=$st->fetchAll();
 
     $strictSingles=['شیر','ماست','کشک','کره','پنیر','خامه','دوغ'];
