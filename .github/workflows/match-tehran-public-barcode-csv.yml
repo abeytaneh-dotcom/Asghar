@@ -1,0 +1,89 @@
+name: Match Tehran Public Barcode CSV
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/match-tehran-public-barcode-csv'
+
+permissions:
+  contents: read
+
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Download public barcode CSV DB
+        run: |
+          set -Eeuo pipefail
+          curl -L --retry 3 --fail -o "$RUNNER_TEMP/barcodes_csv.zip" https://raw.githubusercontent.com/aioke/barcodes/main/barcodes_csv.zip
+          unzip -q "$RUNNER_TEMP/barcodes_csv.zip" -d "$RUNNER_TEMP/barcodes_csv"
+          ls -lh "$RUNNER_TEMP/barcodes_csv"
+      - name: Stream exact barcode matches
+        shell: bash
+        run: |
+          python3 - "$RUNNER_TEMP/barcodes_csv" "$RUNNER_TEMP/matches.json" <<'PY'
+          import base64,csv,gzip,json,re,pathlib,sys
+          root=pathlib.Path(sys.argv[1]); out=pathlib.Path(sys.argv[2])
+          f=next(root.rglob('*.csv'),None) or next((x for x in root.rglob('*') if x.is_file()),None)
+          if not f: raise SystemExit('no csv file')
+          p=pathlib.Path('TehranSupermarket/pyramid_seed_1400_data.php').read_text('utf-8',errors='replace')
+          m=re.search(r"return\s+'([^']+)'\s*;",p,re.S); raw=gzip.decompress(base64.b64decode(m.group(1))).decode('utf-8')
+          target={}
+          for x in raw.splitlines():
+              if not x.strip():continue
+              r=json.loads(x); b=re.sub(r'\D','',str(r.get('barcode') or ''))
+              if 8<=len(b)<=14: target[b]={'barcode':b,'old_name':str(r.get('name') or ''),'code2':str(r.get('code2') or '')}
+          print('TARGETS',len(target),flush=True)
+          # handle likely encodings/delimiters; barcode DB is public and may use Russian headers
+          enc='utf-8-sig'
+          try:
+              sample=f.read_text(enc,errors='strict')[:10000]
+          except Exception:
+              enc='cp1251'; sample=f.read_text(enc,errors='replace')[:10000]
+          try: delim=csv.Sniffer().sniff(sample,delimiters=';,\t|').delimiter
+          except Exception: delim=';'
+          print('FILE',f,'ENC',enc,'DELIM',repr(delim),flush=True)
+          matches=[]; seen=set(); rows=0
+          with f.open('r',encoding=enc,errors='replace',newline='') as fh:
+              rd=csv.reader(fh,delimiter=delim)
+              first=next(rd,[]); print('FIRST_ROW',first,flush=True)
+              # determine barcode column from header or first data row
+              lows=[str(x).lower() for x in first]
+              bidx=next((i for i,x in enumerate(lows) if any(k in x for k in ('barcode','ean','upc','штрих','код'))),None)
+              header=first if bidx is not None else None
+              if bidx is None:
+                  # choose column with 8-14 digit first-row value
+                  bidx=next((i for i,x in enumerate(first) if 8<=len(re.sub(r'\D','',str(x)))<=14),0)
+              def consume(row):
+                  nonlocal rows
+                  rows+=1
+                  if bidx>=len(row):return
+                  b=re.sub(r'\D','',str(row[bidx]))
+                  cand=[b]
+                  if b.startswith('0'):cand.append(b.lstrip('0'))
+                  hit=None
+                  for c in cand:
+                      if c in target:hit=c;break
+                  if not hit or hit in seen:return
+                  seen.add(hit)
+                  d=dict(target[hit]);d['db_row']=row
+                  if header and len(header)==len(row): d['db_values']=dict(zip(header,row))
+                  matches.append(d)
+              if header is None: consume(first)
+              for row in rd:
+                  consume(row)
+                  if rows%400000==0:print('PROGRESS',rows,'matches',len(matches),flush=True)
+          print('ROWS_SCANNED',rows);print('EXACT_MATCHES',len(matches))
+          for x in matches[:30]:print('EXAMPLE',json.dumps(x,ensure_ascii=False))
+          out.write_text(json.dumps(matches,ensure_ascii=False),'utf-8')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tehran-public-barcode-csv-matches
+          path: ${{ runner.temp }}/matches.json
+          retention-days: 2
