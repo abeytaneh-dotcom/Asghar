@@ -2,11 +2,14 @@
 'use strict';
 if(window.__tehranAiSpellHelper)return;window.__tehranAiSpellHelper=1;
 var nativeFetch=window.fetch.bind(window);
-function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[m]||m;});}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]||m;});}
 function ensureStyle(){
   if(document.getElementById('tehran-ai-spell-style'))return;
   var st=document.createElement('style');st.id='tehran-ai-spell-style';st.textContent='\
 .tehran-ai-spell-note{margin:7px 0;display:flex}.tehran-ai-spell-note>div{max-width:92%;background:#fff8df;border:1px solid #f2df9e;color:#5a4a15;border-radius:15px;padding:10px 12px;box-shadow:0 2px 10px #0001;font:12px/1.8 system-ui}.tehran-ai-spell-note b{color:#173b28}.tehran-ai-spell-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.tehran-ai-spell-chips button{border:1px solid #cddfcf;background:#fff;color:#12602f;border-radius:999px;padding:6px 9px;font:800 11px system-ui}';document.head.appendChild(st);
+}
+function alreadyShown(msgs,sig){
+  var list=msgs.querySelectorAll('[data-spell-sig]');for(var i=0;i<list.length;i++){if(list[i].getAttribute('data-spell-sig')===sig)return true;}return false;
 }
 function insertNote(d,original){
   if(!d||!d.ok)return;
@@ -16,7 +19,7 @@ function insertNote(d,original){
   var msgs=document.querySelector('.tehran-ai-msgs');if(!msgs)return;
   ensureStyle();
   var sig=(original||'')+'|'+corrected+'|'+sugs.join(',');
-  if(msgs.querySelector('[data-spell-sig="'+CSS.escape(sig)+'"]'))return;
+  if(alreadyShown(msgs,sig))return;
   var n=document.createElement('div');n.className='tehran-ai-spell-note';n.setAttribute('data-spell-sig',sig);
   var html='<div>';
   if(corrected){html+='احتمالاً منظورت <b>«'+esc(corrected)+'»</b> بوده؛ نزدیک‌ترین نتیجه‌ها را برات آوردم.';}
