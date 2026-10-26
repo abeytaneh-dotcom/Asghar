@@ -23,3 +23,4 @@ function start(){
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(start,450);},{once:true});else setTimeout(start,450);
 })();
+// deploy-marker: guided-ai-v1
