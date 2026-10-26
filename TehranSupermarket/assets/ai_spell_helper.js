@@ -25,7 +25,7 @@ function insertNote(d,original){
   if(corrected){html+='احتمالاً منظورت <b>«'+esc(corrected)+'»</b> بوده؛ نزدیک‌ترین نتیجه‌ها را برات آوردم.';}
   else{html+='نزدیک‌ترین عبارت‌هایی که پیدا کردم:';}
   var chips=[];if(corrected)chips.push(corrected);sugs.forEach(function(x){if(chips.indexOf(x)<0)chips.push(x);});
-  if(chips.length){html+='<div class="tehran-ai-spell-chips">';chips.slice(0,4).forEach(function(x){html+='<button type="button" data-ai-spell="'+esc(x)+'">'+esc(x)+'</button>';});html+='</div>';}
+  if(chips.length){html+='<div class="tehran-ai-spell-chips">';chips.slice(0,4).forEach(function(x){html+='<button type="button" data-ai-spell="'+esc(x)+'" data-ai-spell-original="'+esc(original||'')+'">'+esc(x)+'</button>';});html+='</div>';}
   html+='</div>';n.innerHTML=html;msgs.appendChild(n);msgs.scrollTop=msgs.scrollHeight;
 }
 window.fetch=function(input,init){
