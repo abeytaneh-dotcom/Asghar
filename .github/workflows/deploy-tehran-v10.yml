@@ -1,0 +1,107 @@
+name: Deploy Tehran Market V10
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/deploy-tehran-v10.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+          fetch-depth: 0
+
+      - name: Patch storefront with dedicated mobile hero
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('TehranSupermarket/shop.php')
+          s=p.read_text(encoding='utf-8')
+
+          # Replace any previous single hero image/picture with a responsive picture.
+          picture='''<picture class="tmx-hero-picture-v10"><source media="(max-width:800px)" srcset="assets/tehran-storefront-mobile-v10.svg?v=20261027-10"><img class="tmx-hero-real-image-v10" src="assets/tehran-storefront-v3.svg?v=20261027-10" alt="فروشگاه شیشه‌ای طهران مارکت" style="position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important;object-position:center!important;display:block!important;visibility:visible!important;opacity:1!important;z-index:0!important;pointer-events:none!important"></picture>'''
+          s=re.sub(r'<picture class="tmx-hero-picture-v10">.*?</picture>',picture,s,count=1,flags=re.S)
+          if 'tmx-hero-picture-v10' not in s:
+              s=re.sub(r'<img class="tmx-hero-real-image-v\d+"[^>]*>',picture,s,count=1)
+          if 'tmx-hero-picture-v10' not in s:
+              raise SystemExit('hero image anchor not found')
+
+          # Lighten the overlay so the physical store is clearly visible.
+          s=re.sub(r'background:linear-gradient\(0deg,rgba\(5,6,8,[^;]+?100%\)\!important',
+                   'background:linear-gradient(0deg,rgba(5,6,8,.92) 0%,rgba(5,6,8,.68) 22%,rgba(5,6,8,.18) 48%,rgba(5,6,8,.02) 72%,rgba(5,6,8,0) 100%)!important',s,count=1)
+
+          # Replace old mobile polish with v10.
+          s=re.sub(r'<link rel="stylesheet" href="assets/tehran-mobile-polish-v\d+\.css\?v=[^"]+">','',s)
+          link='<link rel="stylesheet" href="assets/tehran-mobile-polish-v10.css?v=20261027-10">'
+          s=s.replace('</head>',link+'</head>',1)
+
+          p.write_text(s,encoding='utf-8')
+          PY
+          php -l TehranSupermarket/shop.php
+          grep -Fq 'tmx-hero-picture-v10' TehranSupermarket/shop.php
+          grep -Fq 'tehran-storefront-mobile-v10.svg?v=20261027-10' TehranSupermarket/shop.php
+          grep -Fq 'tehran-mobile-polish-v10.css?v=20261027-10' TehranSupermarket/shop.php
+          ! grep -Fq 'tehran-mobile-polish-v9.css?v=' TehranSupermarket/shop.php
+
+      - name: Persist storefront v10
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/shop.php
+          if ! git diff --cached --quiet; then
+            git commit -m 'Use dedicated mobile storefront composition for Tehran Market'
+            git push origin HEAD:websaza-hosting
+          fi
+
+      - name: Upload v10 storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          upload TehranSupermarket/shop.php "$TARGET_DIR" shop.php
+          upload TehranSupermarket/assets/tehran-storefront-mobile-v10.svg "$TARGET_DIR/assets" tehran-storefront-mobile-v10.svg
+          upload TehranSupermarket/assets/tehran-mobile-polish-v10.css "$TARGET_DIR/assets" tehran-mobile-polish-v10.css
+          upload TehranSupermarket/assets/tehran-storefront-v3.svg "$TARGET_DIR/assets" tehran-storefront-v3.svg
+
+      - name: Verify live v10
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-10" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-mobile-v10.svg?v=20261027-10" -o "$RUNNER_TEMP/mobile.svg"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-mobile-polish-v10.css?v=20261027-10" -o "$RUNNER_TEMP/polish.css"
+          grep -Fq 'tmx-hero-picture-v10' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tehran-storefront-mobile-v10.svg?v=20261027-10' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tehran-mobile-polish-v10.css?v=20261027-10' "$RUNNER_TEMP/home.html"
+          grep -Fq 'طهران مارکت' "$RUNNER_TEMP/mobile.svg"
+          grep -Fq 'TEHRAN MARKET' "$RUNNER_TEMP/mobile.svg"
+          grep -Fq 'height:390px!important' "$RUNNER_TEMP/polish.css"
+          grep -Fq 'object-position:center top!important' "$RUNNER_TEMP/polish.css"
+          echo 'TEHRAN_V10_LIVE_OK dedicated_mobile_storefront=ok brighter_store=ok hero_spacing=ok'
