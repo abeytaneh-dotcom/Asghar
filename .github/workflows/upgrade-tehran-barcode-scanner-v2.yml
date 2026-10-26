@@ -1,0 +1,71 @@
+name: Upgrade Tehran Barcode Scanner V2
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/upgrade-tehran-barcode-scanner-v2'
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_BASE: https://mch4444.dnsuserver.com:2083
+      CPANEL_USER: vt6qdx8
+      SITE_DIR: public_html/tehran
+      SITE_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+          fetch-depth: 1
+      - name: Add V2 loader to storefront source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/index.php')
+          s=p.read_text('utf-8')
+          marker='barcode_scanner_v2.js?v=20261026-3'
+          if marker not in s:
+              needle='\necho $html;'
+              insert="\n$barcodeV2 = '<script src=\"barcode_scanner_v2.js?v=20261026-3\"></script>';\n$html = str_replace('</body>', $barcodeV2.'</body>', $html);\n\necho $html;"
+              if needle not in s:
+                  raise SystemExit('index echo marker not found')
+              s=s.replace(needle,insert,1)
+              p.write_text(s,'utf-8')
+          PY
+          if ! git diff --quiet -- TehranSupermarket/index.php; then
+            git config user.name 'tehran-site-bot'
+            git config user.email 'actions@users.noreply.github.com'
+            git add TehranSupermarket/index.php
+            git commit -m 'Load improved Tehran barcode scanner V2'
+            git push origin HEAD:websaza-hosting
+          fi
+      - name: Deploy improved scanner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){ local file="$1"; curl -sS --fail-with-body -H "$AUTH" -F "file-1=@${file};filename=$(basename "$file")" -F "dir=$SITE_DIR" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null; }
+          upload TehranSupermarket/index.php
+          upload TehranSupermarket/barcode_scanner_v2.js
+          upload TehranSupermarket/barcode_lookup.php
+      - name: Verify improved scanner is live
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -sS --fail --max-time 30 "$SITE_URL/" -o "$RUNNER_TEMP/home.html"
+          grep -q 'barcode_scanner_v2.js?v=20261026-3' "$RUNNER_TEMP/home.html"
+          curl -sS --fail --max-time 30 "$SITE_URL/barcode_scanner_v2.js?v=20261026-3" -o "$RUNNER_TEMP/scanner.js"
+          grep -q 'BrowserMultiFormatReader' "$RUNNER_TEMP/scanner.js"
+          grep -q 'focusMode' "$RUNNER_TEMP/scanner.js"
+          code=$(curl -sS -o "$RUNNER_TEMP/lookup.json" -w '%{http_code}' --get --data-urlencode 'barcode=6260161501830' "$SITE_URL/barcode_lookup.php")
+          test "$code" = 200
+          jq -e 'has("ok")' "$RUNNER_TEMP/lookup.json" >/dev/null
