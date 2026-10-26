@@ -1,0 +1,85 @@
+name: Deploy Tehran AI Shopping Assistant
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/deploy-tehran-ai-assistant'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_BASE: https://mch4444.dnsuserver.com:2083
+      CPANEL_USER: vt6qdx8
+      SITE_DIR: public_html/tehran
+      SITE_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Validate assistant files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -l TehranSupermarket/ai_assistant.php
+          node --check TehranSupermarket/assets/ai_assistant.js
+          grep -q "AGE-18" TehranSupermarket/ai_assistant.php
+          grep -q "data-place-order" TehranSupermarket/assets/ai_assistant.js
+      - name: Load assistant on storefront
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/index.php')
+          s=p.read_text(encoding='utf-8')
+          marker='assets/ai_assistant.js?v=20261026-1'
+          if marker not in s:
+              needle='\necho $html;'
+              insert='\n$aiAssistant = \'<script src="assets/ai_assistant.js?v=20261026-1"></script>\';\n$html = str_replace(\'</body>\', $aiAssistant.\'</body>\', $html);\n\necho $html;'
+              if needle not in s:
+                  raise SystemExit('index output marker not found')
+              s=s.replace(needle,insert,1)
+              p.write_text(s,encoding='utf-8')
+          PY
+          php -l TehranSupermarket/index.php
+      - name: Commit storefront loader
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/index.php
+          if ! git diff --cached --quiet; then
+            git commit -m 'Enable Tehran AI shopping assistant'
+            git push origin HEAD:websaza-hosting
+          fi
+      - name: Deploy assistant
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){ local file="$1" dir="$2" name="$3"; curl -sS --fail-with-body -H "$AUTH" -F "file-1=@${file};filename=${name}" -F "dir=${dir}" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null; }
+          upload 'TehranSupermarket/ai_assistant.php' "$SITE_DIR" 'ai_assistant.php'
+          upload 'TehranSupermarket/assets/ai_assistant.js' "$SITE_DIR/assets" 'ai_assistant.js'
+          upload 'TehranSupermarket/index.php' "$SITE_DIR" 'index.php'
+      - name: Verify assistant live
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -sS --fail --max-time 30 "$SITE_URL/?v=$(date +%s)" -o "$RUNNER_TEMP/home.html"
+          grep -q 'assets/ai_assistant.js?v=20261026-1' "$RUNNER_TEMP/home.html"
+          curl -sS --fail --max-time 30 "$SITE_URL/assets/ai_assistant.js?v=$(date +%s)" -o "$RUNNER_TEMP/ai.js"
+          grep -q 'دستیار هوشمند طهران مارکت' "$RUNNER_TEMP/ai.js"
+          grep -q 'data-place-order' "$RUNNER_TEMP/ai.js"
+          node --check "$RUNNER_TEMP/ai.js"
+          curl -sS --fail --max-time 30 "$SITE_URL/ai_assistant.php?action=boot" -o "$RUNNER_TEMP/boot.json"
+          jq -e '.ok == true and (.token|length)>20 and (.csrf|length)>20 and (.zones|type)=="array"' "$RUNNER_TEMP/boot.json" >/dev/null
+          curl -sS --fail --max-time 30 --get --data-urlencode 'action=search' --data-urlencode 'q=شیر' "$SITE_URL/ai_assistant.php" -o "$RUNNER_TEMP/search.json"
+          jq -e '.ok == true and (.items|type)=="array"' "$RUNNER_TEMP/search.json" >/dev/null
+          echo "AI_ASSISTANT_OK products=$(jq '.items|length' "$RUNNER_TEMP/search.json")"
