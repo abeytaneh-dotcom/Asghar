@@ -1,0 +1,63 @@
+name: Hotfix Tehran Server Nav
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'TehranSupermarket/.htaccess'
+      - 'TehranSupermarket/assets/server_mobile_nav_v1.js'
+      - 'TehranSupermarket/assets/server_mobile_nav_v1.css'
+      - 'TehranSupermarket/assets/server_storefront_critical_v1.css'
+      - '.github/workflows/hotfix-tehran-server-nav.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+
+      - name: Upload storefront hotfix files only
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          upload TehranSupermarket/.htaccess "$TARGET_DIR" .htaccess
+          upload TehranSupermarket/assets/server_mobile_nav_v1.js "$TARGET_DIR/assets" server_mobile_nav_v1.js
+          upload TehranSupermarket/assets/server_mobile_nav_v1.css "$TARGET_DIR/assets" server_mobile_nav_v1.css
+          upload TehranSupermarket/assets/server_storefront_critical_v1.css "$TARGET_DIR/assets" server_storefront_critical_v1.css
+
+      - name: Verify live server-owned navigation and first-paint theme
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/?hotfix=server-nav-v1" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/server_mobile_nav_v1.js?v=20261027-2" -o "$RUNNER_TEMP/nav.js"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/server_mobile_nav_v1.css?v=20261027-2" -o "$RUNNER_TEMP/nav.css"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/server_storefront_critical_v1.css?v=20261027-2" -o "$RUNNER_TEMP/critical.css"
+          grep -Fq "tm-storefront-path" "$RUNNER_TEMP/home.html"
+          grep -Fq "server_storefront_critical_v1.css" "$RUNNER_TEMP/home.html"
+          grep -Fq "server_mobile_nav_v1.js" "$RUNNER_TEMP/home.html"
+          grep -Fq "tm-server-mobile-nav" "$RUNNER_TEMP/nav.js"
+          grep -Fq "tm-server-nav-ready" "$RUNNER_TEMP/nav.css"
+          grep -Fq "tm-storefront-server" "$RUNNER_TEMP/critical.css"
+          echo 'HOTFIX_LIVE_OK server_nav=ok first_paint_theme=ok'
