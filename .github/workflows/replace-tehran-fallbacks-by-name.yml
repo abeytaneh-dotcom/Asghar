@@ -1,0 +1,58 @@
+name: Replace Tehran Fallbacks By Name
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/replace-tehran-fallbacks-by-name'
+
+permissions:
+  contents: read
+
+jobs:
+  replace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_BASE: https://mch4444.dnsuserver.com:2083
+      CPANEL_USER: vt6qdx8
+      SITE_DIR: public_html/tehran
+      SITE_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Install tools
+        run: python3 -m pip install --disable-pip-version-check --quiet pillow rapidfuzz curl_cffi
+      - name: Fetch fallback products
+        shell: bash
+        run: |
+          set -Eeuo pipefail;mkdir -p "$RUNNER_TEMP/replace";AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}";TOKEN=$(openssl rand -hex 32);NAME="fallback_report_$(openssl rand -hex 8).php"
+          cp .github/scripts/tehran_fallback_products_report.php "$RUNNER_TEMP/$NAME";sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$NAME"
+          curl -sS --fail-with-body -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$NAME;filename=$NAME" -F "dir=$SITE_DIR" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null
+          code=$(curl -sS -o "$RUNNER_TEMP/replace/fallbacks.json" -w '%{http_code}' -H "X-Report-Token: $TOKEN" "$SITE_URL/$NAME");test "$code" = 200;jq -e '.ok==true' "$RUNNER_TEMP/replace/fallbacks.json" >/dev/null;echo "fallbacks=$(jq -r '.count' "$RUNNER_TEMP/replace/fallbacks.json")"
+      - name: Search by product name across public web images
+        run: python3 .github/scripts/replace_tehran_fallbacks_by_name.py "$RUNNER_TEMP/replace" "$RUNNER_TEMP/replace/fallbacks.json"
+      - name: Apply real images
+        shell: bash
+        run: |
+          set -Eeuo pipefail;shopt -s nullglob;bundles=("$RUNNER_TEMP"/replace/bundles/image-bundle-*.zip);if [ ${#bundles[@]} -eq 0 ];then jq '. + {site_updated:0}' "$RUNNER_TEMP/replace/summary.json" > "$RUNNER_TEMP/replace/final-summary.json";exit 0;fi
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}";TOKEN=$(openssl rand -hex 32);IMP="real_override_$(openssl rand -hex 8).php";cp .github/scripts/tehran_real_image_override_import.php "$RUNNER_TEMP/$IMP";sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$IMP"
+          upload(){ local f="$1" d="$2";curl -sS --fail-with-body --retry 2 -H "$AUTH" -F "file-1=@${f};filename=$(basename "$f")" -F "dir=$d" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null;};upload "$RUNNER_TEMP/$IMP" "$SITE_DIR";TOTAL=0;B=0
+          for bundle in "${bundles[@]}";do upload "$bundle" "$SITE_DIR/storage";name=$(basename "$bundle");resp="$RUNNER_TEMP/replace/resp-$name.json";code=$(curl -sS -o "$resp" -w '%{http_code}' --max-time 150 -X POST -H "X-Import-Token: $TOKEN" --data-urlencode "bundle=$name" "$SITE_URL/$IMP");test "$code" = 200;jq -e '.ok==true' "$resp" >/dev/null;n=$(jq -r '.updated//0' "$resp");TOTAL=$((TOTAL+n));B=$((B+1));echo "updated=$TOTAL";done
+          curl -sS --fail-with-body -X POST -H "X-Import-Token: $TOKEN" --data 'finish=1' "$SITE_URL/$IMP" >/dev/null;jq --argjson updated "$TOTAL" --argjson bundles "$B" '. + {site_updated:$updated,site_bundles:$bundles}' "$RUNNER_TEMP/replace/summary.json" > "$RUNNER_TEMP/replace/final-summary.json"
+      - name: Verify
+        shell: bash
+        run: |
+          set -Eeuo pipefail;AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}";TOKEN=$(openssl rand -hex 32);NAME="verify_images_$(openssl rand -hex 8).php";cp .github/scripts/tehran_image_verify.php "$RUNNER_TEMP/$NAME";sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$NAME";curl -sS --fail-with-body -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$NAME;filename=$NAME" -F "dir=$SITE_DIR" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null;curl -sS -o "$RUNNER_TEMP/replace/live-verify.json" -X POST -H "X-Verify-Token: $TOKEN" "$SITE_URL/$NAME";cat "$RUNNER_TEMP/replace/live-verify.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tehran-name-real-replacement-report
+          path: |
+            ${{ runner.temp }}/replace/summary.json
+            ${{ runner.temp }}/replace/final-summary.json
+            ${{ runner.temp }}/replace/live-verify.json
+            ${{ runner.temp }}/replace/matches.json
+          retention-days: 3
