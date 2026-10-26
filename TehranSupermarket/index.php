@@ -24,15 +24,6 @@ $html = str_replace('سوپرمارکت طهران · بهارستان اصفه�
 $brandCss = '<style id="tehran-market-brand">.tehran-market-logo{width:150px;height:94px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:16px;background:#fff;flex:0 0 auto}.tehran-market-logo img{width:100%;height:100%;object-fit:contain;display:block}@media(max-width:800px){.tehran-market-logo{width:112px;height:70px;border-radius:12px}.top{gap:8px}.top>div{font-size:11px}}</style>';
 $html = str_replace('</head>', $brandCss.'</head>', $html);
 
-$serverShellHead = <<<'HTML'
-<!-- tm-direct-server-shell-v1 -->
-<script id="tm-storefront-direct-class">document.documentElement.classList.add('tm-storefront-server');</script>
-<link rel="stylesheet" href="assets/server_storefront_critical_v1.css?v=20261027-30">
-<link rel="stylesheet" href="assets/server_mobile_nav_v1.css?v=20261027-30">
-<script defer src="assets/server_mobile_nav_v1.js?v=20261027-30"></script>
-HTML;
-$html = str_replace('</head>', $serverShellHead.'</head>', $html);
-
 $tobaccoUi = <<<'HTML'
 <style id="tehran-tobacco-ui">
 .tobacco-age-overlay{position:fixed;inset:0;z-index:100000;background:rgba(8,20,13,.72);display:flex;align-items:center;justify-content:center;padding:22px;backdrop-filter:blur(4px)}
@@ -157,22 +148,10 @@ $html = str_replace('</body>', $customerMemory.'</body>', $html);
 $aiLocation = '<script src="assets/ai_location_checkout.js?v=20261026-2"></script>';
 $html = str_replace('</body>', $aiLocation.'</body>', $html);
 
-$aiEntry = '<script src="assets/ai_entry_flow.js?v=20261027-106"></script>';
+$aiEntry = '<script src="assets/ai_entry_flow.js?v=20261027-reference-3"></script>';
 $html = str_replace('</body>', $aiEntry.'</body>', $html);
 
 $aiLearning = '<script src="assets/ai_learning.js?v=20261026-1"></script>';
 $html = str_replace('</body>', $aiLearning.'</body>', $html);
-
-$serverNavBody = <<<'HTML'
-<!-- tm-static-mobile-nav-v2 -->
-<nav id="tm-server-mobile-nav" aria-label="منوی پایین موبایل">
-  <button type="button" data-server-nav="home"><span class="tm-snav-ico">⌂</span><span>خانه</span></button>
-  <button type="button" data-server-nav="products"><span class="tm-snav-ico">▦</span><span>محصولات</span></button>
-  <button type="button" class="tm-snav-scan" data-server-nav="scan"><span class="tm-snav-ico">▥</span><span>اسکن</span></button>
-  <button type="button" data-server-nav="cart"><span class="tm-snav-ico">🛒</span><span>سبد خرید</span></button>
-  <a href="account.php" data-server-nav="account"><span class="tm-snav-ico">◯</span><span>حساب من</span></a>
-</nav>
-HTML;
-$html = str_replace('</body>', $serverNavBody.'</body>', $html);
 
 echo $html;
