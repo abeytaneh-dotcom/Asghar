@@ -1,0 +1,91 @@
+name: Debug Tehran Mobile Live
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/debug-tehran-mobile-live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Install browser
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw"
+          cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.48.2 >/dev/null 2>&1
+          npx playwright install chromium >/dev/null 2>&1
+      - name: Capture exact live mobile page
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/pw"
+          cat > inspect.js <<'JS'
+          const { chromium } = require('playwright');
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            const context=await browser.newContext({viewport:{width:412,height:915},deviceScaleFactor:1,isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 13; SM-A715F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Mobile Safari/537.36'});
+            const page=await context.newPage();
+            const logs=[];
+            page.on('console',m=>logs.push('console '+m.type()+': '+m.text()));
+            page.on('pageerror',e=>logs.push('pageerror: '+e.message));
+            const res=await page.goto('https://websaza.ir/tehran/?debug-mobile=20261027-1',{waitUntil:'networkidle',timeout:60000});
+            await page.waitForTimeout(2500);
+            const info=await page.evaluate(()=>{
+              const q=s=>document.querySelector(s);
+              const qa=s=>Array.from(document.querySelectorAll(s));
+              const nav=q('#tm-server-mobile-nav');
+              const legacy=qa('.tm-mobile-nav');
+              const bodyStyle=getComputedStyle(document.body);
+              const hero=q('.hero');
+              const heroStyle=hero?getComputedStyle(hero):null;
+              const links=qa('link[rel="stylesheet"]').map(x=>x.href);
+              const scripts=qa('script[src]').map(x=>x.src);
+              return {
+                href:location.href,
+                title:document.title,
+                readyState:document.readyState,
+                bodyClass:document.body.className,
+                bodyBg:bodyStyle.backgroundColor,
+                bodyColor:bodyStyle.color,
+                navExists:!!nav,
+                navHtml:nav?nav.outerHTML:null,
+                navDisplay:nav?getComputedStyle(nav).display:null,
+                navPosition:nav?getComputedStyle(nav).position:null,
+                navBottom:nav?getComputedStyle(nav).bottom:null,
+                legacyNavCount:legacy.length,
+                heroExists:!!hero,
+                heroDisplay:heroStyle?heroStyle.display:null,
+                heroBg:heroStyle?heroStyle.backgroundImage:null,
+                brandText:(q('header .brand')||{}).innerText||'',
+                h1:(q('h1')||{}).innerText||'',
+                css:links,
+                scripts,
+                swControlled:!!navigator.serviceWorker.controller
+              };
+            });
+            await page.screenshot({path:'tehran-mobile-live.png',fullPage:true});
+            require('fs').writeFileSync('tehran-mobile-live.json',JSON.stringify({status:res&&res.status(),headers:res&&res.headers(),info,logs},null,2));
+            console.log(JSON.stringify({status:res&&res.status(),info},null,2));
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
+          node inspect.js
+          cp tehran-mobile-live.png "$GITHUB_WORKSPACE/tehran-mobile-live.png"
+          cp tehran-mobile-live.json "$GITHUB_WORKSPACE/tehran-mobile-live.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tehran-mobile-live-debug
+          path: |
+            tehran-mobile-live.png
+            tehran-mobile-live.json
+          retention-days: 1
