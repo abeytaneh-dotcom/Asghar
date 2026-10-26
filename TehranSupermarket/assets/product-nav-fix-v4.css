@@ -1,0 +1,30 @@
+/* Tehran Market v4 — seamless in-page navigation + product section */
+html{scroll-behavior:smooth}
+body.tehran-premium-home #products{scroll-margin-top:96px}
+body.tehran-premium-home #cart,body.tehran-premium-home #checkout{scroll-margin-top:96px}
+body.tehran-premium-home #products .search{display:flex!important;align-items:center!important;gap:6px!important;background:#fff!important;border:1px solid #e6eaed!important;border-radius:14px!important;padding:5px!important;box-shadow:none!important;margin:8px 0 10px!important}
+body.tehran-premium-home #products .search input{flex:1!important;min-width:0!important;border:0!important;background:transparent!important;color:#20272c!important;padding:9px 10px!important;outline:0!important;box-shadow:none!important}
+body.tehran-premium-home #products .search .btn,body.tehran-premium-home #products .search button{width:auto!important;min-width:74px!important;align-self:stretch!important;border:0!important;border-radius:10px!important;background:#11171b!important;color:#f2c94c!important;font-weight:900!important;padding:8px 12px!important;box-shadow:none!important}
+body.tehran-premium-home #products .cats{display:flex!important;gap:7px!important;overflow-x:auto!important;padding:1px 0 9px!important;scrollbar-width:none!important}
+body.tehran-premium-home #products .cats::-webkit-scrollbar{display:none!important}
+body.tehran-premium-home #products .cats a{flex:0 0 auto!important;background:#fff!important;color:#39434a!important;border:1px solid #e5e9eb!important;border-radius:999px!important;padding:8px 11px!important;font-weight:800!important;box-shadow:none!important}
+body.tehran-premium-home #products .cats a.on,body.tehran-premium-home #products .cats a:hover{background:#11171b!important;color:#f2c94c!important;border-color:#11171b!important}
+body.tehran-premium-home #products .card{border-color:#e8ecee!important;box-shadow:none!important}
+body.tehran-premium-home #products .card .add,body.tehran-premium-home #products .card button.add{background:#11171b!important;color:#f2c94c!important;border:0!important}
+body.tehran-premium-home #products .card .qty{background:#fff7d5!important;border:1px solid #f1df97!important}
+body.tehran-premium-home #products .card .qty button{background:transparent!important;color:#11171b!important}
+body.tehran-premium-home #products .card .stock,body.tehran-premium-home #products .card .available,body.tehran-premium-home #products .card .in-stock{color:#596268!important}
+body.tehran-premium-home .tm-mobile-nav .is-current{color:#a97905!important;font-weight:900!important}
+body.tehran-premium-home .tm-mobile-nav button{cursor:pointer}
+@media(max-width:800px){
+ body.tehran-premium-home #products{scroll-margin-top:92px}
+ body.tehran-premium-home #products .sectionhead{margin-top:10px!important}
+ body.tehran-premium-home #products .sectionhead h2{font-size:15px!important;color:#1c2328!important}
+ body.tehran-premium-home #products .sectionhead p{color:#8a9399!important}
+ body.tehran-premium-home #products .search{display:flex!important;margin:7px 0 9px!important;border-radius:12px!important;padding:4px!important}
+ body.tehran-premium-home #products .search input{font-size:10px!important;padding:8px!important}
+ body.tehran-premium-home #products .search .btn,body.tehran-premium-home #products .search button{min-width:62px!important;font-size:9px!important;padding:7px 9px!important;border-radius:9px!important}
+ body.tehran-premium-home #products .cats a{font-size:8.7px!important;padding:7px 10px!important}
+ body.tehran-premium-home #products .grid{gap:7px!important}
+ body.tehran-premium-home #products .card{border-radius:13px!important;background:#fff!important}
+}
