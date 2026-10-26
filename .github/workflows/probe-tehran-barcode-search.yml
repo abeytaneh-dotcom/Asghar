@@ -1,0 +1,61 @@
+name: Probe Tehran Barcode Search
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/probe-tehran-barcode-search'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Install client
+        run: python3 -m pip install --disable-pip-version-check --quiet curl_cffi
+      - name: Probe barcode search
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64,gzip,json,re,pathlib,time
+          from curl_cffi import requests
+          p=pathlib.Path('TehranSupermarket/pyramid_seed_1400_data.php').read_text('utf-8',errors='replace')
+          m=re.search(r"return\s+'([^']+)'\s*;",p,re.S)
+          raw=gzip.decompress(base64.b64decode(m.group(1))).decode('utf-8')
+          rows=[]
+          for x in raw.splitlines():
+              if not x.strip(): continue
+              r=json.loads(x); b=re.sub(r'\D','',str(r.get('barcode') or ''))
+              if 8<=len(b)<=14: rows.append((b,str(r.get('name') or '')))
+          # evenly spaced sample across the old catalog
+          n=80; idxs=[round(i*(len(rows)-1)/(n-1)) for i in range(n)]
+          sample=[rows[i] for i in idxs]
+          sess=requests.Session(impersonate='chrome')
+          h={'Accept':'application/json','Accept-Language':'fa-IR,fa;q=0.9','Origin':'https://www.digikala.com','Referer':'https://www.digikala.com/','x-web-client':'desktop','x-web-client-id':'web'}
+          base='https://api.digikala.com'
+          fresh=main=0; examples=[]
+          for j,(b,name) in enumerate(sample,1):
+              for kind,path in [('fresh','/fresh/v1/search/'),('main','/v1/search/')]:
+                  try:
+                      rr=sess.get(base+path,params={'q':b,'page':1,'sort':22},headers=h,timeout=20)
+                      body=rr.json() if rr.status_code==200 else {}
+                      ps=((body.get('data') or {}).get('products') or []) if isinstance(body,dict) else []
+                      if ps:
+                          p0=ps[0]; title=str(p0.get('title_fa') or '')
+                          if kind=='fresh': fresh+=1
+                          else: main+=1
+                          if len(examples)<20: examples.append((kind,b,name,title,p0.get('id')))
+                  except Exception: pass
+              if j%10==0: print('PROGRESS',j,'fresh_hits',fresh,'main_hits',main,flush=True)
+              time.sleep(.08)
+          print('SAMPLE_SIZE',len(sample))
+          print('FRESH_BARCODE_HITS',fresh)
+          print('MAIN_BARCODE_HITS',main)
+          print('EXAMPLES')
+          for e in examples: print(e)
+          PY
