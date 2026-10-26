@@ -138,6 +138,9 @@ $html = str_replace('</body>', $aiAutoCommit.'</body>', $html);
 $aiCartManager = '<script src="assets/ai_cart_manager.js?v=20261026-1"></script>';
 $html = str_replace('</body>', $aiCartManager.'</body>', $html);
 
+$customerMemory = '<script src="assets/customer_memory.js?v=20261026-1"></script>';
+$html = str_replace('</body>', $customerMemory.'</body>', $html);
+
 $aiLocation = '<script src="assets/ai_location_checkout.js?v=20261026-2"></script>';
 $html = str_replace('</body>', $aiLocation.'</body>', $html);
 
