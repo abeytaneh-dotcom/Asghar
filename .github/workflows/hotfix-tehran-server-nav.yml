@@ -11,7 +11,7 @@ on:
       - '.github/workflows/hotfix-tehran-server-nav.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   hotfix:
@@ -27,8 +27,49 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: websaza-hosting
+          fetch-depth: 0
 
-      - name: Upload storefront hotfix files only
+      - name: Patch storefront shell directly into PHP head
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/index.php')
+          s=p.read_text(encoding='utf-8')
+          marker='tm-direct-server-shell-v1'
+          if marker not in s:
+              anchor="$html = str_replace('</head>', $brandCss.'</head>', $html);"
+              if anchor not in s:
+                  raise SystemExit('index head anchor not found')
+              block=r'''$serverShellHead = <<<'HTML'
+<!-- tm-direct-server-shell-v1 -->
+<script id="tm-storefront-direct-class">document.documentElement.classList.add('tm-storefront-server');</script>
+<link rel="stylesheet" href="assets/server_storefront_critical_v1.css?v=20261027-4">
+<link rel="stylesheet" href="assets/server_mobile_nav_v1.css?v=20261027-4">
+<script defer src="assets/server_mobile_nav_v1.js?v=20261027-4"></script>
+HTML;
+$html = str_replace('</head>', $serverShellHead.'</head>', $html);'''
+              s=s.replace(anchor,anchor+'\n\n'+block,1)
+          s=s.replace('assets/ai_entry_flow.js?v=20261026-1','assets/ai_entry_flow.js?v=20261027-103')
+          p.write_text(s,encoding='utf-8')
+          PY
+          php -l TehranSupermarket/index.php
+          grep -Fq 'tm-direct-server-shell-v1' TehranSupermarket/index.php
+
+      - name: Save PHP shell fix in repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/index.php
+          if ! git diff --cached --quiet; then
+            git commit -m 'Render Tehran mobile shell directly from PHP'
+            git push origin HEAD:websaza-hosting
+          fi
+
+      - name: Upload patched PHP and storefront assets only
         shell: bash
         run: |
           set -euo pipefail
@@ -41,23 +82,24 @@ jobs:
               "${BASE}/execute/Fileman/save_file_content" -o "$out"
             test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
           }
-          upload TehranSupermarket/.htaccess "$TARGET_DIR" .htaccess
+          upload TehranSupermarket/index.php "$TARGET_DIR" index.php
           upload TehranSupermarket/assets/server_mobile_nav_v1.js "$TARGET_DIR/assets" server_mobile_nav_v1.js
           upload TehranSupermarket/assets/server_mobile_nav_v1.css "$TARGET_DIR/assets" server_mobile_nav_v1.css
           upload TehranSupermarket/assets/server_storefront_critical_v1.css "$TARGET_DIR/assets" server_storefront_critical_v1.css
 
-      - name: Verify live server-owned navigation and first-paint theme
+      - name: Verify direct PHP shell on live site
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -L --max-time 30 "${PUBLIC_URL}/?hotfix=server-nav-v1" -o "$RUNNER_TEMP/home.html"
-          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/server_mobile_nav_v1.js?v=20261027-2" -o "$RUNNER_TEMP/nav.js"
-          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/server_mobile_nav_v1.css?v=20261027-2" -o "$RUNNER_TEMP/nav.css"
-          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/server_storefront_critical_v1.css?v=20261027-2" -o "$RUNNER_TEMP/critical.css"
-          grep -Fq "tm-storefront-path" "$RUNNER_TEMP/home.html"
-          grep -Fq "server_storefront_critical_v1.css" "$RUNNER_TEMP/home.html"
-          grep -Fq "server_mobile_nav_v1.js" "$RUNNER_TEMP/home.html"
-          grep -Fq "tm-server-mobile-nav" "$RUNNER_TEMP/nav.js"
-          grep -Fq "tm-server-nav-ready" "$RUNNER_TEMP/nav.css"
-          grep -Fq "tm-storefront-server" "$RUNNER_TEMP/critical.css"
-          echo 'HOTFIX_LIVE_OK server_nav=ok first_paint_theme=ok'
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/?direct-php-shell=20261027-4" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/server_mobile_nav_v1.js?v=20261027-4" -o "$RUNNER_TEMP/nav.js"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/server_mobile_nav_v1.css?v=20261027-4" -o "$RUNNER_TEMP/nav.css"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/server_storefront_critical_v1.css?v=20261027-4" -o "$RUNNER_TEMP/critical.css"
+          grep -Fq 'tm-direct-server-shell-v1' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-storefront-direct-class' "$RUNNER_TEMP/home.html"
+          grep -Fq 'server_storefront_critical_v1.css?v=20261027-4' "$RUNNER_TEMP/home.html"
+          grep -Fq 'server_mobile_nav_v1.js?v=20261027-4' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-server-mobile-nav' "$RUNNER_TEMP/nav.js"
+          grep -Fq 'tm-server-nav-ready' "$RUNNER_TEMP/nav.css"
+          grep -Fq 'tm-storefront-server' "$RUNNER_TEMP/critical.css"
+          echo 'HOTFIX_LIVE_OK direct_php_head=ok server_nav=ok first_paint_theme=ok'
