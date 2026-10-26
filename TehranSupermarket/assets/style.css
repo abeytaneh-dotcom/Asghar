@@ -9,3 +9,24 @@
 body::after{content:"تستی — جهت سفارش تماس بگیرید — websaza.ir";position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-18deg);z-index:2147483647;pointer-events:none;user-select:none;-webkit-user-select:none;width:92vw;text-align:center;direction:rtl;color:#176b39;opacity:.14;font-family:Vazirmatn,Tahoma,Arial,sans-serif;font-weight:800;font-size:clamp(22px,4.8vw,54px);line-height:1.8;text-shadow:0 1px 0 #fff;white-space:normal}
 @media(max-width:600px){body::after{font-size:25px;opacity:.16;width:90vw;line-height:1.7}}
 @media print{body::after{opacity:.18}}
+/* Tehran storefront critical mobile paint: prevents legacy green flash before JS shell rebuild */
+@media(max-width:800px){
+  body:has(#products){background:#070b0e!important;color:#263038}
+  body:has(#products) .top{background:#070b0e!important;color:#fff!important;border-bottom:1px solid #ffffff12!important;box-shadow:0 8px 30px #0002!important}
+  body:has(#products) .brand b{color:#fff!important}
+  body:has(#products) .brand small{color:#c9cdd0!important}
+  body:has(#products) .tehran-market-logo{width:auto!important;height:auto!important;background:transparent!important;border-radius:0!important;overflow:visible!important}
+  body:has(#products) .tehran-market-logo img{display:none!important}
+  body:has(#products) .tehran-market-logo::after{content:'طهران مارکت';display:inline-flex;align-items:center;min-height:38px;padding:0 12px;border-radius:12px;border:1px solid #ffffff16;background:#ffffff08;color:#fff;font-weight:900;font-size:14px}
+  body:has(#products) main{background:#f7f8f9!important;color:#263038!important;padding-top:1px!important}
+  body:has(#products) #products .sectionhead h2{color:#151c21!important}
+  body:has(#products) #products .search{background:#fff!important;border:1px solid #e7eaec!important;border-radius:14px!important;padding:5px!important}
+  body:has(#products) #products .search .btn{background:#11171b!important;color:#f6c84a!important;border-radius:10px!important}
+  body:has(#products) #products .cats a{background:#fff!important;color:#293238!important;border:1px solid #e7eaec!important}
+  body:has(#products) #products .cats a.on{background:#11171b!important;color:#f6c84a!important;border-color:#11171b!important}
+  body:has(#products) #products .card{background:#fff!important;border:1px solid #eaedef!important;box-shadow:none!important}
+  body:has(#products) #products .price-row b{color:#11171b!important}
+  body:has(#products) #products .add{background:#11171b!important;color:#f6c84a!important}
+  body:has(#products):not(.tm-shell-ready) .hero{display:block!important;visibility:hidden!important;min-height:300px!important;margin:0!important;background:#070b0e!important}
+  body:has(#products):not(.tm-shell-ready) .tm-mobile-nav{display:none!important}
+}
