@@ -1,3 +1,4 @@
+# diagnostic-trigger-2
 name: Debug Tehran Mobile Live
 
 on:
@@ -38,7 +39,7 @@ jobs:
             const logs=[];
             page.on('console',m=>logs.push('console '+m.type()+': '+m.text()));
             page.on('pageerror',e=>logs.push('pageerror: '+e.message));
-            const res=await page.goto('https://websaza.ir/tehran/?debug-mobile=20261027-1',{waitUntil:'networkidle',timeout:60000});
+            const res=await page.goto('https://websaza.ir/tehran/?debug-mobile=20261027-2',{waitUntil:'networkidle',timeout:60000});
             await page.waitForTimeout(2500);
             const info=await page.evaluate(()=>{
               const q=s=>document.querySelector(s);
