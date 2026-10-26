@@ -25,44 +25,53 @@ jobs:
           ref: websaza-hosting
           fetch-depth: 0
 
-      - name: Make hero structural and remove legacy cache
+      - name: Remove legacy storefront CSS and keep one clean skin
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
+
           p=Path('TehranSupermarket/shop.php')
           s=p.read_text(encoding='utf-8')
 
+          # The old shared green stylesheet was still fighting the new storefront.
+          s=re.sub(r'<link rel="stylesheet" href="assets/style\.css\?v=[^"]+">', '<link rel="stylesheet" href="assets/tehran-storefront-base-v8.css?v=20261027-8">', s, count=1)
+
+          # Keep the reference skin on fresh versions.
+          s=re.sub(r'assets/tehran-reference-v4\.css\?v=[^"\']+', 'assets/tehran-reference-v4.css?v=20261027-8', s)
+          s=re.sub(r'assets/tehran-reference-v4-mobilefix\.css\?v=[^"\']+', 'assets/tehran-reference-v4-mobilefix.css?v=20261027-8', s)
           s=s.replace('@media(max-width:800px){.hero{display:none}', '@media(max-width:800px){.hero{display:flex}')
-          s=s.replace('assets/tehran-reference-v4.css?v=20261027-4','assets/tehran-reference-v4.css?v=20261027-6')
-          s=s.replace('assets/tehran-reference-v4-mobilefix.css?v=20261027-1','assets/tehran-reference-v4-mobilefix.css?v=20261027-6')
 
+          # Structural hero: real IMG + inline visibility, independent from CSS/JS shell state.
           old='<section class="hero tmx-hero" id="smart-shopping"><div class="tmx-hero-copy">'
-          new='''<section class="hero tmx-hero" id="smart-shopping" style="display:flex!important;visibility:visible!important;opacity:1!important;position:relative!important;overflow:hidden!important;background:#050608!important;isolation:isolate!important"><img class="tmx-hero-real-image-v6" src="assets/tehran-storefront-v2.svg?v=20261027-6" alt="فروشگاه شیشه‌ای طهران مارکت" style="position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important;object-position:69% center!important;display:block!important;visibility:visible!important;opacity:1!important;z-index:0!important;pointer-events:none!important"><span aria-hidden="true" style="position:absolute!important;inset:0!important;display:block!important;background:linear-gradient(0deg,rgba(5,6,8,.96) 0%,rgba(5,6,8,.76) 40%,rgba(5,6,8,.18) 78%,rgba(5,6,8,.08) 100%)!important;z-index:1!important"></span><div class="tmx-hero-copy" style="display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;z-index:2!important">'''
-          if 'tmx-hero-real-image-v6' not in s:
-              if old not in s:
+          new='''<section class="hero tmx-hero" id="smart-shopping" style="display:flex!important;visibility:visible!important;opacity:1!important;position:relative!important;overflow:hidden!important;background:#050608!important;isolation:isolate!important"><img class="tmx-hero-real-image-v8" src="assets/tehran-storefront-v2.svg?v=20261027-8" alt="فروشگاه شیشه‌ای طهران مارکت" style="position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important;object-position:69% center!important;display:block!important;visibility:visible!important;opacity:1!important;z-index:0!important;pointer-events:none!important"><span aria-hidden="true" style="position:absolute!important;inset:0!important;display:block!important;background:linear-gradient(0deg,rgba(5,6,8,.95) 0%,rgba(5,6,8,.70) 42%,rgba(5,6,8,.12) 82%,rgba(5,6,8,.04) 100%)!important;z-index:1!important"></span><div class="tmx-hero-copy" style="display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;z-index:2!important">'''
+          if 'tmx-hero-real-image-v8' not in s:
+              if 'tmx-hero-real-image-v6' in s:
+                  s=s.replace('tmx-hero-real-image-v6','tmx-hero-real-image-v8',1)
+                  s=s.replace('tehran-storefront-v2.svg?v=20261027-6','tehran-storefront-v2.svg?v=20261027-8',1)
+              elif old in s:
+                  s=s.replace(old,new,1)
+              else:
                   raise SystemExit('hero anchor missing')
-              s=s.replace(old,new,1)
 
+          # Do not let an old service worker serve stale storefront HTML/CSS.
           old_sw="if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js?v=20261027-reference-3',{scope:'/tehran/',updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));"
           new_sw="if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.getRegistrations().then(rs=>Promise.all(rs.map(r=>r.unregister()))).then(()=>('caches' in window?caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k)))):null)).catch(()=>{}));"
           if old_sw in s:
               s=s.replace(old_sw,new_sw,1)
-          elif new_sw not in s:
-              raise SystemExit('service worker registration anchor missing')
 
           p.write_text(s,encoding='utf-8')
           PY
           php -l TehranSupermarket/shop.php
-          grep -Fq 'tmx-hero-real-image-v6' TehranSupermarket/shop.php
-          grep -Fq 'display:flex!important;visibility:visible!important' TehranSupermarket/shop.php
-          grep -Fq 'tehran-storefront-v2.svg?v=20261027-6' TehranSupermarket/shop.php
-          grep -Fq 'getRegistrations().then(rs=>Promise.all(rs.map(r=>r.unregister())))' TehranSupermarket/shop.php
-          ! grep -Fq "serviceWorker.register('sw.js?v=20261027-reference-3'" TehranSupermarket/shop.php
+          grep -Fq 'tehran-storefront-base-v8.css?v=20261027-8' TehranSupermarket/shop.php
+          ! grep -Fq 'assets/style.css?v=' TehranSupermarket/shop.php
+          grep -Fq 'tmx-hero-real-image-v8' TehranSupermarket/shop.php
+          grep -Fq 'tehran-storefront-v2.svg?v=20261027-8' TehranSupermarket/shop.php
           ! grep -Fq '@media(max-width:800px){.hero{display:none}' TehranSupermarket/shop.php
 
-      - name: Persist structural hero and cache fix
+      - name: Persist clean storefront
         shell: bash
         run: |
           set -euo pipefail
@@ -70,11 +79,11 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add TehranSupermarket/shop.php
           if ! git diff --cached --quiet; then
-            git commit -m 'Remove stale PWA cache from Tehran storefront'
+            git commit -m 'Remove legacy green CSS from Tehran storefront'
             git push origin HEAD:websaza-hosting
           fi
 
-      - name: Upload structural storefront
+      - name: Upload clean storefront
         shell: bash
         run: |
           set -euo pipefail
@@ -88,22 +97,26 @@ jobs:
             test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
           }
           upload TehranSupermarket/shop.php "$TARGET_DIR" shop.php
+          upload TehranSupermarket/assets/tehran-storefront-base-v8.css "$TARGET_DIR/assets" tehran-storefront-base-v8.css
           upload TehranSupermarket/assets/tehran-reference-v4.css "$TARGET_DIR/assets" tehran-reference-v4.css
           upload TehranSupermarket/assets/tehran-reference-v4-mobilefix.css "$TARGET_DIR/assets" tehran-reference-v4-mobilefix.css
           upload TehranSupermarket/assets/tehran-storefront-v2.svg "$TARGET_DIR/assets" tehran-storefront-v2.svg
 
-      - name: Verify structural hero and no stale PWA on live site
+      - name: Verify live storefront has no legacy green CSS
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-7" -o "$RUNNER_TEMP/home.html"
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-v2.svg?v=20261027-6" -o "$RUNNER_TEMP/store.svg"
-          grep -Fq 'tmx-hero-real-image-v6' "$RUNNER_TEMP/home.html"
-          grep -Fq 'display:flex!important;visibility:visible!important' "$RUNNER_TEMP/home.html"
-          grep -Fq 'tehran-storefront-v2.svg?v=20261027-6' "$RUNNER_TEMP/home.html"
-          grep -Fq 'getRegistrations().then(rs=>Promise.all(rs.map(r=>r.unregister())))' "$RUNNER_TEMP/home.html"
-          ! grep -Fq "serviceWorker.register('sw.js?v=20261027-reference-3'" "$RUNNER_TEMP/home.html"
-          ! grep -Fq '@media(max-width:800px){.hero{display:none}' "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-8" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-base-v8.css?v=20261027-8" -o "$RUNNER_TEMP/base.css"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-v2.svg?v=20261027-8" -o "$RUNNER_TEMP/store.svg"
+
+          grep -Fq 'tehran-storefront-base-v8.css?v=20261027-8' "$RUNNER_TEMP/home.html"
+          ! grep -Fq 'assets/style.css?v=' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tmx-hero-real-image-v8' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tehran-storefront-v2.svg?v=20261027-8' "$RUNNER_TEMP/home.html"
           grep -Fq 'اولین فروشگاه' "$RUNNER_TEMP/home.html"
+          ! grep -Fq 'tm-shell-ready' "$RUNNER_TEMP/base.css"
+          ! grep -Fq '#11823b' "$RUNNER_TEMP/base.css"
+          grep -Fq 'Tehran Market standalone storefront base v8' "$RUNNER_TEMP/base.css"
           grep -Fq 'نمای فروشگاه شیشه‌ای مدرن طهران مارکت' "$RUNNER_TEMP/store.svg"
-          echo 'REFERENCE_V7_LIVE_OK structural_img=present hero=forced_visible legacy_mobile_hide=removed pwa_cache=disabled headline=present'
+          echo 'REFERENCE_V8_LIVE_OK legacy_green_css=removed standalone_base=ok structural_hero=ok storefront_svg=ok'
