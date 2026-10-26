@@ -28,15 +28,16 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p=Path('TehranSupermarket/index.php')
           s=p.read_text(encoding='utf-8')
-          old='$barcodeV2 = \'<script src="barcode_scanner_v2.js?v=20261026-3"></script>\';'
           new='$barcodeV2 = \'<script src="barcode_camera_v8.js?v=20261026-1"></script><script src="barcode_scanner_v2.js?v=20261026-8"></script>\';'
-          if old in s:
-              s=s.replace(old,new)
-          elif 'barcode_camera_v8.js' not in s:
+          s2,n=re.subn(r"\$barcodeV2\s*=\s*'<script src=\"barcode_scanner_v2\.js\?v=[^\"]+\"></script>';",new,s,count=1)
+          if n==0:
+              s2,n=re.subn(r"\$barcodeV2\s*=\s*'<script src=\"barcode_camera_v8\.js\?v=[^\"]+\"></script><script src=\"barcode_scanner_v2\.js\?v=[^\"]+\"></script>';",new,s,count=1)
+          if n==0:
               raise SystemExit('scanner loader marker not found')
-          p.write_text(s,encoding='utf-8')
+          p.write_text(s2,encoding='utf-8')
           PY
       - name: Commit loader change
         shell: bash
