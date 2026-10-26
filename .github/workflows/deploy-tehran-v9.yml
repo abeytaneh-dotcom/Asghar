@@ -1,0 +1,94 @@
+name: Deploy Tehran Market V9
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/deploy-tehran-v9.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+          fetch-depth: 0
+
+      - name: Patch storefront to real exterior hero
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('TehranSupermarket/shop.php')
+          s=p.read_text(encoding='utf-8')
+          s=re.sub(r'tmx-hero-real-image-v\d+', 'tmx-hero-real-image-v9', s, count=1)
+          s=re.sub(r'assets/tehran-storefront-v\d+\.svg\?v=[^"\']+', 'assets/tehran-storefront-v3.svg?v=20261027-9', s, count=1)
+          s=s.replace('object-position:69% center!important','object-position:62% center!important',1)
+          s=s.replace('background:linear-gradient(0deg,rgba(5,6,8,.95) 0%,rgba(5,6,8,.70) 42%,rgba(5,6,8,.12) 82%,rgba(5,6,8,.04) 100%)!important','background:linear-gradient(0deg,rgba(5,6,8,.82) 0%,rgba(5,6,8,.46) 40%,rgba(5,6,8,.05) 82%,rgba(5,6,8,.01) 100%)!important',1)
+          link='<link rel="stylesheet" href="assets/tehran-mobile-polish-v9.css?v=20261027-9">'
+          if link not in s:
+              s=s.replace('</head>',link+'</head>',1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          php -l TehranSupermarket/shop.php
+          grep -Fq 'tmx-hero-real-image-v9' TehranSupermarket/shop.php
+          grep -Fq 'tehran-storefront-v3.svg?v=20261027-9' TehranSupermarket/shop.php
+          grep -Fq 'tehran-mobile-polish-v9.css?v=20261027-9' TehranSupermarket/shop.php
+          grep -Fq 'object-position:62% center!important' TehranSupermarket/shop.php
+
+      - name: Persist storefront v9
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/shop.php
+          if ! git diff --cached --quiet; then
+            git commit -m 'Use glass exterior hero on Tehran Market mobile'
+            git push origin HEAD:websaza-hosting
+          fi
+
+      - name: Upload v9 storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          upload TehranSupermarket/shop.php "$TARGET_DIR" shop.php
+          upload TehranSupermarket/assets/tehran-storefront-v3.svg "$TARGET_DIR/assets" tehran-storefront-v3.svg
+          upload TehranSupermarket/assets/tehran-mobile-polish-v9.css "$TARGET_DIR/assets" tehran-mobile-polish-v9.css
+
+      - name: Verify live v9
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-9" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-v3.svg?v=20261027-9" -o "$RUNNER_TEMP/store.svg"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-mobile-polish-v9.css?v=20261027-9" -o "$RUNNER_TEMP/polish.css"
+          grep -Fq 'tmx-hero-real-image-v9' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tehran-storefront-v3.svg?v=20261027-9' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tehran-mobile-polish-v9.css?v=20261027-9' "$RUNNER_TEMP/home.html"
+          grep -Fq 'طهران مارکت' "$RUNNER_TEMP/store.svg"
+          grep -Fq 'TEHRAN MARKET' "$RUNNER_TEMP/store.svg"
+          grep -Fq 'height:315px!important' "$RUNNER_TEMP/polish.css"
+          echo 'TEHRAN_V9_LIVE_OK exterior_storefront=ok mobile_compact=ok bottom_nav_padding=ok'
