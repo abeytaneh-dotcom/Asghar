@@ -1,0 +1,74 @@
+name: Deploy Tehran Guided AI Hotfix
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/deploy-tehran-guided-ai-hotfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Validate guided AI files
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l TehranSupermarket/schema.php
+          php -l TehranSupermarket/shop.php
+          php -l TehranSupermarket/ai_search_fuzzy.php
+          php -l TehranSupermarket/ai_learning_lib.php
+          php -l TehranSupermarket/ai_learning.php
+          php -l TehranSupermarket/index.php
+          node --check TehranSupermarket/assets/ai_assistant_autocommit.js
+          node --check TehranSupermarket/assets/ai_entry_flow.js
+          node --check TehranSupermarket/assets/ai_learning.js
+          node --check TehranSupermarket/assets/ai_location_checkout.js
+          node --check TehranSupermarket/assets/ai_spell_helper.js
+      - name: Upload guided AI files
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          save_file(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          for f in schema.php shop.php ai_search_fuzzy.php ai_learning_lib.php ai_learning.php index.php; do save_file "TehranSupermarket/$f" "$TARGET_DIR" "$f"; done
+          for f in ai_assistant_autocommit.js ai_entry_flow.js ai_learning.js ai_location_checkout.js ai_spell_helper.js; do save_file "TehranSupermarket/assets/$f" "$TARGET_DIR/assets" "$f"; done
+      - name: Verify guided AI live
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/?v=guided-ai-live-1" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/ai_entry_flow.js?v=guided-ai-live-1" -o "$RUNNER_TEMP/entry.js"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/ai_location_checkout.js?v=guided-ai-live-1" -o "$RUNNER_TEMP/location.js"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/ai_learning.js?v=guided-ai-live-1" -o "$RUNNER_TEMP/learn.js"
+          curl -sS -L --max-time 30 --get --data-urlencode 'q=ماشت' "${PUBLIC_URL}/ai_search_fuzzy.php" -o "$RUNNER_TEMP/fuzzy.json"
+          grep -Fq 'assets/ai_entry_flow.js?v=20261026-1' "$RUNNER_TEMP/home.html"
+          grep -Fq 'assets/ai_learning.js?v=20261026-1' "$RUNNER_TEMP/home.html"
+          grep -Fq 'assets/ai_location_checkout.js?v=20261026-2' "$RUNNER_TEMP/home.html"
+          grep -Fq 'خودت میای می‌بری یا برات بفرستیم' "$RUNNER_TEMP/location.js"
+          grep -Fq 'tehran_ai_entry_seen_v1' "$RUNNER_TEMP/entry.js"
+          grep -Fq 'ai_learning.php' "$RUNNER_TEMP/learn.js"
+          jq -e '.ok==true and .corrected_query=="ماست" and (.items|length)>0' "$RUNNER_TEMP/fuzzy.json" >/dev/null
+          CODE=$(curl -sS -o "$RUNNER_TEMP/learn.json" -w '%{http_code}' -X POST -H 'Sec-Fetch-Site: same-origin' --data-urlencode 'event_type=search' --data-urlencode 'q=تست یادگیری' "${PUBLIC_URL}/ai_learning.php")
+          test "$CODE" = '200'; jq -e '.ok==true' "$RUNNER_TEMP/learn.json" >/dev/null
+          echo GUIDED_AI_LIVE_OK
