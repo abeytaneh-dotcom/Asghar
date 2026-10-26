@@ -1,6 +1,18 @@
 (function(){
 'use strict';
 document.documentElement.classList.add('tm-js');
+function retireStalePwa(){
+  try{
+    if('caches' in window){caches.keys().then(function(keys){return Promise.all(keys.filter(function(k){return /^tehran-pwa/i.test(k);}).map(function(k){return caches.delete(k);}));}).catch(function(){});}
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.register('sw.js?v=20261027-navfix-13',{scope:'/tehran/',updateViaCache:'none'}).then(function(r){
+        r.update().catch(function(){});
+        if(r.waiting)r.waiting.postMessage('SKIP_WAITING');
+      }).catch(function(){});
+    }
+  }catch(e){}
+}
+retireStalePwa();
 function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[c];});}
 function qParam(name){try{return new URLSearchParams(location.search).get(name)||'';}catch(e){return '';}}
 function ensureCss(id,href){
@@ -84,4 +96,4 @@ loadCss();
 if(document.body)document.body.classList.add('tehran-premium-home');
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',rebuild,{once:true});else rebuild();
 })();
-// deploy-marker: premium-reference-shell-v1 premium-reference-shell-v2-clean header-logo-fallback-v1 mobile-polish-v3 product-nav-fix-v4 hard-no-reload-v6 single-mobile-nav-v1
+// deploy-marker: premium-reference-shell-v1 premium-reference-shell-v2-clean header-logo-fallback-v1 mobile-polish-v3 product-nav-fix-v4 hard-no-reload-v6 single-mobile-nav-v1 purge-stale-pwa-v8
