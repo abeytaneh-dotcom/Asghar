@@ -1,0 +1,89 @@
+name: Cache Bust Tehran AI Fuzzy Search
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/cachebust-tehran-ai-spell.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Bust AI helper cache
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/index.php')
+          s=p.read_text(encoding='utf-8')
+          old='assets/ai_assistant_autocommit.js?v=20261026-1'
+          new='assets/ai_assistant_autocommit.js?v=20261026-2'
+          if old in s:
+              s=s.replace(old,new)
+          elif new not in s:
+              raise SystemExit('AI autocommit loader not found')
+          p.write_text(s,encoding='utf-8')
+          PY
+          php -l TehranSupermarket/index.php
+          php -l TehranSupermarket/ai_search_fuzzy.php
+          node --check TehranSupermarket/assets/ai_spell_helper.js
+          node --check TehranSupermarket/assets/ai_assistant_autocommit.js
+      - name: Commit cache bust
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/index.php
+          if ! git diff --cached --quiet; then
+            git commit -m 'Activate Tehran AI fuzzy search helper'
+            git push origin HEAD:websaza-hosting
+          fi
+      - name: Deploy fuzzy search files
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          save_file(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          save_file TehranSupermarket/index.php "$TARGET_DIR" index.php
+          save_file TehranSupermarket/ai_search_fuzzy.php "$TARGET_DIR" ai_search_fuzzy.php
+          save_file TehranSupermarket/assets/ai_spell_helper.js "$TARGET_DIR/assets" ai_spell_helper.js
+          save_file TehranSupermarket/assets/ai_assistant_autocommit.js "$TARGET_DIR/assets" ai_assistant_autocommit.js
+      - name: Verify fuzzy search live
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/?v=fuzzy-ai-2" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/ai_spell_helper.js?v=20261026-1" -o "$RUNNER_TEMP/helper.js"
+          grep -Fq 'ai_assistant_autocommit.js?v=20261026-2' "$RUNNER_TEMP/home.html"
+          grep -Fq 'ai_search_fuzzy.php' "$RUNNER_TEMP/helper.js"
+          for pair in 'ماشت:ماست' 'پیر:پنیر' 'چیبس:چیپس' 'نویدنی:نوشیدنی'; do
+            q="${pair%%:*}"; want="${pair##*:}"
+            curl -sS -L --max-time 45 --get --data-urlencode "q=$q" "${PUBLIC_URL}/ai_search_fuzzy.php" -o "$RUNNER_TEMP/fuzzy.json"
+            jq -e --arg w "$want" '.ok==true and .corrected_query==$w and (.items|length)>0' "$RUNNER_TEMP/fuzzy.json" >/dev/null
+          done
+          for q in 'زغال' 'ذغال'; do
+            curl -sS -L --max-time 45 --get --data-urlencode "q=$q" "${PUBLIC_URL}/ai_search_fuzzy.php" -o "$RUNNER_TEMP/coal.json"
+            jq -e '.ok==true and (.items|length)>0' "$RUNNER_TEMP/coal.json" >/dev/null
+          done
+          echo FUZZY_SEARCH_OK
