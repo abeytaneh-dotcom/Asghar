@@ -1,0 +1,96 @@
+name: Patch Tehran Index Shell Directly
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/patch-tehran-index-shell.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+          fetch-depth: 0
+
+      - name: Inject first-paint shell directly into index.php
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/index.php')
+          s=p.read_text(encoding='utf-8')
+          marker='tm-direct-server-shell-v1'
+          if marker not in s:
+              anchor="$html = str_replace('</head>', $brandCss.'</head>', $html);"
+              if anchor not in s:
+                  raise SystemExit('brand head injection anchor not found')
+              block=r'''$serverShellHead = <<<'HTML'
+<!-- tm-direct-server-shell-v1 -->
+<script id="tm-storefront-direct-class">document.documentElement.classList.add('tm-storefront-server');</script>
+<link rel="stylesheet" href="assets/server_storefront_critical_v1.css?v=20261027-3">
+<link rel="stylesheet" href="assets/server_mobile_nav_v1.css?v=20261027-3">
+<script defer src="assets/server_mobile_nav_v1.js?v=20261027-3"></script>
+HTML;
+$html = str_replace('</head>', $serverShellHead.'</head>', $html);'''
+              s=s.replace(anchor,anchor+'\n\n'+block,1)
+          # Force current JS shell query in source too, not only through Apache substitution.
+          s=s.replace('assets/ai_entry_flow.js?v=20261026-1','assets/ai_entry_flow.js?v=20261027-102')
+          p.write_text(s,encoding='utf-8')
+          PY
+          php -l TehranSupermarket/index.php
+          grep -Fq 'tm-direct-server-shell-v1' TehranSupermarket/index.php
+          grep -Fq 'server_mobile_nav_v1.js?v=20261027-3' TehranSupermarket/index.php
+
+      - name: Commit source fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/index.php
+          if ! git diff --cached --quiet; then
+            git commit -m 'Render Tehran mobile shell from PHP head'
+            git push origin HEAD:websaza-hosting
+          fi
+
+      - name: Upload patched index and shell assets directly
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"; AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          upload TehranSupermarket/index.php "$TARGET_DIR" index.php
+          upload TehranSupermarket/assets/server_mobile_nav_v1.js "$TARGET_DIR/assets" server_mobile_nav_v1.js
+          upload TehranSupermarket/assets/server_mobile_nav_v1.css "$TARGET_DIR/assets" server_mobile_nav_v1.css
+          upload TehranSupermarket/assets/server_storefront_critical_v1.css "$TARGET_DIR/assets" server_storefront_critical_v1.css
+
+      - name: Verify direct PHP shell is live
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/?direct-shell=1" -o "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-direct-server-shell-v1' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-storefront-direct-class' "$RUNNER_TEMP/home.html"
+          grep -Fq 'server_storefront_critical_v1.css?v=20261027-3' "$RUNNER_TEMP/home.html"
+          grep -Fq 'server_mobile_nav_v1.js?v=20261027-3' "$RUNNER_TEMP/home.html"
+          echo 'DIRECT_SHELL_LIVE_OK php_head=ok nav=ok first_paint=ok'
