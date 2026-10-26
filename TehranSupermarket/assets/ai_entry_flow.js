@@ -2,10 +2,14 @@
 'use strict';
 function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[c];});}
 function qParam(name){try{return new URLSearchParams(location.search).get(name)||'';}catch(e){return '';}}
+function ensureCss(id,href){
+  var old=document.getElementById(id);
+  if(old){old.href=href;return old;}
+  var l=document.createElement('link');l.id=id;l.rel='stylesheet';l.href=href;document.head.appendChild(l);return l;
+}
 function loadCss(){
-  var old=document.getElementById('tehran-premium-css');
-  if(old){old.href='assets/tehran-premium-v1.css?v=20261027-3';return;}
-  var l=document.createElement('link');l.id='tehran-premium-css';l.rel='stylesheet';l.href='assets/tehran-premium-v1.css?v=20261027-3';document.head.appendChild(l);
+  ensureCss('tehran-premium-css','assets/tehran-premium-v1.css?v=20261027-4');
+  ensureCss('tehran-header-hotfix','assets/header-logo-hotfix.css?v=20261027-1');
 }
 function rebuild(){
   loadCss();
@@ -45,4 +49,4 @@ document.addEventListener('click',function(e){var ai=e.target.closest('[data-tm-
 loadCss();
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',rebuild,{once:true});else rebuild();
 })();
-// deploy-marker: premium-reference-shell-v1 premium-reference-shell-v2-clean
+// deploy-marker: premium-reference-shell-v1 premium-reference-shell-v2-clean header-logo-fallback-v1
