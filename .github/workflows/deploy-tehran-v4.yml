@@ -25,7 +25,7 @@ jobs:
           ref: websaza-hosting
           fetch-depth: 0
 
-      - name: Switch storefront to v4 and force mobile hero fix
+      - name: Make hero structural and remove legacy mobile hide
         shell: bash
         run: |
           set -euo pipefail
@@ -33,21 +33,30 @@ jobs:
           from pathlib import Path
           p=Path('TehranSupermarket/shop.php')
           s=p.read_text(encoding='utf-8')
-          s=s.replace('assets/tehran-reference-v3.css?v=20261027-3','assets/tehran-reference-v4.css?v=20261027-4')
-          fix='<link rel="stylesheet" href="assets/tehran-reference-v4-mobilefix.css?v=20261027-1">'
-          if fix not in s:
-              anchor='<link rel="stylesheet" href="assets/tehran-reference-v4.css?v=20261027-4">'
-              if anchor not in s:
-                  raise SystemExit('v4 css anchor missing')
-              s=s.replace(anchor,anchor+fix,1)
+
+          # Never hide the hero on mobile in the base template.
+          s=s.replace('@media(max-width:800px){.hero{display:none}', '@media(max-width:800px){.hero{display:flex}')
+
+          # Force current stylesheet versions.
+          s=s.replace('assets/tehran-reference-v4.css?v=20261027-4','assets/tehran-reference-v4.css?v=20261027-6')
+          s=s.replace('assets/tehran-reference-v4-mobilefix.css?v=20261027-1','assets/tehran-reference-v4-mobilefix.css?v=20261027-6')
+
+          old='<section class="hero tmx-hero" id="smart-shopping"><div class="tmx-hero-copy">'
+          new='''<section class="hero tmx-hero" id="smart-shopping" style="display:flex!important;visibility:visible!important;opacity:1!important;position:relative!important;overflow:hidden!important;background:#050608!important;isolation:isolate!important"><img class="tmx-hero-real-image-v6" src="assets/tehran-storefront-v2.svg?v=20261027-6" alt="فروشگاه شیشه‌ای طهران مارکت" style="position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important;object-position:69% center!important;display:block!important;visibility:visible!important;opacity:1!important;z-index:0!important;pointer-events:none!important"><span aria-hidden="true" style="position:absolute!important;inset:0!important;display:block!important;background:linear-gradient(0deg,rgba(5,6,8,.96) 0%,rgba(5,6,8,.76) 40%,rgba(5,6,8,.18) 78%,rgba(5,6,8,.08) 100%)!important;z-index:1!important"></span><div class="tmx-hero-copy" style="display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;z-index:2!important">'''
+          if 'tmx-hero-real-image-v6' not in s:
+              if old not in s:
+                  raise SystemExit('hero anchor missing')
+              s=s.replace(old,new,1)
+
           p.write_text(s,encoding='utf-8')
           PY
           php -l TehranSupermarket/shop.php
-          grep -Fq 'tehran-reference-v4.css?v=20261027-4' TehranSupermarket/shop.php
-          grep -Fq 'tehran-reference-v4-mobilefix.css?v=20261027-1' TehranSupermarket/shop.php
-          grep -Fq 'tm-v4-mobilefix-hero-visible' TehranSupermarket/assets/tehran-reference-v4-mobilefix.css
+          grep -Fq 'tmx-hero-real-image-v6' TehranSupermarket/shop.php
+          grep -Fq 'display:flex!important;visibility:visible!important' TehranSupermarket/shop.php
+          grep -Fq 'tehran-storefront-v2.svg?v=20261027-6' TehranSupermarket/shop.php
+          ! grep -Fq '@media(max-width:800px){.hero{display:none}' TehranSupermarket/shop.php
 
-      - name: Persist storefront switch
+      - name: Persist structural hero fix
         shell: bash
         run: |
           set -euo pipefail
@@ -55,11 +64,11 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add TehranSupermarket/shop.php
           if ! git diff --cached --quiet; then
-            git commit -m 'Enable Tehran v4 mobile hero hard fix'
+            git commit -m 'Render Tehran hero directly in storefront HTML'
             git push origin HEAD:websaza-hosting
           fi
 
-      - name: Upload v4 storefront
+      - name: Upload structural storefront
         shell: bash
         run: |
           set -euo pipefail
@@ -77,16 +86,16 @@ jobs:
           upload TehranSupermarket/assets/tehran-reference-v4-mobilefix.css "$TARGET_DIR/assets" tehran-reference-v4-mobilefix.css
           upload TehranSupermarket/assets/tehran-storefront-v2.svg "$TARGET_DIR/assets" tehran-storefront-v2.svg
 
-      - name: Verify live v4 storefront and visible mobile hero
+      - name: Verify structural hero on live site
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-5" -o "$RUNNER_TEMP/home.html"
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-reference-v4-mobilefix.css?v=20261027-1" -o "$RUNNER_TEMP/mobilefix.css"
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-v2.svg?v=20261027-1" -o "$RUNNER_TEMP/store.svg"
-          grep -Fq 'tehran-reference-v4-mobilefix.css?v=20261027-1' "$RUNNER_TEMP/home.html"
-          grep -Fq 'tm-v4-mobilefix-hero-visible' "$RUNNER_TEMP/mobilefix.css"
-          grep -Fq 'visibility:visible!important' "$RUNNER_TEMP/mobilefix.css"
-          grep -Fq 'tehran-storefront-v2.svg' "$RUNNER_TEMP/mobilefix.css"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-6" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-v2.svg?v=20261027-6" -o "$RUNNER_TEMP/store.svg"
+          grep -Fq 'tmx-hero-real-image-v6' "$RUNNER_TEMP/home.html"
+          grep -Fq 'display:flex!important;visibility:visible!important' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tehran-storefront-v2.svg?v=20261027-6' "$RUNNER_TEMP/home.html"
+          ! grep -Fq '@media(max-width:800px){.hero{display:none}' "$RUNNER_TEMP/home.html"
+          grep -Fq 'اولین فروشگاه' "$RUNNER_TEMP/home.html"
           grep -Fq 'نمای فروشگاه شیشه‌ای مدرن طهران مارکت' "$RUNNER_TEMP/store.svg"
-          echo 'REFERENCE_V4_MOBILEFIX_LIVE_OK hero_text=visible storefront=visible legacy_hide=overridden'
+          echo 'REFERENCE_V6_LIVE_OK structural_img=present hero=forced_visible legacy_mobile_hide=removed headline=present'
