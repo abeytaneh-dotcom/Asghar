@@ -1,5 +1,9 @@
 <?php
 declare(strict_types=1);
+// tm-no-store-navfix-v2
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 require_once __DIR__.'/pyramid_seed_1400.php';
 ts_seed_pyramid_1400();
@@ -23,9 +27,9 @@ $html = str_replace('</head>', $brandCss.'</head>', $html);
 $serverShellHead = <<<'HTML'
 <!-- tm-direct-server-shell-v1 -->
 <script id="tm-storefront-direct-class">document.documentElement.classList.add('tm-storefront-server');</script>
-<link rel="stylesheet" href="assets/server_storefront_critical_v1.css?v=20261027-5">
-<link rel="stylesheet" href="assets/server_mobile_nav_v1.css?v=20261027-5">
-<script defer src="assets/server_mobile_nav_v1.js?v=20261027-5"></script>
+<link rel="stylesheet" href="assets/server_storefront_critical_v1.css?v=20261027-12">
+<link rel="stylesheet" href="assets/server_mobile_nav_v1.css?v=20261027-12">
+<script defer src="assets/server_mobile_nav_v1.js?v=20261027-12"></script>
 HTML;
 $html = str_replace('</head>', $serverShellHead.'</head>', $html);
 
@@ -153,10 +157,22 @@ $html = str_replace('</body>', $customerMemory.'</body>', $html);
 $aiLocation = '<script src="assets/ai_location_checkout.js?v=20261026-2"></script>';
 $html = str_replace('</body>', $aiLocation.'</body>', $html);
 
-$aiEntry = '<script src="assets/ai_entry_flow.js?v=20261027-104"></script>';
+$aiEntry = '<script src="assets/ai_entry_flow.js?v=20261027-105"></script>';
 $html = str_replace('</body>', $aiEntry.'</body>', $html);
 
 $aiLearning = '<script src="assets/ai_learning.js?v=20261026-1"></script>';
 $html = str_replace('</body>', $aiLearning.'</body>', $html);
+
+$serverNavBody = <<<'HTML'
+<!-- tm-static-mobile-nav-v2 -->
+<nav id="tm-server-mobile-nav" aria-label="منوی پایین موبایل">
+  <button type="button" data-server-nav="home"><span class="tm-snav-ico">⌂</span><span>خانه</span></button>
+  <button type="button" data-server-nav="products"><span class="tm-snav-ico">▦</span><span>محصولات</span></button>
+  <button type="button" class="tm-snav-scan" data-server-nav="scan"><span class="tm-snav-ico">▥</span><span>اسکن</span></button>
+  <button type="button" data-server-nav="cart"><span class="tm-snav-ico">🛒</span><span>سبد خرید</span></button>
+  <a href="account.php" data-server-nav="account"><span class="tm-snav-ico">◯</span><span>حساب من</span></a>
+</nav>
+HTML;
+$html = str_replace('</body>', $serverNavBody.'</body>', $html);
 
 echo $html;
