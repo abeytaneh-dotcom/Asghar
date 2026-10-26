@@ -1,0 +1,41 @@
+/* Tehran Market mobile storefront v10 */
+@media(max-width:800px){
+  .tmx-header{padding:7px 9px 8px!important;gap:6px!important;background:#080a0c!important}
+  .tmx-head-search{height:39px!important;border-radius:11px!important}
+  .tmx-head-search input{font-size:10px!important;padding:7px 10px!important}
+  .tmx-head-search button{width:31px!important;height:31px!important;flex-basis:31px!important}
+
+  .tmx-hero{min-height:390px!important;height:390px!important;padding:0!important;border-radius:0 0 20px 20px!important;display:block!important;position:relative!important;overflow:hidden!important;background:#080a0c!important}
+  .tmx-hero picture{position:absolute!important;inset:0!important;display:block!important;width:100%!important;height:100%!important;z-index:0!important}
+  .tmx-hero picture img,.tmx-hero-real-image-v10{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important;object-position:center top!important;display:block!important;filter:saturate(1.02) contrast(1.05) brightness(1.12)!important}
+  .tmx-hero>span[aria-hidden="true"]{background:linear-gradient(0deg,rgba(5,6,8,.96) 0%,rgba(5,6,8,.80) 22%,rgba(5,6,8,.28) 46%,rgba(5,6,8,.04) 72%,rgba(5,6,8,0) 100%)!important;z-index:1!important}
+  .tmx-hero:before{content:none!important}
+  .tmx-hero-copy{position:absolute!important;left:14px!important;right:14px!important;bottom:16px!important;width:auto!important;max-width:none!important;z-index:3!important;display:block!important;text-align:right!important}
+  .tmx-eyebrow{font-size:8px!important;padding:5px 8px!important;background:rgba(6,8,10,.72)!important;border-color:rgba(255,255,255,.14)!important}
+  .tmx-hero h1{font-size:24px!important;line-height:1.28!important;margin:8px 0 6px!important;letter-spacing:-.2px!important;max-width:320px!important;text-shadow:0 2px 12px #000!important}
+  .tmx-hero h1 strong{font-size:26px!important;color:#f4c94d!important}
+  .tmx-hero p{display:none!important}
+  .tmx-hero-actions{display:flex!important;gap:7px!important;flex-wrap:nowrap!important}
+  .tmx-primary,.tmx-secondary{min-height:36px!important;padding:7px 10px!important;font-size:8.5px!important;border-radius:9px!important;white-space:nowrap!important}
+  .tmx-primary{background:#f1c445!important;color:#141414!important}
+  .tmx-secondary{background:rgba(11,14,17,.82)!important;color:#fff!important;border-color:rgba(255,255,255,.15)!important}
+
+  .tmx-smart-row{margin:10px auto 0!important;padding:0 9px!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important;z-index:20!important}
+  .tmx-smart-card{min-height:76px!important;padding:7px 4px!important;border-radius:13px!important;display:flex!important;flex-direction:column!important;justify-content:center!important;text-align:center!important;gap:5px!important;box-shadow:0 7px 18px rgba(0,0,0,.06)!important}
+  .tmx-smart-ico{width:32px!important;height:32px!important;flex-basis:32px!important;border-radius:9px!important;font-size:15px!important}
+  .tmx-smart-card b{font-size:8.5px!important;margin:0!important}.tmx-smart-card small{display:none!important}
+
+  main{padding-top:20px!important;padding-bottom:110px!important}
+  .state{margin-bottom:10px!important;font-size:9px!important;padding:8px 10px!important}
+  #tmx-mobile-nav{height:60px!important;padding:5px 8px calc(5px + env(safe-area-inset-bottom))!important;box-shadow:0 -6px 18px rgba(0,0,0,.08)!important}
+  #tmx-mobile-nav button,#tmx-mobile-nav a{font-size:8.5px!important;gap:1px!important}
+  #tmx-mobile-nav .tmx-nav-ico{font-size:16px!important}
+  #tmx-mobile-nav .tmx-scan{width:50px!important;height:50px!important;transform:translateY(-7px)!important}
+  .sticky{bottom:64px!important;left:8px!important;right:8px!important}
+}
+@media(max-width:390px){
+  .tmx-hero{min-height:370px!important;height:370px!important}
+  .tmx-hero h1{font-size:22px!important;max-width:285px!important}
+  .tmx-hero h1 strong{font-size:24px!important}
+  .tmx-primary,.tmx-secondary{font-size:8px!important;padding:7px 9px!important}
+}
