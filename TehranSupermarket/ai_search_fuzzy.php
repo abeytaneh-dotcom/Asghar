@@ -52,9 +52,11 @@ try{
         PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false,
     ]);
     require_once __DIR__.'/schema.php';ensure_product_schema($pdo);
+    require_once __DIR__.'/ai_learning_lib.php';ts_ai_learning_schema($pdo);
 }catch(Throwable $e){ts_log_internal($e,'AI-FUZZY-501');fs_out(['ok'=>false,'message'=>'ارتباط با فروشگاه برقرار نشد.'],503);}
 
 $rows=$pdo->query("SELECT id,name,brand,quantity_label,category,image_path,price,stock FROM products WHERE active=1 AND price>0 ORDER BY id DESC LIMIT 12000")->fetchAll();
+$learnedAliases=ts_ai_alias_map($pdo);$learnedScores=ts_ai_score_map($pdo);
 
 $curated=['شیر','ماست','کشک','پنیر','کره','خامه','دوغ','نوشیدنی','آبمیوه','نوشابه','آب','آب معدنی','دلستر','چیپس','پفک','شکلات','بیسکویت','کیک','آدامس','روغن','برنج','ماکارونی','قند','شکر','نمک','حبوبات','عدس','لوبیا','نخود','رب','کنسرو','سس','چای','قهوه','شامپو','صابون','خمیردندان','پوشک','دستمال','مایع','پودر','زغال','سیگار','تنباکو','فندک','کبریت','میوه','سبزی','گوشت','مرغ','تخم مرغ'];
 $vocab=[];
@@ -66,6 +68,7 @@ foreach($rows as $p){
 }
 
 $direct=['ماشت'=>'ماست','پیر'=>'پنیر','چیبس'=>'چیپس','نویدنی'=>'نوشیدنی','ذغال'=>'زغال','زغال'=>'زغال'];
+foreach($learnedAliases as $k=>$v){if(!isset($direct[$k]))$direct[$k]=$v;}
 $origTokens=fs_tokens($q);if(!$origTokens)$origTokens=[fs_norm($q)];
 $effective=[];$corrections=[];$suggestions=[];
 foreach($origTokens as $tok){
@@ -96,7 +99,7 @@ $genericCat=(count($effective)===1&&isset($generic[$effective[0]]))?$generic[$ef
 $ranked=[];
 foreach($rows as $p){
     $nn=fs_norm((string)$p['name']);$nb=fs_norm((string)$p['brand']);$nqty=fs_norm((string)$p['quantity_label']);$nc=fs_norm((string)$p['category']);
-    $score=((int)$p['stock']>0?25:-150);$matched=0;
+    $score=((int)$p['stock']>0?25:-150)+min(85.0,max(0.0,(float)($learnedScores[(int)$p['id']]??0)));$matched=0;
     if($genericCat!==''){
         if((string)$p['category']===$genericCat)$score+=240;else continue;
     }else{
@@ -121,4 +124,5 @@ usort($ranked,fn($a,$b)=>($b['_score']<=>$a['_score']) ?: ((int)$b['stock']<=>(i
 $items=[];foreach(array_slice($ranked,0,12) as $p){$items[]=['id'=>(int)$p['id'],'name'=>(string)$p['name'],'brand'=>(string)$p['brand'],'quantity_label'=>(string)$p['quantity_label'],'category'=>(string)$p['category'],'image'=>fs_img($p['image_path']),'price'=>(int)$p['price'],'stock'=>(int)$p['stock']];}
 
 $sug=array_keys($suggestions);$sug=array_values(array_filter($sug,fn($w)=>$w!==$correctedQuery));$sug=array_slice($sug,0,4);
+ts_ai_log_event($pdo,'search',$q,$corrections?$correctedQuery:null,null,0,null);
 fs_out(['ok'=>true,'query'=>$q,'corrected_query'=>$corrections?$correctedQuery:null,'corrections'=>$corrections,'suggestions'=>$sug,'items'=>$items,'count'=>count($items)]);

@@ -138,7 +138,7 @@ document.addEventListener('submit',function(e){
   function loadSpellHelper(){
     if(document.querySelector('script[data-tehran-ai-spell-helper]'))return;
     var s=document.createElement('script');
-    s.src='assets/ai_spell_helper.js?v=20261026-1';
+    s.src='assets/ai_spell_helper.js?v=20261026-2';
     s.async=false;
     s.setAttribute('data-tehran-ai-spell-helper','1');
     document.head.appendChild(s);

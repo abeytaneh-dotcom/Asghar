@@ -132,13 +132,19 @@ $html = str_replace('</body>', $barcodeV2.'</body>', $html);
 $aiAssistant = '<script src="assets/ai_assistant_v2.js?v=20261026-2"></script>';
 $html = str_replace('</body>', $aiAssistant.'</body>', $html);
 
-$aiAutoCommit = '<script src="assets/ai_assistant_autocommit.js?v=20261026-2"></script>';
+$aiAutoCommit = '<script src="assets/ai_assistant_autocommit.js?v=20261026-3"></script>';
 $html = str_replace('</body>', $aiAutoCommit.'</body>', $html);
 
 $aiCartManager = '<script src="assets/ai_cart_manager.js?v=20261026-1"></script>';
 $html = str_replace('</body>', $aiCartManager.'</body>', $html);
 
-$aiLocation = '<script src="assets/ai_location_checkout.js?v=20261026-1"></script>';
+$aiLocation = '<script src="assets/ai_location_checkout.js?v=20261026-2"></script>';
 $html = str_replace('</body>', $aiLocation.'</body>', $html);
+
+$aiEntry = '<script src="assets/ai_entry_flow.js?v=20261026-1"></script>';
+$html = str_replace('</body>', $aiEntry.'</body>', $html);
+
+$aiLearning = '<script src="assets/ai_learning.js?v=20261026-1"></script>';
+$html = str_replace('</body>', $aiLearning.'</body>', $html);
 
 echo $html;

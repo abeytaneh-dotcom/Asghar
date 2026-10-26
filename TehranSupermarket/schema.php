@@ -54,6 +54,7 @@ function ensure_product_schema(PDO $pdo): void {
     if(!isset($orderCols['pyramid_invoice_no'])) $oa[]="ADD COLUMN pyramid_invoice_no VARCHAR(100) NULL";
     if(!isset($orderCols['stock_restored_at'])) $oa[]="ADD COLUMN stock_restored_at DATETIME NULL";
     if(!isset($orderCols['status_updated_at'])) $oa[]="ADD COLUMN status_updated_at DATETIME NULL";
+    if(!isset($orderCols['fulfillment_method'])) $oa[]="ADD COLUMN fulfillment_method VARCHAR(20) NOT NULL DEFAULT 'delivery' AFTER status";
     if(!isset($orderCols['delivery_zone_id'])) $oa[]="ADD COLUMN delivery_zone_id INT UNSIGNED NULL";
     if(!isset($orderCols['delivery_zone_name'])) $oa[]="ADD COLUMN delivery_zone_name VARCHAR(120) NULL";
     if(!isset($orderCols['delivery_eta'])) $oa[]="ADD COLUMN delivery_eta VARCHAR(120) NULL";
