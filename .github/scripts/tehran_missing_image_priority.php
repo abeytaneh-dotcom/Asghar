@@ -16,7 +16,7 @@ try{
         WHERE p.active=1 AND (p.image_path IS NULL OR p.image_path='')
         GROUP BY p.id,p.name,p.brand,p.quantity_label,p.barcode,p.pyramid_code2,p.category,p.stock
         ORDER BY (p.stock>0) DESC, sold_qty DESC, order_count DESC, p.stock DESC, p.id ASC
-        LIMIT 700";
+        LIMIT 1600";
   $rows=$pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
   echo json_encode(['ok'=>true,'count'=>count($rows),'rows'=>$rows],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 }catch(Throwable $e){http_response_code(500);echo json_encode(['ok'=>false,'error'=>$e->getMessage()],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);}
