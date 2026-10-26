@@ -1,0 +1,80 @@
+name: Match Tehran Public Barcode DB
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/match-tehran-public-barcode-db'
+
+permissions:
+  contents: read
+
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Download public barcode SQLite DB
+        run: |
+          set -Eeuo pipefail
+          curl -L --retry 3 --fail -o "$RUNNER_TEMP/barcodes_db.zip" https://raw.githubusercontent.com/aioke/barcodes/main/barcodes_db.zip
+          unzip -q "$RUNNER_TEMP/barcodes_db.zip" -d "$RUNNER_TEMP/barcodes"
+          ls -lh "$RUNNER_TEMP/barcodes"
+      - name: Match Tehran exact barcodes
+        shell: bash
+        run: |
+          python3 - "$RUNNER_TEMP/barcodes" "$RUNNER_TEMP/matches.json" <<'PY'
+          import base64,gzip,json,re,pathlib,sqlite3,sys
+          root=pathlib.Path(sys.argv[1]); out=pathlib.Path(sys.argv[2])
+          db=next(root.rglob('*.db'),None)
+          if not db: raise SystemExit('no sqlite db')
+          con=sqlite3.connect(str(db)); cur=con.cursor()
+          tables=[r[0] for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+          print('TABLES',tables)
+          for t in tables:
+              print('SCHEMA',t,cur.execute(f'PRAGMA table_info("{t}")').fetchall())
+          p=pathlib.Path('TehranSupermarket/pyramid_seed_1400_data.php').read_text('utf-8',errors='replace')
+          m=re.search(r"return\s+'([^']+)'\s*;",p,re.S); raw=gzip.decompress(base64.b64decode(m.group(1))).decode('utf-8')
+          targets=[]
+          for x in raw.splitlines():
+              if not x.strip():continue
+              r=json.loads(x);b=re.sub(r'\D','',str(r.get('barcode') or ''))
+              if 8<=len(b)<=14: targets.append((b,str(r.get('name') or ''),str(r.get('code2') or '')))
+          # discover barcode/text columns by names and sample values
+          chosen=None
+          for t in tables:
+              cols=[r[1] for r in cur.execute(f'PRAGMA table_info("{t}")')]
+              lows=[c.lower() for c in cols]
+              bcol=next((c for c in cols if any(k in c.lower() for k in ('barcode','ean','upc','code'))),None)
+              textcols=[c for c in cols if any(k in c.lower() for k in ('name','title','product','brand','description'))]
+              if bcol and textcols:
+                  chosen=(t,bcol,textcols);break
+          if not chosen: raise SystemExit('could not discover barcode/name columns')
+          t,bcol,textcols=chosen; print('CHOSEN',chosen)
+          # build index when possible
+          try: cur.execute(f'CREATE INDEX IF NOT EXISTS temp.idx_probe ON "{t}"("{bcol}")')
+          except Exception: pass
+          matches=[]
+          sql=f'SELECT '+','.join('"'+c+'"' for c in [bcol]+textcols)+f' FROM "{t}" WHERE "{bcol}"=? LIMIT 3'
+          for i,(b,old,code2) in enumerate(targets,1):
+              vals=[b,b.lstrip('0')]
+              rows=[]
+              for v in dict.fromkeys(vals):
+                  try: rows=cur.execute(sql,(v,)).fetchall()
+                  except Exception: rows=[]
+                  if rows: break
+              if rows:
+                  row=rows[0]; matches.append({'barcode':b,'old_name':old,'code2':code2,'db_values':dict(zip([bcol]+textcols,row))})
+              if i%2000==0:print('PROGRESS',i,'matches',len(matches),flush=True)
+          print('TARGETS',len(targets));print('EXACT_MATCHES',len(matches))
+          for x in matches[:25]: print('EXAMPLE',json.dumps(x,ensure_ascii=False))
+          out.write_text(json.dumps(matches,ensure_ascii=False),'utf-8')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tehran-public-barcode-matches
+          path: ${{ runner.temp }}/matches.json
+          retention-days: 2
