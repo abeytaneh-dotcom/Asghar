@@ -1,0 +1,86 @@
+name: Deploy Tehran AI Editable Cart
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/tehran-ai-cart'
+      - '.github/workflows/deploy-tehran-ai-cart.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-tehran-ai-cart
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Load editable cart manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check TehranSupermarket/assets/ai_cart_manager.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/index.php')
+          s=p.read_text()
+          line='$aiCartManager = \'<script src="assets/ai_cart_manager.js?v=20261026-1"></script>\';\n$html = str_replace(\'</body>\', $aiCartManager.\'</body>\', $html);\n\n'
+          if 'ai_cart_manager.js' not in s:
+              s=s.replace('echo $html;', line+'echo $html;')
+              p.write_text(s)
+          PY
+          php -l TehranSupermarket/index.php
+          grep -Fq 'ai_cart_manager.js?v=20261026-1' TehranSupermarket/index.php
+      - name: Commit storefront loader
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- TehranSupermarket/index.php; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add TehranSupermarket/index.php
+            git commit -m 'Load Tehran AI editable cart manager'
+            git push origin HEAD:websaza-hosting
+          fi
+      - name: Deploy cart manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CPANEL_TOKEN:-}"
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          save_file(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          save_file TehranSupermarket/index.php "$TARGET_DIR" index.php
+          save_file TehranSupermarket/assets/ai_cart_manager.js "$TARGET_DIR/assets" ai_cart_manager.js
+      - name: Verify editable cart live
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/?v=ai-cart-1" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/ai_cart_manager.js?v=20261026-1" -o "$RUNNER_TEMP/cart.js"
+          grep -Fq 'ai_cart_manager.js?v=20261026-1' "$RUNNER_TEMP/home.html"
+          grep -Fq 'data-cart-plus' "$RUNNER_TEMP/cart.js"
+          grep -Fq 'data-cart-minus' "$RUNNER_TEMP/cart.js"
+          grep -Fq 'data-cart-remove' "$RUNNER_TEMP/cart.js"
+          grep -Fq 'جمع کل' "$RUNNER_TEMP/cart.js"
+          echo 'AI_CART_EDITABLE_OK'
