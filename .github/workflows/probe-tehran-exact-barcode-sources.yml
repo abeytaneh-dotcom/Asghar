@@ -1,0 +1,70 @@
+name: Probe Tehran Exact Barcode Sources
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/probe-tehran-exact-barcode-sources'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Install client
+        run: python3 -m pip install --disable-pip-version-check --quiet curl_cffi
+      - name: Probe exact barcode APIs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64,gzip,json,re,pathlib,time
+          from curl_cffi import requests
+          p=pathlib.Path('TehranSupermarket/pyramid_seed_1400_data.php').read_text('utf-8',errors='replace')
+          m=re.search(r"return\s+'([^']+)'\s*;",p,re.S)
+          raw=gzip.decompress(base64.b64decode(m.group(1))).decode('utf-8')
+          rows=[]
+          for x in raw.splitlines():
+              if not x.strip(): continue
+              r=json.loads(x); b=re.sub(r'\D','',str(r.get('barcode') or ''))
+              if 8<=len(b)<=14: rows.append((b,str(r.get('name') or '')))
+          n=20; idxs=[round(i*(len(rows)-1)/(n-1)) for i in range(n)]; sample=[rows[i] for i in idxs]
+          off_hits=[]
+          for j,(b,name) in enumerate(sample[:15],1):
+              try:
+                  r=requests.get(f'https://world.openfoodfacts.org/api/v2/product/{b}.json',params={'fields':'code,product_name,brands,image_front_url,image_url','product_type':'all'},headers={'User-Agent':'TehranMarketCatalog/1.0 (https://websaza.ir/tehran - barcode image matching)'},impersonate='chrome',timeout=25,allow_redirects=True)
+                  d=r.json() if r.status_code==200 else {}
+                  p0=d.get('product') or {}
+                  img=p0.get('image_front_url') or p0.get('image_url') or ''
+                  if d.get('status')==1 and img: off_hits.append((b,name,p0.get('product_name'),p0.get('brands'),img))
+              except Exception: pass
+              print('OFF',j,'hits',len(off_hits),flush=True)
+              time.sleep(4.2)
+          upc_hits=[]
+          for i in range(0,len(sample),2):
+              pair=sample[i:i+2]; q=','.join(x[0] for x in pair)
+              try:
+                  r=requests.get('https://api.upcitemdb.com/prod/trial/lookup',params={'upc':q},headers={'Accept':'application/json'},impersonate='chrome',timeout=25)
+                  d=r.json() if r.status_code==200 else {}
+                  by={str(x.get('ean') or x.get('upc') or ''):x for x in d.get('items') or []}
+                  for b,name in pair:
+                      item=by.get(b) or next((x for k,x in by.items() if k.lstrip('0')==b.lstrip('0')),None)
+                      if item:
+                          imgs=item.get('images') or []
+                          if imgs: upc_hits.append((b,name,item.get('title'),item.get('brand'),imgs[0]))
+              except Exception: pass
+              print('UPC_REQ',i//2+1,'hits',len(upc_hits),flush=True)
+              time.sleep(10.2)
+          print('SAMPLE',len(sample))
+          print('OFF_HITS',len(off_hits))
+          print('UPCITEMDB_HITS',len(upc_hits))
+          print('OFF_EXAMPLES')
+          for x in off_hits[:10]: print(x)
+          print('UPC_EXAMPLES')
+          for x in upc_hits[:10]: print(x)
+          PY
