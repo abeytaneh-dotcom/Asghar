@@ -1,0 +1,81 @@
+name: Deploy Tehran Reference V4
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/deploy-tehran-v4.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+          fetch-depth: 0
+
+      - name: Switch storefront to v4
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/shop.php')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('assets/tehran-reference-v3.css?v=20261027-3','assets/tehran-reference-v4.css?v=20261027-4')
+          p.write_text(s,encoding='utf-8')
+          PY
+          php -l TehranSupermarket/shop.php
+          grep -Fq 'tehran-reference-v4.css?v=20261027-4' TehranSupermarket/shop.php
+          grep -Fq 'reference-faithful storefront v4' TehranSupermarket/assets/tehran-reference-v4.css
+
+      - name: Persist storefront switch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/shop.php
+          if ! git diff --cached --quiet; then
+            git commit -m 'Switch Tehran storefront to reference v4'
+            git push origin HEAD:websaza-hosting
+          fi
+
+      - name: Upload v4 storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          upload TehranSupermarket/shop.php "$TARGET_DIR" shop.php
+          upload TehranSupermarket/assets/tehran-reference-v4.css "$TARGET_DIR/assets" tehran-reference-v4.css
+
+      - name: Verify live v4 storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-4" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-reference-v4.css?v=20261027-4" -o "$RUNNER_TEMP/v4.css"
+          grep -Fq 'tehran-reference-v4.css?v=20261027-4' "$RUNNER_TEMP/home.html"
+          grep -Fq 'reference-faithful storefront v4' "$RUNNER_TEMP/v4.css"
+          grep -Fq 'background:#fff!important' "$RUNNER_TEMP/v4.css"
+          grep -Fq "tehran-storefront-v2.svg" "$RUNNER_TEMP/v4.css"
+          echo 'REFERENCE_V4_LIVE_OK hero=black-gold products=light cards=white mobile=ok'
