@@ -1,4 +1,4 @@
-name: Hotfix Tehran Server Nav
+name: Rebuild Tehran Reference Storefront
 
 on:
   push:
@@ -10,9 +10,9 @@ permissions:
   contents: write
 
 jobs:
-  hotfix:
+  rebuild:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     env:
       CPANEL_HOST: mch4444.dnsuserver.com
       CPANEL_USER: vt6qdx8
@@ -24,69 +24,37 @@ jobs:
         with:
           ref: websaza-hosting
           fetch-depth: 0
-
-      - name: Force fresh storefront asset versions
-        shell: bash
+      - name: Build direct PHP storefront
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p=Path('TehranSupermarket/index.php')
-          s=p.read_text(encoding='utf-8')
-          s=re.sub(r'assets/server_storefront_critical_v1\.css\?v=[^"\']+', 'assets/server_storefront_critical_v1.css?v=20261027-30', s)
-          s=re.sub(r'assets/server_mobile_nav_v1\.css\?v=[^"\']+', 'assets/server_mobile_nav_v1.css?v=20261027-30', s)
-          s=re.sub(r'assets/server_mobile_nav_v1\.js\?v=[^"\']+', 'assets/server_mobile_nav_v1.js?v=20261027-30', s)
-          s=re.sub(r'assets/ai_entry_flow\.js\?v=[^"\']+', 'assets/ai_entry_flow.js?v=20261027-106', s)
-          p.write_text(s,encoding='utf-8')
-          PY
+          python3 scripts/rebuild_tehran_reference.py
+          php -l TehranSupermarket/shop.php
           php -l TehranSupermarket/index.php
-          grep -Fq 'server_storefront_critical_v1.css?v=20261027-30' TehranSupermarket/index.php
-          grep -Fq 'server_mobile_nav_v1.css?v=20261027-30' TehranSupermarket/index.php
-          grep -Fq 'ai_entry_flow.js?v=20261027-106' TehranSupermarket/index.php
-          grep -Fq 'black/gold' TehranSupermarket/assets/server_storefront_critical_v1.css
-
-      - name: Persist version bump
-        shell: bash
+          grep -Fq 'tmx-header' TehranSupermarket/shop.php
+          grep -Fq 'tmx-hero' TehranSupermarket/shop.php
+      - name: Persist rebuilt storefront
         run: |
-          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add TehranSupermarket/index.php
-          if ! git diff --cached --quiet; then
-            git commit -m 'Bust cache for black gold Tehran storefront'
-            git push origin HEAD:websaza-hosting
-          fi
-
-      - name: Upload fresh storefront immediately
+          git add TehranSupermarket/shop.php TehranSupermarket/index.php
+          if ! git diff --cached --quiet; then git commit -m 'Rebuild Tehran storefront to approved reference'; git push origin HEAD:websaza-hosting; fi
+      - name: Upload reference storefront
         shell: bash
         run: |
           set -euo pipefail
-          BASE="https://${CPANEL_HOST}:2083"
-          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
-          upload(){
-            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
-            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
-              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
-              "${BASE}/execute/Fileman/save_file_content" -o "$out"
-            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
-          }
+          BASE="https://${CPANEL_HOST}:2083"; AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){ local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"; curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" "${BASE}/execute/Fileman/save_file_content" -o "$out"; test "$(jq -r '.result.status // .status // 0' "$out")" = '1'; }
+          upload TehranSupermarket/shop.php "$TARGET_DIR" shop.php
           upload TehranSupermarket/index.php "$TARGET_DIR" index.php
-          upload TehranSupermarket/assets/server_storefront_critical_v1.css "$TARGET_DIR/assets" server_storefront_critical_v1.css
-          upload TehranSupermarket/assets/server_mobile_nav_v1.css "$TARGET_DIR/assets" server_mobile_nav_v1.css
-          upload TehranSupermarket/assets/server_mobile_nav_v1.js "$TARGET_DIR/assets" server_mobile_nav_v1.js
+          upload TehranSupermarket/assets/tehran-reference-v3.css "$TARGET_DIR/assets" tehran-reference-v3.css
+          upload TehranSupermarket/assets/tehran-reference-v3.js "$TARGET_DIR/assets" tehran-reference-v3.js
           upload TehranSupermarket/assets/ai_entry_flow.js "$TARGET_DIR/assets" ai_entry_flow.js
-
-      - name: Verify fresh black gold production skin
-        shell: bash
+      - name: Verify live reference storefront
         run: |
-          set -euo pipefail
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?skin=20261027-30" -o "$RUNNER_TEMP/home.html"
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/server_storefront_critical_v1.css?v=20261027-30" -o "$RUNNER_TEMP/skin.css"
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/server_mobile_nav_v1.css?v=20261027-30" -o "$RUNNER_TEMP/nav.css"
-          grep -Fq 'server_storefront_critical_v1.css?v=20261027-30' "$RUNNER_TEMP/home.html"
-          grep -Fq 'server_mobile_nav_v1.css?v=20261027-30' "$RUNNER_TEMP/home.html"
-          grep -Fq 'Tehran Market hard server skin v3' "$RUNNER_TEMP/skin.css"
-          grep -Fq 'radial-gradient' "$RUNNER_TEMP/skin.css"
-          grep -Fq 'rgba(7,9,11,.97)' "$RUNNER_TEMP/nav.css"
-          echo 'BLACK_GOLD_LIVE_OK cache_busted=ok skin=ok mobile_nav=ok'
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-3" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-reference-v3.css?v=20261027-3" -o "$RUNNER_TEMP/ref.css"
+          grep -Fq 'tmx-header' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tmx-hero' "$RUNNER_TEMP/home.html"
+          grep -Fq 'اولین فروشگاه' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tehran-storefront-v2.svg' "$RUNNER_TEMP/ref.css"
+          grep -Fq 'tmx-mobile-nav' "$RUNNER_TEMP/home.html"
+          echo 'REFERENCE_LIVE_OK direct_php=ok hero=ok storefront=ok mobile_nav=ok'
