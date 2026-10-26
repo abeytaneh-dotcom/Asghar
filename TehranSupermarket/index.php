@@ -135,4 +135,7 @@ $html = str_replace('</body>', $aiAssistant.'</body>', $html);
 $aiAutoCommit = '<script src="assets/ai_assistant_autocommit.js?v=20261026-1"></script>';
 $html = str_replace('</body>', $aiAutoCommit.'</body>', $html);
 
+$aiCartManager = '<script src="assets/ai_cart_manager.js?v=20261026-1"></script>';
+$html = str_replace('</body>', $aiCartManager.'</body>', $html);
+
 echo $html;
