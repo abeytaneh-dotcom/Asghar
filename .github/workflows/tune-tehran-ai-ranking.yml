@@ -1,0 +1,68 @@
+name: Tune Tehran AI Product Ranking
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/tune-tehran-ai-ranking.yml'
+permissions:
+  contents: write
+jobs:
+  tune:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Prioritize true product-name matches
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('TehranSupermarket/ai_assistant.php')
+          s=p.read_text(encoding='utf-8')
+          old="""            if($strict){
+                $tok=ai_norm((string)$tokens[0]);
+                if(!preg_match('/(^|\\s)'.preg_quote($tok,'/').'($|\\s)/u',$hay))continue;
+            }"""
+          new="""            if($strict){
+                $tok=ai_norm((string)$tokens[0]);
+                $starts=($nn===$tok || str_starts_with($nn,$tok.' '));
+                if($starts)$score+=260;
+                elseif(preg_match('/(^|\\s)'.preg_quote($tok,'/').'($|\\s)/u',$nn))$score-=90;
+                else continue;
+            }"""
+          if old not in s: raise SystemExit('strict block not found')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
+          php -l TehranSupermarket/ai_assistant.php
+      - name: Commit tuning
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/ai_assistant.php
+          git commit -m 'Prioritize exact Tehran AI product-name matches'
+          git push origin HEAD:websaza-hosting
+      - name: Deploy tuned search
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"; AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"; OUT="$RUNNER_TEMP/save.json"
+          curl -sS --fail-with-body -H "$AUTH" --request POST --data-urlencode "dir=${TARGET_DIR}" --data-urlencode 'file=ai_assistant.php' --data-urlencode 'content@TehranSupermarket/ai_assistant.php' "${BASE}/execute/Fileman/save_file_content" -o "$OUT"
+          test "$(jq -r '.result.status // .status // 0' "$OUT")" = '1'
+      - name: Verify milk ranking
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --get --data-urlencode 'action=search' --data-urlencode 'q=شیر' "${PUBLIC_URL}/ai_assistant.php" -o "$RUNNER_TEMP/milk.json"
+          jq -e '.ok==true and (.items|length)>0' "$RUNNER_TEMP/milk.json" >/dev/null
+          if jq -r '.items[].name' "$RUNNER_TEMP/milk.json" | grep -Eq 'ماست|کشک'; then exit 1; fi
+          echo 'Top milk results:'
+          jq -r '.items[0:6][].name' "$RUNNER_TEMP/milk.json"
