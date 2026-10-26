@@ -1,0 +1,34 @@
+/* Tehran Market mobile polish v9 */
+.tmx-hero-real-image-v6{filter:saturate(.92) contrast(1.05) brightness(.88)}
+@media(max-width:800px){
+  .tmx-header{padding:7px 9px 8px!important;gap:6px!important}
+  .tmx-head-search{height:39px!important;border-radius:11px!important}
+  .tmx-head-search input{font-size:10px!important;padding:7px 10px!important}
+  .tmx-head-search button{width:31px!important;height:31px!important;flex-basis:31px!important}
+  .tmx-hero{min-height:315px!important;height:315px!important;padding:16px 14px 15px!important;border-radius:0 0 18px 18px!important;align-items:flex-end!important}
+  .tmx-hero:before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(0deg,rgba(3,4,5,.97) 0%,rgba(3,4,5,.82) 31%,rgba(3,4,5,.24) 63%,rgba(3,4,5,.08) 100%)}
+  .tmx-hero-copy{width:100%!important;max-width:100%!important;z-index:3!important}
+  .tmx-eyebrow{font-size:8px!important;padding:5px 8px!important;background:rgba(8,10,12,.72)!important}
+  .tmx-hero h1{font-size:24px!important;line-height:1.27!important;margin:8px 0 8px!important;letter-spacing:-.25px!important;max-width:315px!important}
+  .tmx-hero h1 strong{font-size:26px!important}
+  .tmx-hero p{display:none!important}
+  .tmx-hero-actions{gap:6px!important}
+  .tmx-primary,.tmx-secondary{min-height:36px!important;padding:7px 10px!important;font-size:8.5px!important;border-radius:9px!important}
+  .tmx-smart-row{margin:-9px auto 0!important;padding:0 9px!important;gap:6px!important;z-index:20!important}
+  .tmx-smart-card{min-height:74px!important;padding:7px 3px!important;border-radius:13px!important;box-shadow:0 8px 20px rgba(0,0,0,.07)!important}
+  .tmx-smart-ico{width:32px!important;height:32px!important;flex-basis:32px!important;border-radius:9px!important;font-size:15px!important}
+  .tmx-smart-card b{font-size:8.5px!important}
+  main{padding-top:24px!important;padding-bottom:105px!important}
+  .state{margin-bottom:10px!important;font-size:9px!important;padding:8px 10px!important}
+  #tmx-mobile-nav{height:62px!important;padding:6px 8px calc(6px + env(safe-area-inset-bottom))!important;box-shadow:0 -7px 20px rgba(0,0,0,.08)!important}
+  #tmx-mobile-nav button,#tmx-mobile-nav a{font-size:9px!important;gap:1px!important}
+  #tmx-mobile-nav .tmx-nav-ico{font-size:17px!important}
+  #tmx-mobile-nav .tmx-scan{width:52px!important;height:52px!important;transform:translateY(-8px)!important}
+  .sticky{bottom:66px!important;left:8px!important;right:8px!important}
+}
+@media(max-width:390px){
+  .tmx-hero{min-height:300px!important;height:300px!important}
+  .tmx-hero h1{font-size:22px!important;max-width:285px!important}
+  .tmx-hero h1 strong{font-size:24px!important}
+  .tmx-primary,.tmx-secondary{font-size:8px!important;padding:7px 9px!important}
+}
