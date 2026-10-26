@@ -31,30 +31,53 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
+
           p = Path('TehranSupermarket/index.php')
           s = p.read_text(encoding='utf-8')
-          marker = 'tm-direct-server-shell-v1'
-          anchor = "$html = str_replace('</head>', $brandCss.'</head>', $html);"
-          if marker not in s:
+
+          if 'tm-no-store-navfix-v2' not in s:
+              anchor = 'declare(strict_types=1);'
               if anchor not in s:
-                  raise SystemExit('index head anchor not found')
-              lines = [
-                  "$serverShellHead = <<<'HTML'",
-                  "<!-- tm-direct-server-shell-v1 -->",
-                  "<script id=\"tm-storefront-direct-class\">document.documentElement.classList.add('tm-storefront-server');</script>",
-                  "<link rel=\"stylesheet\" href=\"assets/server_storefront_critical_v1.css?v=20261027-5\">",
-                  "<link rel=\"stylesheet\" href=\"assets/server_mobile_nav_v1.css?v=20261027-5\">",
-                  "<script defer src=\"assets/server_mobile_nav_v1.js?v=20261027-5\"></script>",
-                  "HTML;",
-                  "$html = str_replace('</head>', $serverShellHead.'</head>', $html);",
-              ]
-              block = '\n'.join(lines)
-              s = s.replace(anchor, anchor + '\n\n' + block, 1)
-          s = s.replace('assets/ai_entry_flow.js?v=20261026-1', 'assets/ai_entry_flow.js?v=20261027-104')
+                  raise SystemExit('declare anchor not found')
+              headers = """declare(strict_types=1);
+          // tm-no-store-navfix-v2
+          header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+          header('Pragma: no-cache');
+          header('Expires: 0');"""
+              s = s.replace(anchor, headers, 1)
+
+          s = re.sub(r'assets/server_storefront_critical_v1\.css\?v=[^"\']+', 'assets/server_storefront_critical_v1.css?v=20261027-12', s)
+          s = re.sub(r'assets/server_mobile_nav_v1\.css\?v=[^"\']+', 'assets/server_mobile_nav_v1.css?v=20261027-12', s)
+          s = re.sub(r'assets/server_mobile_nav_v1\.js\?v=[^"\']+', 'assets/server_mobile_nav_v1.js?v=20261027-12', s)
+          s = re.sub(r'assets/ai_entry_flow\.js\?v=[^"\']+', 'assets/ai_entry_flow.js?v=20261027-105', s)
+
+          if 'tm-static-mobile-nav-v2' not in s:
+              anchor = 'echo $html;'
+              if anchor not in s:
+                  raise SystemExit('echo anchor not found')
+              block = r'''$serverNavBody = <<<'HTML'
+          <!-- tm-static-mobile-nav-v2 -->
+          <nav id="tm-server-mobile-nav" aria-label="منوی پایین موبایل">
+            <button type="button" data-server-nav="home"><span class="tm-snav-ico">⌂</span><span>خانه</span></button>
+            <button type="button" data-server-nav="products"><span class="tm-snav-ico">▦</span><span>محصولات</span></button>
+            <button type="button" class="tm-snav-scan" data-server-nav="scan"><span class="tm-snav-ico">▥</span><span>اسکن</span></button>
+            <button type="button" data-server-nav="cart"><span class="tm-snav-ico">🛒</span><span>سبد خرید</span></button>
+            <a href="account.php" data-server-nav="account"><span class="tm-snav-ico">◯</span><span>حساب من</span></a>
+          </nav>
+          HTML;
+          $html = str_replace('</body>', $serverNavBody.'</body>', $html);
+
+          echo $html;'''
+              s = s.replace(anchor, block, 1)
+
           p.write_text(s, encoding='utf-8')
           PY
           php -l TehranSupermarket/index.php
           grep -Fq 'tm-direct-server-shell-v1' TehranSupermarket/index.php
+          grep -Fq 'tm-static-mobile-nav-v2' TehranSupermarket/index.php
+          grep -Fq 'server_mobile_nav_v1.js?v=20261027-12' TehranSupermarket/index.php
+          grep -Fq 'ai_entry_flow.js?v=20261027-105' TehranSupermarket/index.php
 
       - name: Persist patched index in repository
         shell: bash
@@ -64,11 +87,11 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add TehranSupermarket/index.php
           if ! git diff --cached --quiet; then
-            git commit -m 'Persist Tehran direct mobile storefront shell'
+            git commit -m 'Make Tehran mobile nav server-rendered and cache-safe'
             git push origin HEAD:websaza-hosting
           fi
 
-      - name: Upload patched PHP and shell assets
+      - name: Upload patched PHP and mobile assets
         shell: bash
         run: |
           set -euo pipefail
@@ -85,20 +108,22 @@ jobs:
           upload TehranSupermarket/assets/server_mobile_nav_v1.js "$TARGET_DIR/assets" server_mobile_nav_v1.js
           upload TehranSupermarket/assets/server_mobile_nav_v1.css "$TARGET_DIR/assets" server_mobile_nav_v1.css
           upload TehranSupermarket/assets/server_storefront_critical_v1.css "$TARGET_DIR/assets" server_storefront_critical_v1.css
+          upload TehranSupermarket/assets/ai_entry_flow.js "$TARGET_DIR/assets" ai_entry_flow.js
 
-      - name: Verify direct PHP shell on live site
+      - name: Verify single no-reload nav on live site
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -L --max-time 30 "${PUBLIC_URL}/?direct-php-shell=20261027-5" -o "$RUNNER_TEMP/home.html"
-          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/server_mobile_nav_v1.js?v=20261027-5" -o "$RUNNER_TEMP/nav.js"
-          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/server_mobile_nav_v1.css?v=20261027-5" -o "$RUNNER_TEMP/nav.css"
-          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/server_storefront_critical_v1.css?v=20261027-5" -o "$RUNNER_TEMP/critical.css"
-          grep -Fq 'tm-direct-server-shell-v1' "$RUNNER_TEMP/home.html"
-          grep -Fq 'tm-storefront-direct-class' "$RUNNER_TEMP/home.html"
-          grep -Fq 'server_storefront_critical_v1.css?v=20261027-5' "$RUNNER_TEMP/home.html"
-          grep -Fq 'server_mobile_nav_v1.js?v=20261027-5' "$RUNNER_TEMP/home.html"
-          grep -Fq 'tm-server-mobile-nav' "$RUNNER_TEMP/nav.js"
-          grep -Fq 'tm-server-nav-ready' "$RUNNER_TEMP/nav.css"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?navfix=20261027-12" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/server_mobile_nav_v1.js?v=20261027-12" -o "$RUNNER_TEMP/nav.js"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/ai_entry_flow.js?v=20261027-105" -o "$RUNNER_TEMP/entry.js"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/server_storefront_critical_v1.css?v=20261027-12" -o "$RUNNER_TEMP/critical.css"
+
+          grep -Fq 'tm-static-mobile-nav-v2' "$RUNNER_TEMP/home.html"
+          grep -Fq 'server_mobile_nav_v1.js?v=20261027-12' "$RUNNER_TEMP/home.html"
+          grep -Fq 'ai_entry_flow.js?v=20261027-105' "$RUNNER_TEMP/home.html"
+          grep -Fq 'blockOldNavAnchors' "$RUNNER_TEMP/nav.js"
+          grep -Fq 'single-mobile-nav-v1' "$RUNNER_TEMP/entry.js"
+          ! grep -Fq 'document.body.appendChild(mobile)' "$RUNNER_TEMP/entry.js"
           grep -Fq 'tm-storefront-server' "$RUNNER_TEMP/critical.css"
-          echo 'HOTFIX_LIVE_OK direct_php_head=ok server_nav=ok first_paint_theme=ok'
+          echo 'NAVFIX_LIVE_OK static_nav=ok duplicate_nav=removed cached_old_links=blocked premium_theme=ok'
