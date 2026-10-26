@@ -20,11 +20,14 @@ function scrollToEl(el){
   window.scrollTo({top:Math.max(0,top),behavior:'smooth'});
 }
 function setMobileActive(name){
-  document.querySelectorAll('.tm-mobile-nav [data-nav]').forEach(function(x){x.classList.toggle('is-current',x.getAttribute('data-nav')===name);});
+  document.querySelectorAll('.tm-mobile-nav [data-nav],#tm-server-mobile-nav [data-server-nav]').forEach(function(x){
+    var key=x.getAttribute('data-nav')||x.getAttribute('data-server-nav')||'';
+    x.classList.toggle('is-current',key===name);
+  });
 }
 function openAi(){var a=document.getElementById('tehran-ai-fab-v2');if(a){a.click();return true;}return false;}
 function openScan(){var s=document.getElementById('barcode-scan-fab');if(s){s.click();return true;}return false;}
-function handleMobileNav(e){
+function handleLegacyMobileNav(e){
   var item=e.target&&e.target.closest?e.target.closest('.tm-mobile-nav [data-nav]'):null;
   if(!item)return;
   var name=item.getAttribute('data-nav')||'';
@@ -37,7 +40,9 @@ function handleMobileNav(e){
   if(name==='cart'){setMobileActive('cart');scrollToEl(document.getElementById('cart')||document.querySelector('.cartbox'));return;}
   if(name==='scan'){setMobileActive('scan');openScan();return;}
 }
-document.addEventListener('click',handleMobileNav,true);
+document.addEventListener('click',handleLegacyMobileNav,true);
+document.addEventListener('touchend',handleLegacyMobileNav,true);
+function removeLegacyMobileNav(){document.querySelectorAll('.tm-mobile-nav').forEach(function(x){x.remove();});}
 function rebuild(){
   loadCss();
   document.body.classList.add('tehran-premium-home');
@@ -67,9 +72,7 @@ function rebuild(){
     banner.innerHTML='<div class="tm-mini-banner-inner"><div><strong>خرید روزانه، بدون سردرگمی</strong><br><span>دسته‌بندی‌ها، جستجو، بارکدخوان و سبد خرید همه در یک صفحه</span></div><a href="#products" data-tm-scroll="products">شروع خرید</a></div>';
     features.insertAdjacentElement('afterend',banner);
   }
-  var mobile=document.createElement('nav');mobile.className='tm-mobile-nav';mobile.setAttribute('aria-label','منوی پایین موبایل');
-  mobile.innerHTML='<button class="home is-current" type="button" data-nav="home"><span class="ico">⌂</span><span>خانه</span></button><button type="button" data-nav="products"><span class="ico">▦</span><span>محصولات</span></button><button class="scan" type="button" data-nav="scan" aria-label="اسکن بارکد"><span class="ico">▥</span><span>اسکن</span></button><button type="button" data-nav="cart"><span class="ico">🛒</span><span>سبد خرید</span></button><a href="account.php" data-nav="account"><span class="ico">◯</span><span>حساب من</span></a>';
-  document.body.appendChild(mobile);
+  removeLegacyMobileNav();
   document.body.classList.add('tm-shell-ready');
 }
 document.addEventListener('click',function(e){
@@ -81,4 +84,4 @@ loadCss();
 if(document.body)document.body.classList.add('tehran-premium-home');
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',rebuild,{once:true});else rebuild();
 })();
-// deploy-marker: premium-reference-shell-v1 premium-reference-shell-v2-clean header-logo-fallback-v1 mobile-polish-v3 product-nav-fix-v4 hard-no-reload-v5
+// deploy-marker: premium-reference-shell-v1 premium-reference-shell-v2-clean header-logo-fallback-v1 mobile-polish-v3 product-nav-fix-v4 hard-no-reload-v6 single-mobile-nav-v1
