@@ -39,7 +39,6 @@ jobs:
               r=json.loads(x); b=re.sub(r'\D','',str(r.get('barcode') or ''))
               if 8<=len(b)<=14: target[b]={'barcode':b,'old_name':str(r.get('name') or ''),'code2':str(r.get('code2') or '')}
           print('TARGETS',len(target),flush=True)
-          # handle likely encodings/delimiters; barcode DB is public and may use Russian headers
           enc='utf-8-sig'
           try:
               sample=f.read_text(enc,errors='strict')[:10000]
@@ -48,27 +47,22 @@ jobs:
           try: delim=csv.Sniffer().sniff(sample,delimiters=';,\t|').delimiter
           except Exception: delim=';'
           print('FILE',f,'ENC',enc,'DELIM',repr(delim),flush=True)
-          matches=[]; seen=set(); rows=0
+          matches=[]; seen=set(); counter=[0]
           with f.open('r',encoding=enc,errors='replace',newline='') as fh:
               rd=csv.reader(fh,delimiter=delim)
               first=next(rd,[]); print('FIRST_ROW',first,flush=True)
-              # determine barcode column from header or first data row
               lows=[str(x).lower() for x in first]
               bidx=next((i for i,x in enumerate(lows) if any(k in x for k in ('barcode','ean','upc','штрих','код'))),None)
               header=first if bidx is not None else None
               if bidx is None:
-                  # choose column with 8-14 digit first-row value
                   bidx=next((i for i,x in enumerate(first) if 8<=len(re.sub(r'\D','',str(x)))<=14),0)
               def consume(row):
-                  nonlocal rows
-                  rows+=1
+                  counter[0]+=1
                   if bidx>=len(row):return
                   b=re.sub(r'\D','',str(row[bidx]))
                   cand=[b]
                   if b.startswith('0'):cand.append(b.lstrip('0'))
-                  hit=None
-                  for c in cand:
-                      if c in target:hit=c;break
+                  hit=next((c for c in cand if c in target),None)
                   if not hit or hit in seen:return
                   seen.add(hit)
                   d=dict(target[hit]);d['db_row']=row
@@ -77,8 +71,8 @@ jobs:
               if header is None: consume(first)
               for row in rd:
                   consume(row)
-                  if rows%400000==0:print('PROGRESS',rows,'matches',len(matches),flush=True)
-          print('ROWS_SCANNED',rows);print('EXACT_MATCHES',len(matches))
+                  if counter[0]%400000==0:print('PROGRESS',counter[0],'matches',len(matches),flush=True)
+          print('ROWS_SCANNED',counter[0]);print('EXACT_MATCHES',len(matches))
           for x in matches[:30]:print('EXAMPLE',json.dumps(x,ensure_ascii=False))
           out.write_text(json.dumps(matches,ensure_ascii=False),'utf-8')
           PY
