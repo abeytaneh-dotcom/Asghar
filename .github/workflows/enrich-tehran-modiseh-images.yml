@@ -25,12 +25,12 @@ jobs:
           ref: websaza-hosting
       - name: Install tools
         run: python3 -m pip install --disable-pip-version-check --quiet pillow rapidfuzz curl_cffi beautifulsoup4
-      - name: Build Modiseh image bundles
+      - name: Build Modiseh listing image bundles
         shell: bash
         run: |
           set -Eeuo pipefail
           mkdir -p "$RUNNER_TEMP/enrich"
-          python3 .github/scripts/enrich_tehran_modiseh_images.py "$RUNNER_TEMP/enrich"
+          python3 .github/scripts/enrich_tehran_modiseh_listing_images.py "$RUNNER_TEMP/enrich"
       - name: Apply image bundles
         shell: bash
         run: |
