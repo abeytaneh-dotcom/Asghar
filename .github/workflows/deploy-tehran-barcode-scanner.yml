@@ -1,0 +1,56 @@
+name: Deploy Tehran Barcode Scanner
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/deploy-tehran-barcode-scanner'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_BASE: https://mch4444.dnsuserver.com:2083
+      CPANEL_USER: vt6qdx8
+      SITE_DIR: public_html/tehran
+      SITE_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Deploy scanner files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){
+            local file="$1"
+            curl -sS --fail-with-body -H "$AUTH" \
+              -F "file-1=@${file};filename=$(basename "$file")" \
+              -F "dir=$SITE_DIR" -F 'overwrite=1' \
+              "$CPANEL_BASE/execute/Fileman/upload_files" \
+              | jq -e '(.result.status // .status)==1' >/dev/null
+          }
+          upload TehranSupermarket/index.php
+          upload TehranSupermarket/barcode_lookup.php
+      - name: Verify scanner UI and lookup API
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -sS --fail --max-time 30 "$SITE_URL/" -o "$RUNNER_TEMP/home.html"
+          grep -q 'barcode-scan-fab' "$RUNNER_TEMP/home.html"
+          grep -q 'اسکن بارکد محصول' "$RUNNER_TEMP/home.html"
+          code=$(curl -sS -o "$RUNNER_TEMP/lookup.json" -w '%{http_code}' --get --data-urlencode 'barcode=6260161501830' "$SITE_URL/barcode_lookup.php")
+          test "$code" = 200
+          jq -e 'has("ok")' "$RUNNER_TEMP/lookup.json" >/dev/null
+          cat "$RUNNER_TEMP/lookup.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tehran-barcode-scanner-verification
+          path: ${{ runner.temp }}/lookup.json
+          retention-days: 2
