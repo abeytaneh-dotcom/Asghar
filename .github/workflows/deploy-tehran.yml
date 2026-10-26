@@ -120,11 +120,13 @@ jobs:
           echo "HTTP home=$HCODE admin=$ACODE track=$TCODE account=$UCODE manifest=$MCODE sw=$SWCODE leaflet_js=$LJCODE leaflet_css=$LCCODE premium_css=$PCODE ai_entry=$AICODE map=$MAPCODE installer=$ICODE missing=$NFCode sync=$SYNCCODE payment=$PAYCODE"
           test "$HCODE" = '200'; test "$ACODE" = '200'; test "$TCODE" = '200'; test "$UCODE" = '200'; test "$MCODE" = '200'; test "$SWCODE" = '200'; test "$LJCODE" = '200'; test "$LCCODE" = '200'; test "$PCODE" = '200'; test "$AICODE" = '200'; test "$MAPCODE" = '200'
           test "$ICODE" = '403'; test "$NFCode" = '404'; { test "$SYNCCODE" = '401' || test "$SYNCCODE" = '503'; }; test "$PAYCODE" = '404'
-          grep -Fq 'سوپرمارکت طهران' "$RUNNER_TEMP/home.html"
+          grep -Fq 'طهران مارکت' "$RUNNER_TEMP/home.html"
           grep -Fq 'پیگیری سفارش' "$RUNNER_TEMP/home.html"
           grep -Fq 'assets/leaflet/leaflet.js' "$RUNNER_TEMP/home.html"
           grep -Fq 'Tehran Market premium storefront' "$RUNNER_TEMP/premium.css"
           grep -Fq 'premium-reference-shell-v1' "$RUNNER_TEMP/ai-entry.js"
+          grep -Fq 'اولین فروشگاه' "$RUNNER_TEMP/ai-entry.js"
+          grep -Fq 'مواد غذایی هوشمند' "$RUNNER_TEMP/ai-entry.js"
           grep -Fq 'پنل مدیریت سوپرمارکت طهران' "$RUNNER_TEMP/admin.html"
           grep -Fq 'سفارشت کجاست؟' "$RUNNER_TEMP/track.html"
           grep -Fq 'ورود امن با موبایل' "$RUNNER_TEMP/account.html"
@@ -139,4 +141,4 @@ jobs:
           test "$(wc -c < "$RUNNER_TEMP/leaflet.js")" -gt 50000
           test "$(wc -c < "$RUNNER_TEMP/map.png")" -gt 500
           file "$RUNNER_TEMP/map.png" | grep -Eiq 'PNG|image data'
-          echo "DEPLOY_OK premium_shell=ok map_png_bytes=$(wc -c < "$RUNNER_TEMP/map.png") safe_error_contracts=ok"
+          echo "DEPLOY_OK premium_shell=ok headline=ok map_png_bytes=$(wc -c < "$RUNNER_TEMP/map.png") safe_error_contracts=ok"
