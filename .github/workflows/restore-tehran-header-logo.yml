@@ -1,0 +1,52 @@
+name: Restore Tehran Header Logo
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/restore-tehran-header-logo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Validate logo fix
+        run: |
+          set -euo pipefail
+          node --check TehranSupermarket/assets/customer_memory.js
+          grep -Fq 'function ensureLogo' TehranSupermarket/assets/customer_memory.js
+          grep -Fq 'pwa-icon.php?size=512&v=20261026-gold' TehranSupermarket/assets/customer_memory.js
+      - name: Upload logo fix
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          OUT="$RUNNER_TEMP/save.json"
+          curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+            --data-urlencode "dir=${TARGET_DIR}/assets" \
+            --data-urlencode "file=customer_memory.js" \
+            --data-urlencode "content@TehranSupermarket/assets/customer_memory.js" \
+            "${BASE}/execute/Fileman/save_file_content" -o "$OUT"
+          test "$(jq -r '.result.status // .status // 0' "$OUT")" = '1'
+      - name: Verify live logo fix
+        run: |
+          set -euo pipefail
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/customer_memory.js?v=logo-fix-20261026" -o "$RUNNER_TEMP/memory.js"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/?v=logo-fix-20261026" -o "$RUNNER_TEMP/home.html"
+          grep -Fq 'function ensureLogo' "$RUNNER_TEMP/memory.js"
+          grep -Fq 'pwa-icon.php?size=512&v=20261026-gold' "$RUNNER_TEMP/memory.js"
+          grep -Fq 'assets/customer_memory.js' "$RUNNER_TEMP/home.html"
+          echo LOGO_FIX_LIVE_OK
