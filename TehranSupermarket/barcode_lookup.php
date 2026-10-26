@@ -31,13 +31,14 @@ try{
         ]
     );
 
-    $st = $pdo->prepare('SELECT id,name,barcode,price,stock,unit,category,image_path FROM products WHERE active=1 AND barcode=? LIMIT 1');
+    $sql = 'SELECT id,name,barcode,price,stock,category,image_path FROM products WHERE active=1 AND barcode=? LIMIT 1';
+    $st = $pdo->prepare($sql);
     $st->execute([$barcode]);
     $p = $st->fetch();
 
     if(!$p && ltrim($barcode,'0') !== ''){
         $normalized = ltrim($barcode,'0');
-        $st = $pdo->prepare("SELECT id,name,barcode,price,stock,unit,category,image_path FROM products WHERE active=1 AND TRIM(LEADING '0' FROM barcode)=? LIMIT 1");
+        $st = $pdo->prepare("SELECT id,name,barcode,price,stock,category,image_path FROM products WHERE active=1 AND TRIM(LEADING '0' FROM barcode)=? LIMIT 1");
         $st->execute([$normalized]);
         $p = $st->fetch();
     }
@@ -60,7 +61,6 @@ try{
             'price_text'=>number_format((int)$p['price']).' تومان',
             'stock'=>$stockDisplay,
             'stock_text'=>(string)$stockDisplay.' عدد',
-            'unit'=>(string)($p['unit'] ?? ''),
             'category'=>(string)($p['category'] ?? ''),
             'image_path'=>(string)($p['image_path'] ?? ''),
         ],
