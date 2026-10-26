@@ -1,0 +1,47 @@
+name: Deploy Tehran AI Logo
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/deploy-tehran-ai-logo'
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch loader
+        run: |
+          python3 - <<'PY'
+          p='TehranSupermarket/index.php'
+          s=open(p,encoding='utf-8').read()
+          tag='<script src="assets/ai_logo_override.js?v=20261026-1"></script>'
+          if tag not in s:
+              s=s.replace('</body>',tag+'</body>')
+          open(p,'w',encoding='utf-8').write(s)
+          PY
+      - name: Upload AI logo
+        env:
+          TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os, urllib.request, urllib.parse
+          base='https://websaza.ir:2083/execute/Fileman/upload_files'
+          token=os.environ['TOKEN']
+          files=['TehranSupermarket/assets/tehran_ai_logo.png','TehranSupermarket/assets/ai_logo_override.js','TehranSupermarket/index.php']
+          for f in files:
+              rel=f.replace('TehranSupermarket/','')
+              dest='public_html/tehran/'+('/'.join(rel.split('/')[:-1]))
+              boundary='----GPTAIBOUNDARY'
+              data=open(f,'rb').read()
+              body=(f'--{boundary}\r\nContent-Disposition: form-data; name="dir"\r\n\r\n{dest}\r\n--{boundary}\r\nContent-Disposition: form-data; name="file-1"; filename="{rel.split("/")[-1]}"\r\nContent-Type: application/octet-stream\r\n\r\n').encode()+data+f'\r\n--{boundary}--\r\n'.encode()
+              req=urllib.request.Request(base,data=body,headers={'Authorization':'cpanel websaza:'+token,'Content-Type':'multipart/form-data; boundary='+boundary})
+              with urllib.request.urlopen(req) as r:
+                  if r.status!=200: raise SystemExit('upload failed '+f)
+          PY
+      - name: Verify live AI logo
+        run: |
+          sleep 2
+          curl -fsS 'https://websaza.ir/tehran/assets/tehran_ai_logo.png?v=20261026-1' -o /tmp/logo.png
+          test -s /tmp/logo.png
+          curl -fsS 'https://websaza.ir/tehran/' | grep -q 'ai_logo_override.js?v=20261026-1'
+          curl -fsS 'https://websaza.ir/tehran/assets/ai_logo_override.js?v=20261026-1' | grep -q 'tehran_ai_logo.png'
