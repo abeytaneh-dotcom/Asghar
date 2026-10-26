@@ -1,0 +1,169 @@
+name: Upgrade Tehran AI Search and Location
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/upgrade-tehran-ai-search-location.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Patch precise search and location loader
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('TehranSupermarket/ai_assistant.php')
+          s=p.read_text(encoding='utf-8')
+          new=r'''if($action==='search'){
+              $q=trim((string)($_GET['q']??$_POST['q']??''));
+              if(mb_strlen($q)<1 || mb_strlen($q)>120) ai_fail('اسم یا نوع کالایی که می‌خواهید را بنویسید.',422,'AI-422');
+              $nq=ai_norm($q); $tokens=ai_tokens($q);
+              if(!$tokens && $nq!=='') $tokens=[$nq];
+
+              $genericCategories=[
+                  'لبنیات'=>'لبنیات و صبحانه','لبنیات و صبحانه'=>'لبنیات و صبحانه','صبحانه'=>'لبنیات و صبحانه',
+                  'نوشیدنی'=>'نوشیدنی','نوشیدنی ها'=>'نوشیدنی','تنقلات'=>'تنقلات و شیرینی','شیرینی'=>'تنقلات و شیرینی',
+                  'شوینده'=>'خانه و شوینده','خانه و شوینده'=>'خانه و شوینده','مواد غذایی'=>'مواد غذایی',
+                  'کنسرو'=>'کنسرو و غذای آماده','غذای آماده'=>'کنسرو و غذای آماده','بهداشت'=>'بهداشت شخصی','بهداشت شخصی'=>'بهداشت شخصی',
+                  'کودک'=>'کودک','میوه و سبزی'=>'میوه و سبزی','گوشت و مرغ'=>'گوشت و مرغ','دخانیات'=>'دخانیات'
+              ];
+              $genericCat=$genericCategories[$nq]??'';
+
+              $aliases=[
+                  'آبمیوه'=>['آبمیوه','آب میوه'],'آب میوه'=>['آبمیوه','آب میوه'],
+                  'آبمعدنی'=>['آبمعدنی','آب معدنی'],'آب معدنی'=>['آبمعدنی','آب معدنی'],
+                  'انرژی زا'=>['انرژی زا','انرژی‌زا'],'نوشابه انرژی زا'=>['نوشابه انرژی زا','انرژی زا'],
+                  'چیپس'=>['چیپس'],'پفک'=>['پفک'],'شیر'=>['شیر'],'ماست'=>['ماست'],'کشک'=>['کشک'],'دوغ'=>['دوغ']
+              ];
+              $terms=[];
+              foreach(array_merge([$nq],$tokens) as $t){
+                  $t=ai_norm((string)$t); if($t==='')continue; $terms[$t]=true;
+                  foreach(($aliases[$t]??[]) as $a){$a=ai_norm($a);if($a!=='')$terms[$a]=true;}
+              }
+              $terms=array_keys($terms);
+
+              $where=[];$params=[];
+              if($genericCat!==''){
+                  $where[]='category=?';$params[]=$genericCat;
+                  $where[]='name LIKE ?';$params[]='%'.$nq.'%';
+                  $where[]='brand LIKE ?';$params[]='%'.$nq.'%';
+              }else{
+                  foreach(array_slice($terms,0,10) as $term){
+                      $where[]='(name LIKE ? OR brand LIKE ? OR quantity_label LIKE ?)';
+                      $like='%'.$term.'%';array_push($params,$like,$like,$like);
+                  }
+              }
+              if(!$where) ai_out(['ok'=>true,'query'=>$q,'items'=>[]]);
+              $sql='SELECT id,name,brand,quantity_label,category,image_path,price,stock,active FROM products WHERE active=1 AND price>0 AND ('.implode(' OR ',$where).') LIMIT 180';
+              $st=$pdo->prepare($sql);$st->execute($params);$rows=$st->fetchAll();
+
+              $strictSingles=['شیر','ماست','کشک','کره','پنیر','خامه','دوغ'];
+              $strict=(count($tokens)===1 && in_array(ai_norm((string)$tokens[0]),$strictSingles,true));
+              $ranked=[];
+              foreach($rows as $p){
+                  $nn=ai_norm((string)$p['name']);$nb=ai_norm((string)$p['brand']);$nqty=ai_norm((string)$p['quantity_label']);$nc=ai_norm((string)$p['category']);
+                  $hay=trim($nn.' '.$nb.' '.$nqty);$score=((int)$p['stock']>0?20:-120);$matched=0;
+                  if($genericCat!==''){
+                      if((string)$p['category']===$genericCat)$score+=120;
+                      if($nq!==''&&str_contains($nn,$nq))$score+=180;
+                      if($nq!==''&&str_contains($nb,$nq))$score+=80;
+                  }else{
+                      foreach($tokens as $tok){
+                          $tok=ai_norm((string)$tok);if($tok==='')continue;
+                          $word=(bool)preg_match('/(^|\\s)'.preg_quote($tok,'/').'($|\\s)/u',$hay);
+                          $sub=str_contains($hay,$tok);
+                          if($word){$matched++;$score+=90;}
+                          elseif(!$strict&&$sub){$matched++;$score+=38;}
+                      }
+                      $need=count($tokens)<=3?max(1,count($tokens)):max(1,(int)ceil(count($tokens)*0.7));
+                      if($matched<$need)continue;
+                      if($nq!==''&&str_contains($nn,$nq))$score+=220;
+                      elseif($nq!==''&&str_contains($hay,$nq))$score+=100;
+                      if($matched===count($tokens))$score+=70;
+                      if($strict){
+                          $tok=ai_norm((string)$tokens[0]);
+                          if(!preg_match('/(^|\\s)'.preg_quote($tok,'/').'($|\\s)/u',$hay))continue;
+                      }
+                  }
+                  $p['_score']=$score;$ranked[]=$p;
+              }
+              usort($ranked,fn($a,$b)=>($b['_score']<=>$a['_score']) ?: ((int)$b['stock']<=>(int)$a['stock']) ?: ((int)$b['id']<=>(int)$a['id']));
+              $items=[];
+              foreach(array_slice($ranked,0,12) as $p){$items[]=['id'=>(int)$p['id'],'name'=>(string)$p['name'],'brand'=>(string)$p['brand'],'quantity_label'=>(string)$p['quantity_label'],'category'=>(string)$p['category'],'image'=>ai_img($p['image_path']),'price'=>(int)$p['price'],'stock'=>(int)$p['stock']];}
+              ai_out(['ok'=>true,'query'=>$q,'items'=>$items,'count'=>count($items)]);
+          }'''
+          pat=r"if\(\$action==='search'\)\{.*?\n\}\n\nif\(\$action==='cart'\)"
+          out,n=re.subn(pat,new+"\n\nif($action==='cart')",s,flags=re.S)
+          if n!=1: raise SystemExit(f'search block replacements={n}')
+          p.write_text(out,encoding='utf-8')
+
+          i=Path('TehranSupermarket/index.php')
+          x=i.read_text(encoding='utf-8')
+          loader="$aiLocation = '<script src=\"assets/ai_location_checkout.js?v=20261026-1\"></script>';\n$html = str_replace('</body>', $aiLocation.'</body>', $html);\n\n"
+          if 'ai_location_checkout.js' not in x:
+              x=x.replace("echo $html;",loader+"echo $html;")
+              i.write_text(x,encoding='utf-8')
+          PY
+          php -l TehranSupermarket/ai_assistant.php
+          php -l TehranSupermarket/index.php
+          node --check TehranSupermarket/assets/ai_location_checkout.js
+      - name: Commit source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/ai_assistant.php TehranSupermarket/index.php TehranSupermarket/assets/ai_location_checkout.js
+          if ! git diff --cached --quiet; then
+            git commit -m 'Improve Tehran AI search precision and require delivery location'
+            git push origin HEAD:websaza-hosting
+          fi
+      - name: Deploy updated AI files
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          save_file(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          save_file TehranSupermarket/ai_assistant.php "$TARGET_DIR" ai_assistant.php
+          save_file TehranSupermarket/index.php "$TARGET_DIR" index.php
+          save_file TehranSupermarket/assets/ai_location_checkout.js "$TARGET_DIR/assets" ai_location_checkout.js
+      - name: Verify precise search and location live
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/?v=ai-search-location-1" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 "${PUBLIC_URL}/assets/ai_location_checkout.js?v=20261026-1" -o "$RUNNER_TEMP/location.js"
+          curl -sS -L --max-time 30 --get --data-urlencode 'action=search' --data-urlencode 'q=شیر' "${PUBLIC_URL}/ai_assistant.php" -o "$RUNNER_TEMP/milk.json"
+          curl -sS -L --max-time 30 --get --data-urlencode 'action=search' --data-urlencode 'q=آبمیوه' "${PUBLIC_URL}/ai_assistant.php" -o "$RUNNER_TEMP/juice.json"
+          grep -Fq 'ai_location_checkout.js' "$RUNNER_TEMP/home.html"
+          grep -Fq 'ثبت لوکیشن فعلی' "$RUNNER_TEMP/location.js"
+          jq -e '.ok==true and (.items|length)>0' "$RUNNER_TEMP/milk.json" >/dev/null
+          jq -e '.ok==true and (.items|length)>0' "$RUNNER_TEMP/juice.json" >/dev/null
+          if jq -r '.items[].name' "$RUNNER_TEMP/milk.json" | grep -Eq 'ماست|کشک'; then
+            echo 'Milk search still contains yogurt/kashk' >&2; cat "$RUNNER_TEMP/milk.json"; exit 1
+          fi
+          echo SEARCH_LOCATION_OK
