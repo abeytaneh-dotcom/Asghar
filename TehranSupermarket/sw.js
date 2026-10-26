@@ -1,7 +1,7 @@
-const CACHE='tehran-pwa-v5';
+const CACHE='tehran-pwa-v6';
 const SHELL=['/tehran/offline.html'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL).catch(()=>{})));self.skipWaiting();});
-self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});
+self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
 self.addEventListener('fetch',event=>{
   const req=event.request;if(req.method!=='GET')return;
   const url=new URL(req.url);if(url.origin!==location.origin)return;
@@ -10,15 +10,15 @@ self.addEventListener('fetch',event=>{
   if(req.mode==='navigate'){
     event.respondWith(fetch(req,{cache:'no-store'}).catch(()=>caches.match('/tehran/offline.html')));return;
   }
-  if(p==='/tehran/assets/style.css'){
-    event.respondWith(fetch(req,{cache:'no-store'}).then(r=>{if(r.ok){const copy=r.clone();caches.open(CACHE).then(c=>c.put(req,copy));}return r;}).catch(()=>caches.match(req)));return;
-  }
   if(p.startsWith('/tehran/assets/')||p.includes('/uploads/products/')){
-    event.respondWith(caches.match(req).then(hit=>hit||fetch(req).then(r=>{if(r.ok){const copy=r.clone();caches.open(CACHE).then(c=>c.put(req,copy));}return r;})));
+    event.respondWith(fetch(req,{cache:'no-store'}).then(r=>{
+      if(r.ok){const copy=r.clone();caches.open(CACHE).then(c=>c.put(req,copy));}
+      return r;
+    }).catch(()=>caches.match(req)));
   }
 });
 self.addEventListener('push',event=>{
-  let title='🛒 سفارش جدید سوپرمارکت طهران';let body='یک سفارش جدید ثبت شده؛ برای مشاهده سفارش‌ها وارد پنل شوید.';
+  let title='🛒 سفارش جدید طهران مارکت';let body='یک سفارش جدید ثبت شده؛ برای مشاهده سفارش‌ها وارد پنل شوید.';
   try{if(event.data){const d=event.data.json();title=d.title||title;body=d.body||body;}}catch(e){}
   event.waitUntil(self.registration.showNotification(title,{body,icon:'/tehran/pwa-icon.php?size=192',badge:'/tehran/pwa-icon.php?size=192',tag:'tehran-new-order',renotify:true,data:{url:'/tehran/admin_orders.php?status=new'}}));
 });
