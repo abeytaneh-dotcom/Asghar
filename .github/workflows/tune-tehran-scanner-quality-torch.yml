@@ -1,0 +1,92 @@
+name: Tune Tehran Scanner Quality and Torch
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/tune-tehran-scanner-quality-torch'
+
+permissions:
+  contents: write
+
+jobs:
+  tune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_BASE: https://mch4444.dnsuserver.com:2083
+      CPANEL_USER: vt6qdx8
+      SITE_DIR: public_html/tehran
+      SITE_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+          fetch-depth: 0
+
+      - name: Patch scanner quality, focus and auto torch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('TehranSupermarket/barcode_scanner_v2.js')
+          s=p.read_text(encoding='utf-8')
+
+          old="""    nv.facingMode=exact?{exact:'environment'}:{ideal:'environment'};\n    return {video:nv,audio:false};"""
+          new="""    nv.facingMode=exact?{exact:'environment'}:{ideal:'environment'};\n    if(!nv.width)nv.width={ideal:1920};\n    if(!nv.height)nv.height={ideal:1080};\n    if(!nv.frameRate)nv.frameRate={ideal:30};\n    return {video:nv,audio:false};"""
+          if old not in s:
+              raise SystemExit('rear constraint anchor not found')
+          s=s.replace(old,new,1)
+
+          old="""    try{if(adv.length)await track.applyConstraints({advanced:adv});}catch(e){}\n    if(caps.zoom&&typeof caps.zoom.min==='number'){zoomWrap.hidden=false;zoomInput.min=caps.zoom.min;zoomInput.max=caps.zoom.max;zoomInput.step=caps.zoom.step||.1;var z=Math.min(caps.zoom.max,Math.max(caps.zoom.min,1.15));zoomInput.value=z;try{await track.applyConstraints({advanced:[{zoom:z}]});}catch(e){}}else zoomWrap.hidden=true;\n    torchBtn.hidden=!caps.torch;\n    getRearDevices().catch(function(){});"""
+          new="""    try{await track.applyConstraints({width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30}});}catch(e){}\n    try{if(adv.length)await track.applyConstraints({advanced:adv});}catch(e){}\n    if(caps.zoom&&typeof caps.zoom.min==='number'){zoomWrap.hidden=false;zoomInput.min=caps.zoom.min;zoomInput.max=caps.zoom.max;zoomInput.step=caps.zoom.step||.1;var z=Math.min(caps.zoom.max,Math.max(caps.zoom.min,1));zoomInput.value=z;try{await track.applyConstraints({advanced:[{zoom:z}]});}catch(e){}}else zoomWrap.hidden=true;\n    torchBtn.hidden=!caps.torch;\n    if(caps.focusMode&&caps.focusMode.indexOf('single-shot')>=0){try{await track.applyConstraints({advanced:[{focusMode:'single-shot'}]});}catch(e){}setTimeout(function(){if(track&&caps.focusMode.indexOf('continuous')>=0)track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(function(){});},650);}\n    if(caps.torch){\n      var turnLightOn=async function(){try{await track.applyConstraints({advanced:[{torch:true}]});torch=true;torchBtn.textContent='🔦 خاموش';return true;}catch(e){return false;}};\n      if(!(await turnLightOn()))setTimeout(function(){if(track&&!torch)turnLightOn();},500);\n    }\n    getRearDevices().catch(function(){});"""
+          if old not in s:
+              raise SystemExit('tuneTrack anchor not found')
+          s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+
+          idx=Path('TehranSupermarket/index.php')
+          x=idx.read_text(encoding='utf-8')
+          x=x.replace('barcode_scanner_v2.js?v=20261026-3','barcode_scanner_v2.js?v=20261026-7')
+          idx.write_text(x,encoding='utf-8')
+          PY
+
+          grep -q "width:{ideal:1920}" TehranSupermarket/barcode_scanner_v2.js
+          grep -q "torch:true" TehranSupermarket/barcode_scanner_v2.js
+          grep -q "focusMode:'single-shot'" TehranSupermarket/barcode_scanner_v2.js
+          grep -q 'barcode_scanner_v2.js?v=20261026-7' TehranSupermarket/index.php
+
+      - name: Commit tuned scanner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/barcode_scanner_v2.js TehranSupermarket/index.php
+          if ! git diff --cached --quiet; then
+            git commit -m 'Improve Tehran barcode camera quality and auto torch'
+            git push origin HEAD:websaza-hosting
+          fi
+
+      - name: Deploy tuned scanner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){ local file="$1"; curl -sS --fail-with-body -H "$AUTH" -F "file-1=@${file};filename=$(basename "$file")" -F "dir=$SITE_DIR" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null; }
+          upload TehranSupermarket/barcode_scanner_v2.js
+          upload TehranSupermarket/index.php
+
+      - name: Verify tuned scanner is live
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -sS --fail --max-time 30 "$SITE_URL/barcode_scanner_v2.js?v=$(date +%s)" -o "$RUNNER_TEMP/scanner.js"
+          grep -q "width:{ideal:1920}" "$RUNNER_TEMP/scanner.js"
+          grep -q "torch:true" "$RUNNER_TEMP/scanner.js"
+          grep -q "focusMode:'single-shot'" "$RUNNER_TEMP/scanner.js"
+          curl -sS --fail --max-time 30 "$SITE_URL/?v=$(date +%s)" -o "$RUNNER_TEMP/home.html"
+          grep -q 'barcode_scanner_v2.js?v=20261026-7' "$RUNNER_TEMP/home.html"
