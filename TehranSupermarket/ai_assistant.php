@@ -109,32 +109,72 @@ if($action==='search'){
     if(mb_strlen($q)<1 || mb_strlen($q)>120) ai_fail('اسم یا نوع کالایی که می‌خواهید را بنویسید.',422,'AI-422');
     $nq=ai_norm($q); $tokens=ai_tokens($q);
     if(!$tokens && $nq!=='') $tokens=[$nq];
-    $categoryHints=[
-        'شیر'=>'لبنیات و صبحانه','ماست'=>'لبنیات و صبحانه','پنیر'=>'لبنیات و صبحانه','کره'=>'لبنیات و صبحانه','خامه'=>'لبنیات و صبحانه','صبحانه'=>'لبنیات و صبحانه',
-        'نوشابه'=>'نوشیدنی','آبمیوه'=>'نوشیدنی','دوغ'=>'نوشیدنی','آب معدنی'=>'نوشیدنی','انرژی زا'=>'نوشیدنی',
-        'چیپس'=>'تنقلات و شیرینی','پفک'=>'تنقلات و شیرینی','شکلات'=>'تنقلات و شیرینی','بیسکویت'=>'تنقلات و شیرینی','کیک'=>'تنقلات و شیرینی','آدامس'=>'تنقلات و شیرینی',
-        'برنج'=>'مواد غذایی','روغن'=>'مواد غذایی','ماکارونی'=>'مواد غذایی','قند'=>'مواد غذایی','شکر'=>'مواد غذایی','حبوبات'=>'مواد غذایی',
-        'شامپو'=>'بهداشت شخصی','خمیردندان'=>'بهداشت شخصی','صابون'=>'بهداشت شخصی','پوشک'=>'کودک',
-        'سیگار'=>'دخانیات','تنباکو'=>'دخانیات','ذغال'=>'دخانیات','زغال'=>'دخانیات','فندک'=>'دخانیات','کبریت'=>'دخانیات'
+
+    $genericCategories=[
+        'لبنیات'=>'لبنیات و صبحانه','لبنیات و صبحانه'=>'لبنیات و صبحانه','صبحانه'=>'لبنیات و صبحانه',
+        'نوشیدنی'=>'نوشیدنی','نوشیدنی ها'=>'نوشیدنی','تنقلات'=>'تنقلات و شیرینی','شیرینی'=>'تنقلات و شیرینی',
+        'شوینده'=>'خانه و شوینده','خانه و شوینده'=>'خانه و شوینده','مواد غذایی'=>'مواد غذایی',
+        'کنسرو'=>'کنسرو و غذای آماده','غذای آماده'=>'کنسرو و غذای آماده','بهداشت'=>'بهداشت شخصی','بهداشت شخصی'=>'بهداشت شخصی',
+        'کودک'=>'کودک','میوه و سبزی'=>'میوه و سبزی','گوشت و مرغ'=>'گوشت و مرغ','دخانیات'=>'دخانیات'
     ];
-    $catHint=''; foreach($categoryHints as $k=>$v){if(str_contains($nq,ai_norm($k))){$catHint=$v;break;}}
-    $where=[];$params=[];
-    $rawTerms=array_slice(array_values(array_unique(array_filter(array_merge([$nq],$tokens)))),0,7);
-    foreach($rawTerms as $term){
-        $where[]='(name LIKE ? OR brand LIKE ? OR category LIKE ? OR quantity_label LIKE ?)';
-        $like='%'.$term.'%'; array_push($params,$like,$like,$like,$like);
+    $genericCat=$genericCategories[$nq]??'';
+
+    $aliases=[
+        'آبمیوه'=>['آبمیوه','آب میوه'],'آب میوه'=>['آبمیوه','آب میوه'],
+        'آبمعدنی'=>['آبمعدنی','آب معدنی'],'آب معدنی'=>['آبمعدنی','آب معدنی'],
+        'انرژی زا'=>['انرژی زا','انرژی‌زا'],'نوشابه انرژی زا'=>['نوشابه انرژی زا','انرژی زا'],
+        'چیپس'=>['چیپس'],'پفک'=>['پفک'],'شیر'=>['شیر'],'ماست'=>['ماست'],'کشک'=>['کشک'],'دوغ'=>['دوغ']
+    ];
+    $terms=[];
+    foreach(array_merge([$nq],$tokens) as $t){
+        $t=ai_norm((string)$t); if($t==='')continue; $terms[$t]=true;
+        foreach(($aliases[$t]??[]) as $a){$a=ai_norm($a);if($a!=='')$terms[$a]=true;}
     }
-    if($catHint!==''){ $where[]='category=?'; $params[]=$catHint; }
+    $terms=array_keys($terms);
+
+    $where=[];$params=[];
+    if($genericCat!==''){
+        $where[]='category=?';$params[]=$genericCat;
+        $where[]='name LIKE ?';$params[]='%'.$nq.'%';
+        $where[]='brand LIKE ?';$params[]='%'.$nq.'%';
+    }else{
+        foreach(array_slice($terms,0,10) as $term){
+            $where[]='(name LIKE ? OR brand LIKE ? OR quantity_label LIKE ?)';
+            $like='%'.$term.'%';array_push($params,$like,$like,$like);
+        }
+    }
     if(!$where) ai_out(['ok'=>true,'query'=>$q,'items'=>[]]);
-    $sql='SELECT id,name,brand,quantity_label,category,image_path,price,stock,active FROM products WHERE active=1 AND price>0 AND ('.implode(' OR ',$where).') LIMIT 80';
+    $sql='SELECT id,name,brand,quantity_label,category,image_path,price,stock,active FROM products WHERE active=1 AND price>0 AND ('.implode(' OR ',$where).') LIMIT 180';
     $st=$pdo->prepare($sql);$st->execute($params);$rows=$st->fetchAll();
+
+    $strictSingles=['شیر','ماست','کشک','کره','پنیر','خامه','دوغ'];
+    $strict=(count($tokens)===1 && in_array(ai_norm((string)$tokens[0]),$strictSingles,true));
     $ranked=[];
     foreach($rows as $p){
-        $nn=ai_norm((string)$p['name']);$nb=ai_norm((string)$p['brand']);$nc=ai_norm((string)$p['category']);$score=((int)$p['stock']>0?12:-50);
-        if($nq!==''&&str_contains($nn,$nq))$score+=120;
-        if($nq!==''&&str_contains($nb,$nq))$score+=55;
-        foreach($tokens as $t){if(str_contains($nn,$t))$score+=28;if(str_contains($nb,$t))$score+=12;if(str_contains($nc,$t))$score+=8;}
-        if($catHint!==''&&(string)$p['category']===$catHint)$score+=35;
+        $nn=ai_norm((string)$p['name']);$nb=ai_norm((string)$p['brand']);$nqty=ai_norm((string)$p['quantity_label']);$nc=ai_norm((string)$p['category']);
+        $hay=trim($nn.' '.$nb.' '.$nqty);$score=((int)$p['stock']>0?20:-120);$matched=0;
+        if($genericCat!==''){
+            if((string)$p['category']===$genericCat)$score+=120;
+            if($nq!==''&&str_contains($nn,$nq))$score+=180;
+            if($nq!==''&&str_contains($nb,$nq))$score+=80;
+        }else{
+            foreach($tokens as $tok){
+                $tok=ai_norm((string)$tok);if($tok==='')continue;
+                $word=(bool)preg_match('/(^|\s)'.preg_quote($tok,'/').'($|\s)/u',$hay);
+                $sub=str_contains($hay,$tok);
+                if($word){$matched++;$score+=90;}
+                elseif(!$strict&&$sub){$matched++;$score+=38;}
+            }
+            $need=count($tokens)<=3?max(1,count($tokens)):max(1,(int)ceil(count($tokens)*0.7));
+            if($matched<$need)continue;
+            if($nq!==''&&str_contains($nn,$nq))$score+=220;
+            elseif($nq!==''&&str_contains($hay,$nq))$score+=100;
+            if($matched===count($tokens))$score+=70;
+            if($strict){
+                $tok=ai_norm((string)$tokens[0]);
+                if(!preg_match('/(^|\s)'.preg_quote($tok,'/').'($|\s)/u',$hay))continue;
+            }
+        }
         $p['_score']=$score;$ranked[]=$p;
     }
     usort($ranked,fn($a,$b)=>($b['_score']<=>$a['_score']) ?: ((int)$b['stock']<=>(int)$a['stock']) ?: ((int)$b['id']<=>(int)$a['id']));
