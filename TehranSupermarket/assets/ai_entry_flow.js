@@ -1,5 +1,6 @@
 (function(){
 'use strict';
+document.documentElement.classList.add('tm-js');
 function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[c];});}
 function qParam(name){try{return new URLSearchParams(location.search).get(name)||'';}catch(e){return '';}}
 function ensureCss(id,href){
@@ -8,10 +9,10 @@ function ensureCss(id,href){
   var l=document.createElement('link');l.id=id;l.rel='stylesheet';l.href=href;document.head.appendChild(l);return l;
 }
 function loadCss(){
-  ensureCss('tehran-premium-css','assets/tehran-premium-v1.css?v=20261027-4');
-  ensureCss('tehran-header-hotfix','assets/header-logo-hotfix.css?v=20261027-1');
-  ensureCss('tehran-mobile-polish','assets/mobile-polish-v3.css?v=20261027-1');
-  ensureCss('tehran-product-nav-fix','assets/product-nav-fix-v4.css?v=20261027-1');
+  ensureCss('tehran-premium-css','assets/tehran-premium-v1.css?v=20261027-5');
+  ensureCss('tehran-header-hotfix','assets/header-logo-hotfix.css?v=20261027-2');
+  ensureCss('tehran-mobile-polish','assets/mobile-polish-v3.css?v=20261027-2');
+  ensureCss('tehran-product-nav-fix','assets/product-nav-fix-v4.css?v=20261027-2');
 }
 function scrollToEl(el){
   if(!el)return;
@@ -21,6 +22,22 @@ function scrollToEl(el){
 function setMobileActive(name){
   document.querySelectorAll('.tm-mobile-nav [data-nav]').forEach(function(x){x.classList.toggle('is-current',x.getAttribute('data-nav')===name);});
 }
+function openAi(){var a=document.getElementById('tehran-ai-fab-v2');if(a){a.click();return true;}return false;}
+function openScan(){var s=document.getElementById('barcode-scan-fab');if(s){s.click();return true;}return false;}
+function handleMobileNav(e){
+  var item=e.target&&e.target.closest?e.target.closest('.tm-mobile-nav [data-nav]'):null;
+  if(!item)return;
+  var name=item.getAttribute('data-nav')||'';
+  if(name==='account')return;
+  e.preventDefault();
+  e.stopPropagation();
+  if(typeof e.stopImmediatePropagation==='function')e.stopImmediatePropagation();
+  if(name==='home'){setMobileActive('home');window.scrollTo({top:0,behavior:'smooth'});return;}
+  if(name==='products'){setMobileActive('products');scrollToEl(document.getElementById('products'));return;}
+  if(name==='cart'){setMobileActive('cart');scrollToEl(document.getElementById('cart')||document.querySelector('.cartbox'));return;}
+  if(name==='scan'){setMobileActive('scan');openScan();return;}
+}
+document.addEventListener('click',handleMobileNav,true);
 function rebuild(){
   loadCss();
   document.body.classList.add('tehran-premium-home');
@@ -51,20 +68,17 @@ function rebuild(){
     features.insertAdjacentElement('afterend',banner);
   }
   var mobile=document.createElement('nav');mobile.className='tm-mobile-nav';mobile.setAttribute('aria-label','منوی پایین موبایل');
-  mobile.innerHTML='<button class="home is-current" type="button" data-nav="home" data-tm-home><span class="ico">⌂</span><span>خانه</span></button><button type="button" data-nav="products" data-tm-products><span class="ico">▦</span><span>محصولات</span></button><button class="scan" type="button" data-nav="scan" data-tm-scan aria-label="اسکن بارکد"><span class="ico">▥</span><span>اسکن</span></button><button type="button" data-nav="cart" data-tm-cart><span class="ico">🛒</span><span>سبد خرید</span></button><a href="account.php" data-nav="account"><span class="ico">◯</span><span>حساب من</span></a>';
+  mobile.innerHTML='<button class="home is-current" type="button" data-nav="home"><span class="ico">⌂</span><span>خانه</span></button><button type="button" data-nav="products"><span class="ico">▦</span><span>محصولات</span></button><button class="scan" type="button" data-nav="scan" aria-label="اسکن بارکد"><span class="ico">▥</span><span>اسکن</span></button><button type="button" data-nav="cart"><span class="ico">🛒</span><span>سبد خرید</span></button><a href="account.php" data-nav="account"><span class="ico">◯</span><span>حساب من</span></a>';
   document.body.appendChild(mobile);
+  document.body.classList.add('tm-shell-ready');
 }
-function openAi(){var a=document.getElementById('tehran-ai-fab-v2');if(a){a.click();return true;}return false;}
-function openScan(){var s=document.getElementById('barcode-scan-fab');if(s){s.click();return true;}return false;}
 document.addEventListener('click',function(e){
   var ai=e.target.closest('[data-tm-ai]');if(ai){e.preventDefault();openAi();return;}
   var scan=e.target.closest('[data-tm-scan]');if(scan){e.preventDefault();setMobileActive('scan');openScan();return;}
-  var home=e.target.closest('[data-tm-home]');if(home){e.preventDefault();setMobileActive('home');window.scrollTo({top:0,behavior:'smooth'});return;}
-  var products=e.target.closest('[data-tm-products]');if(products){e.preventDefault();setMobileActive('products');scrollToEl(document.getElementById('products'));return;}
-  var cart=e.target.closest('[data-tm-cart]');if(cart){e.preventDefault();setMobileActive('cart');scrollToEl(document.getElementById('cart')||document.querySelector('.cartbox'));return;}
   var smooth=e.target.closest('[data-tm-scroll]');if(smooth){e.preventDefault();var id=smooth.getAttribute('data-tm-scroll');if(id==='top'){window.scrollTo({top:0,behavior:'smooth'});}else{scrollToEl(document.getElementById(id));}return;}
 });
 loadCss();
+if(document.body)document.body.classList.add('tehran-premium-home');
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',rebuild,{once:true});else rebuild();
 })();
-// deploy-marker: premium-reference-shell-v1 premium-reference-shell-v2-clean header-logo-fallback-v1 mobile-polish-v3 product-nav-fix-v4
+// deploy-marker: premium-reference-shell-v1 premium-reference-shell-v2-clean header-logo-fallback-v1 mobile-polish-v3 product-nav-fix-v4 hard-no-reload-v5
