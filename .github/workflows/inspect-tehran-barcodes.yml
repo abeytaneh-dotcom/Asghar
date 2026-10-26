@@ -1,0 +1,41 @@
+name: Inspect Tehran Barcodes
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/inspect-tehran-barcodes'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Count valid barcodes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64,gzip,json,re,pathlib,collections
+          p=pathlib.Path('TehranSupermarket/pyramid_seed_1400_data.php').read_text('utf-8',errors='replace')
+          m=re.search(r"return\s+'([^']+)'\s*;",p,re.S)
+          raw=gzip.decompress(base64.b64decode(m.group(1))).decode('utf-8')
+          rows=[json.loads(x) for x in raw.splitlines() if x.strip()]
+          vals=[]
+          for r in rows:
+              b=re.sub(r'\D','',str(r.get('barcode') or ''))
+              if 8<=len(b)<=14: vals.append(b)
+          c=collections.Counter(vals)
+          unique=sum(v==1 for v in c.values())
+          dup=sum(v>1 for v in c.values())
+          print('ROWS',len(rows))
+          print('VALID_BARCODE_ROWS',len(vals))
+          print('UNIQUE_VALID_BARCODES',len(c))
+          print('BARCODES_OCCURRING_ONCE',unique)
+          print('DUPLICATED_BARCODE_VALUES',dup)
+          print('SAMPLE',list(c.keys())[:20])
+          PY
