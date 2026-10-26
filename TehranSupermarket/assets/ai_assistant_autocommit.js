@@ -121,3 +121,15 @@ document.addEventListener('submit',function(e){
   }
 },true);
 })();
+
+(function(){
+  function loadCartManager(){
+    if(document.querySelector('script[data-tehran-ai-cart-manager]'))return;
+    var s=document.createElement('script');
+    s.src='assets/ai_cart_manager.js?v=20261026-1';
+    s.async=false;
+    s.setAttribute('data-tehran-ai-cart-manager','1');
+    document.head.appendChild(s);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadCartManager,{once:true});else loadCartManager();
+})();
