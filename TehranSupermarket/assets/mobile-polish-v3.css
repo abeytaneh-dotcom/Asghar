@@ -1,0 +1,41 @@
+/* Tehran Market mobile polish v3 — compact, clean, product-first */
+@media (max-width:800px){
+  body.tehran-premium-home{padding-bottom:66px!important}
+  body.tehran-premium-home .top{padding:7px 10px 8px!important;gap:6px!important}
+  body.tehran-premium-home .brand{gap:7px!important}
+  .tm-brand-mark{width:34px!important;height:34px!important;border-radius:10px!important;font-size:20px!important}
+  .tm-brand-copy b{font-size:13px!important;line-height:1.2!important}
+  .tm-brand-copy small{display:none!important}
+  .tm-top-search{height:39px!important;border-radius:11px!important}
+  .tm-top-search button{width:31px!important;height:31px!important;flex-basis:31px!important;border-radius:8px!important}
+  body.tehran-premium-home .hero{min-height:315px!important;padding:18px 15px 15px!important;border-radius:0 0 18px 18px!important;background:linear-gradient(0deg,#050709f2 0%,#050709c7 45%,#05070955 72%,#05070918 100%),url('tehran-storefront-v2.svg') 68% center/cover no-repeat!important}
+  .tm-hero-copy{width:100%!important}
+  .tm-eyebrow{font-size:8.5px!important;padding:5px 8px!important}
+  body.tehran-premium-home .hero h1{font-size:24px!important;line-height:1.4!important;margin:8px 0 6px!important;letter-spacing:-.25px!important}
+  body.tehran-premium-home .hero p{font-size:9.5px!important;line-height:1.75!important;margin:0 0 9px!important;max-width:100%!important}
+  .tm-hero-actions{gap:6px!important}
+  .tm-gold-btn,.tm-dark-btn{min-height:36px!important;padding:7px 10px!important;font-size:8.8px!important;border-radius:9px!important}
+  .tm-feature-row{margin:8px auto 0!important;padding:0 10px!important;gap:5px!important}
+  .tm-feature-card{min-height:74px!important;padding:7px 4px!important;border-radius:12px!important;gap:4px!important}
+  .tm-feature-icon{width:33px!important;height:33px!important;flex-basis:33px!important;border-radius:9px!important;font-size:16px!important}
+  .tm-feature-card b{font-size:8.8px!important}
+  .tm-feature-card small{display:none!important}
+  .tm-mini-banner{display:none!important}
+  body.tehran-premium-home main{padding:0 10px!important}
+  body.tehran-premium-home .state{margin:8px 0!important;padding:8px 9px!important;font-size:9.5px!important;line-height:1.75!important;border-radius:11px!important}
+  body.tehran-premium-home .sectionhead{margin:12px 0 7px!important}
+  body.tehran-premium-home .sectionhead h2{font-size:15px!important}
+  body.tehran-premium-home .cats{padding-bottom:8px!important}
+  body.tehran-premium-home .cats a{padding:8px 10px!important;font-size:8.8px!important;border-radius:10px!important}
+  body.tehran-premium-home .tm-mobile-nav{height:61px!important;padding:5px 7px calc(5px + env(safe-area-inset-bottom))!important}
+  body.tehran-premium-home .tm-mobile-nav a,body.tehran-premium-home .tm-mobile-nav button{font-size:8px!important}
+  body.tehran-premium-home .tm-mobile-nav .ico{font-size:17px!important}
+  body.tehran-premium-home .tm-mobile-nav .scan{width:46px!important;height:46px!important;margin:-13px auto 0!important}
+  body.tehran-premium-home .sticky{bottom:64px!important}
+}
+@media (max-width:390px){
+  body.tehran-premium-home .hero{min-height:300px!important;padding:16px 14px 14px!important}
+  body.tehran-premium-home .hero h1{font-size:22px!important}
+  body.tehran-premium-home .hero p{font-size:9px!important}
+  .tm-gold-btn,.tm-dark-btn{font-size:8.3px!important;padding:7px 9px!important}
+}
