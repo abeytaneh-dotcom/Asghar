@@ -1,0 +1,81 @@
+name: Deploy Tehran AI Assistant V2
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/deploy-tehran-ai-v2'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_BASE: https://mch4444.dnsuserver.com:2083
+      CPANEL_USER: vt6qdx8
+      SITE_DIR: public_html/tehran
+      SITE_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Validate V2 assistant
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node --check TehranSupermarket/assets/ai_assistant_v2.js
+          php -l TehranSupermarket/ai_assistant.php
+          grep -q 'tehran-ai-fab-v2' TehranSupermarket/assets/ai_assistant_v2.js
+          grep -q 'ثبت نهایی سفارش' TehranSupermarket/assets/ai_assistant_v2.js
+      - name: Switch storefront to V2
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('TehranSupermarket/index.php')
+          s=p.read_text(encoding='utf-8')
+          new="$aiAssistant = '<script src=\"assets/ai_assistant_v2.js?v=20261026-2\"></script>';"
+          s2=re.sub(r"\$aiAssistant\s*=\s*'<script src=\"assets/ai_assistant(?:_v2)?\.js\?v=[^\"]+\"></script>';", new, s)
+          if s2==s and 'ai_assistant_v2.js?v=20261026-2' not in s:
+              raise SystemExit('AI loader marker not found')
+          p.write_text(s2,encoding='utf-8')
+          PY
+      - name: Commit storefront loader
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/index.php TehranSupermarket/assets/ai_assistant_v2.js
+          if ! git diff --cached --quiet; then
+            git commit -m 'Use robust Tehran AI assistant V2'
+            git push origin HEAD:websaza-hosting
+          fi
+      - name: Deploy V2
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){ local file="$1" dir="$2" name="$3"; curl -sS --fail-with-body -H "$AUTH" -F "file-1=@${file};filename=${name}" -F "dir=${dir}" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null; }
+          upload 'TehranSupermarket/assets/ai_assistant_v2.js' "$SITE_DIR/assets" 'ai_assistant_v2.js'
+          upload 'TehranSupermarket/ai_assistant.php' "$SITE_DIR" 'ai_assistant.php'
+          upload 'TehranSupermarket/index.php' "$SITE_DIR" 'index.php'
+      - name: Verify V2 live
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -sS --fail --max-time 30 "$SITE_URL/?v=$(date +%s)" -o "$RUNNER_TEMP/home.html"
+          grep -q 'assets/ai_assistant_v2.js?v=20261026-2' "$RUNNER_TEMP/home.html"
+          curl -sS --fail --max-time 30 "$SITE_URL/assets/ai_assistant_v2.js?v=$(date +%s)" -o "$RUNNER_TEMP/ai.js"
+          node --check "$RUNNER_TEMP/ai.js"
+          grep -q 'tehran-ai-fab-v2' "$RUNNER_TEMP/ai.js"
+          grep -q 'سلام 👋 چی لازم داری؟' "$RUNNER_TEMP/ai.js"
+          curl -sS --fail --max-time 30 -c "$RUNNER_TEMP/cookie" "$SITE_URL/ai_assistant.php?action=boot" -o "$RUNNER_TEMP/boot.json"
+          jq -e '.ok==true and (.token|length)>10 and (.csrf|length)>10' "$RUNNER_TEMP/boot.json" >/dev/null
+          curl -sS --fail --max-time 30 -b "$RUNNER_TEMP/cookie" --get --data-urlencode 'action=search' --data-urlencode 'q=شیر' "$SITE_URL/ai_assistant.php" -o "$RUNNER_TEMP/search.json"
+          jq -e '.ok==true and (.items|type)=="array"' "$RUNNER_TEMP/search.json" >/dev/null
