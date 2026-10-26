@@ -1,0 +1,99 @@
+name: Fill Tehran All Product Images
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/fill-tehran-all-product-images'
+
+permissions:
+  contents: read
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_BASE: https://mch4444.dnsuserver.com:2083
+      CPANEL_USER: vt6qdx8
+      SITE_DIR: public_html/tehran
+      SITE_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Install image/search tools
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet pillow rapidfuzz curl_cffi arabic-reshaper python-bidi
+      - name: Fetch every live product still missing an image
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/fill"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          TOKEN=$(openssl rand -hex 32)
+          NAME="missing_all_$(openssl rand -hex 8).php"
+          cp .github/scripts/tehran_missing_image_all.php "$RUNNER_TEMP/$NAME"
+          sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$NAME"
+          curl -sS --fail-with-body -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$NAME;filename=$NAME" -F "dir=$SITE_DIR" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null
+          code=$(curl -sS -o "$RUNNER_TEMP/fill/missing.json" -w '%{http_code}' -H "X-Report-Token: $TOKEN" "$SITE_URL/$NAME")
+          test "$code" = 200
+          jq -e '.ok==true' "$RUNNER_TEMP/fill/missing.json" >/dev/null
+          echo "missing=$(jq -r '.count' "$RUNNER_TEMP/fill/missing.json")"
+      - name: Search the public web and create guaranteed fallbacks
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/fill_tehran_all_product_images.py "$RUNNER_TEMP/fill" "$RUNNER_TEMP/fill/missing.json"
+      - name: Apply every generated image bundle to the live shop
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          TOKEN=$(openssl rand -hex 32)
+          IMP="image_import_$(openssl rand -hex 8).php"
+          cp .github/scripts/tehran_image_import.php "$RUNNER_TEMP/$IMP"
+          sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$IMP"
+          upload(){ local file="$1" dir="$2"; curl -sS --fail-with-body --retry 2 -H "$AUTH" -F "file-1=@${file};filename=$(basename "$file")" -F "dir=${dir}" -F 'overwrite=1' "${CPANEL_BASE}/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null; }
+          upload "$RUNNER_TEMP/$IMP" "$SITE_DIR"
+          TOTAL=0; BUNDLES=0
+          shopt -s nullglob
+          bundles=("$RUNNER_TEMP"/fill/bundles/image-bundle-*.zip)
+          for bundle in "${bundles[@]}"; do
+            upload "$bundle" "$SITE_DIR/storage"
+            name=$(basename "$bundle"); resp="$RUNNER_TEMP/fill/resp-$name.json"
+            code=$(curl -sS -o "$resp" -w '%{http_code}' --max-time 150 -X POST -H "X-Import-Token: $TOKEN" --data-urlencode "bundle=$name" "$SITE_URL/$IMP")
+            test "$code" = 200
+            jq -e '.ok==true' "$resp" >/dev/null
+            n=$(jq -r '.updated // 0' "$resp"); TOTAL=$((TOTAL+n)); BUNDLES=$((BUNDLES+1))
+            echo "bundle=$name updated=$n total=$TOTAL"
+          done
+          curl -sS --fail-with-body --max-time 30 -X POST -H "X-Import-Token: $TOKEN" --data 'finish=1' "$SITE_URL/$IMP" | jq -e '.ok==true and .finished==true' >/dev/null
+          jq --argjson updated "$TOTAL" --argjson bundles "$BUNDLES" '. + {site_updated:$updated,site_bundles:$bundles}' "$RUNNER_TEMP/fill/summary.json" > "$RUNNER_TEMP/fill/final-summary.json"
+          cat "$RUNNER_TEMP/fill/final-summary.json"
+      - name: Verify zero blank product images remain
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          TOKEN=$(openssl rand -hex 32)
+          NAME="verify_images_$(openssl rand -hex 8).php"
+          cp .github/scripts/tehran_image_verify.php "$RUNNER_TEMP/$NAME"
+          sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$NAME"
+          curl -sS --fail-with-body -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$NAME;filename=$NAME" -F "dir=$SITE_DIR" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null
+          code=$(curl -sS -o "$RUNNER_TEMP/fill/live-verify.json" -w '%{http_code}' -X POST -H "X-Verify-Token: $TOKEN" "$SITE_URL/$NAME")
+          test "$code" = 200
+          jq -e '.ok==true' "$RUNNER_TEMP/fill/live-verify.json" >/dev/null
+          cat "$RUNNER_TEMP/fill/live-verify.json"
+          jq -e '(.products.no_image|tonumber)==0' "$RUNNER_TEMP/fill/live-verify.json" >/dev/null
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tehran-all-product-images-report
+          path: |
+            ${{ runner.temp }}/fill/summary.json
+            ${{ runner.temp }}/fill/final-summary.json
+            ${{ runner.temp }}/fill/live-verify.json
+            ${{ runner.temp }}/fill/real-matches.json
+          retention-days: 3
