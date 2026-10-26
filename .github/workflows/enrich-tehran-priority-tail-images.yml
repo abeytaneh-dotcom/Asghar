@@ -1,0 +1,99 @@
+name: Enrich Tehran Priority Tail Images
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/enrich-tehran-priority-tail-images'
+
+permissions:
+  contents: read
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_BASE: https://mch4444.dnsuserver.com:2083
+      CPANEL_USER: vt6qdx8
+      SITE_DIR: public_html/tehran
+      SITE_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Install tools
+        run: python3 -m pip install --disable-pip-version-check --quiet pillow rapidfuzz curl_cffi
+      - name: Fetch priority missing-image products
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/enrich"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          TOKEN=$(openssl rand -hex 32)
+          NAME="missing_priority_$(openssl rand -hex 8).php"
+          cp .github/scripts/tehran_missing_image_priority.php "$RUNNER_TEMP/$NAME"
+          sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$NAME"
+          curl -sS --fail-with-body -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$NAME;filename=$NAME" -F "dir=$SITE_DIR" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null
+          code=$(curl -sS -o "$RUNNER_TEMP/enrich/priority.json" -w '%{http_code}' -H "X-Report-Token: $TOKEN" "$SITE_URL/$NAME")
+          test "$code" = 200
+          jq -e '.ok==true' "$RUNNER_TEMP/enrich/priority.json" >/dev/null
+      - name: Search tail priority products and build bundles
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/enrich_tehran_priority_images_tail.py "$RUNNER_TEMP/enrich" "$RUNNER_TEMP/enrich/priority.json"
+      - name: Apply image bundles
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          shopt -s nullglob
+          bundles=("$RUNNER_TEMP"/enrich/bundles/image-bundle-*.zip)
+          if [ ${#bundles[@]} -eq 0 ]; then
+            jq '. + {site_updated:0,site_bundles:0}' "$RUNNER_TEMP/enrich/summary.json" > "$RUNNER_TEMP/enrich/final-summary.json"
+            cat "$RUNNER_TEMP/enrich/final-summary.json"
+            exit 0
+          fi
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          TOKEN=$(openssl rand -hex 32)
+          IMP="image_import_$(openssl rand -hex 8).php"
+          cp .github/scripts/tehran_image_import.php "$RUNNER_TEMP/$IMP"
+          sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$IMP"
+          upload(){ local file="$1" dir="$2"; curl -sS --fail-with-body -H "$AUTH" -F "file-1=@${file};filename=$(basename "$file")" -F "dir=${dir}" -F 'overwrite=1' "${CPANEL_BASE}/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null; }
+          upload "$RUNNER_TEMP/$IMP" "$SITE_DIR"
+          TOTAL=0; BUNDLES=0
+          for bundle in "${bundles[@]}"; do
+            upload "$bundle" "$SITE_DIR/storage"
+            name=$(basename "$bundle"); resp="$RUNNER_TEMP/resp-$name.json"
+            code=$(curl -sS -o "$resp" -w '%{http_code}' --max-time 120 -X POST -H "X-Import-Token: $TOKEN" --data-urlencode "bundle=$name" "$SITE_URL/$IMP")
+            test "$code" = 200; jq -e '.ok==true' "$resp" >/dev/null
+            n=$(jq -r '.updated // 0' "$resp"); TOTAL=$((TOTAL+n)); BUNDLES=$((BUNDLES+1)); echo "bundle=$name updated=$n total=$TOTAL"
+          done
+          curl -sS --fail-with-body --max-time 30 -X POST -H "X-Import-Token: $TOKEN" --data 'finish=1' "$SITE_URL/$IMP" | jq -e '.ok==true and .finished==true' >/dev/null
+          jq --argjson updated "$TOTAL" --argjson bundles "$BUNDLES" '. + {site_updated:$updated,site_bundles:$bundles}' "$RUNNER_TEMP/enrich/summary.json" > "$RUNNER_TEMP/enrich/final-summary.json"
+          cat "$RUNNER_TEMP/enrich/final-summary.json"
+      - name: Verify images
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          TOKEN=$(openssl rand -hex 32)
+          NAME="verify_images_$(openssl rand -hex 8).php"
+          cp .github/scripts/tehran_image_verify.php "$RUNNER_TEMP/$NAME"
+          sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$NAME"
+          curl -sS --fail-with-body -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$NAME;filename=$NAME" -F "dir=$SITE_DIR" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null
+          code=$(curl -sS -o "$RUNNER_TEMP/enrich/live-verify.json" -w '%{http_code}' -X POST -H "X-Verify-Token: $TOKEN" "$SITE_URL/$NAME")
+          test "$code" = 200; jq -e '.ok==true' "$RUNNER_TEMP/enrich/live-verify.json" >/dev/null
+          cat "$RUNNER_TEMP/enrich/live-verify.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tehran-priority-tail-image-report
+          path: |
+            ${{ runner.temp }}/enrich/priority.json
+            ${{ runner.temp }}/enrich/summary.json
+            ${{ runner.temp }}/enrich/final-summary.json
+            ${{ runner.temp }}/enrich/live-verify.json
+            ${{ runner.temp }}/enrich/matches.json
+          retention-days: 2
