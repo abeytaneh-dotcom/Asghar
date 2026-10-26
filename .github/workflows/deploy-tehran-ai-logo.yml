@@ -3,45 +3,52 @@ on:
   push:
     branches: [websaza-hosting]
     paths:
+      - '.github/workflows/deploy-tehran-ai-logo.yml'
       - '.github/triggers/deploy-tehran-ai-logo'
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
       - name: Patch loader
         run: |
           python3 - <<'PY'
           p='TehranSupermarket/index.php'
           s=open(p,encoding='utf-8').read()
           tag='<script src="assets/ai_logo_override.js?v=20261026-1"></script>'
-          if tag not in s:
-              s=s.replace('</body>',tag+'</body>')
+          if tag not in s: s=s.replace('</body>',tag+'</body>')
           open(p,'w',encoding='utf-8').write(s)
           PY
-      - name: Upload AI logo
-        env:
-          TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      - name: Upload AI logo and override
         run: |
-          python3 - <<'PY'
-          import os, urllib.request, urllib.parse
-          base='https://websaza.ir:2083/execute/Fileman/upload_files'
-          token=os.environ['TOKEN']
-          files=['TehranSupermarket/assets/tehran_ai_logo.png','TehranSupermarket/assets/ai_logo_override.js','TehranSupermarket/index.php']
-          for f in files:
-              rel=f.replace('TehranSupermarket/','')
-              dest='public_html/tehran/'+('/'.join(rel.split('/')[:-1]))
-              boundary='----GPTAIBOUNDARY'
-              data=open(f,'rb').read()
-              body=(f'--{boundary}\r\nContent-Disposition: form-data; name="dir"\r\n\r\n{dest}\r\n--{boundary}\r\nContent-Disposition: form-data; name="file-1"; filename="{rel.split("/")[-1]}"\r\nContent-Type: application/octet-stream\r\n\r\n').encode()+data+f'\r\n--{boundary}--\r\n'.encode()
-              req=urllib.request.Request(base,data=body,headers={'Authorization':'cpanel websaza:'+token,'Content-Type':'multipart/form-data; boundary='+boundary})
-              with urllib.request.urlopen(req) as r:
-                  if r.status!=200: raise SystemExit('upload failed '+f)
-          PY
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          curl -sS --fail-with-body -H "$AUTH" -F "dir=${TARGET_DIR}/assets" -F "file-1=@TehranSupermarket/assets/tehran_ai_logo.png;filename=tehran_ai_logo.png" "${BASE}/execute/Fileman/upload_files" -o "$RUNNER_TEMP/logo.json"
+          test "$(jq -r '.result.status // .status // 0' "$RUNNER_TEMP/logo.json")" = '1'
+          for f in ai_logo_override.js; do
+            curl -sS --fail-with-body -H "$AUTH" --request POST --data-urlencode "dir=${TARGET_DIR}/assets" --data-urlencode "file=${f}" --data-urlencode "content@TehranSupermarket/assets/${f}" "${BASE}/execute/Fileman/save_file_content" -o "$RUNNER_TEMP/${f}.json"
+            test "$(jq -r '.result.status // .status // 0' "$RUNNER_TEMP/${f}.json")" = '1'
+          done
+          curl -sS --fail-with-body -H "$AUTH" --request POST --data-urlencode "dir=${TARGET_DIR}" --data-urlencode "file=index.php" --data-urlencode "content@TehranSupermarket/index.php" "${BASE}/execute/Fileman/save_file_content" -o "$RUNNER_TEMP/index.json"
+          test "$(jq -r '.result.status // .status // 0' "$RUNNER_TEMP/index.json")" = '1'
       - name: Verify live AI logo
         run: |
+          set -euo pipefail
           sleep 2
-          curl -fsS 'https://websaza.ir/tehran/assets/tehran_ai_logo.png?v=20261026-1' -o /tmp/logo.png
-          test -s /tmp/logo.png
-          curl -fsS 'https://websaza.ir/tehran/' | grep -q 'ai_logo_override.js?v=20261026-1'
-          curl -fsS 'https://websaza.ir/tehran/assets/ai_logo_override.js?v=20261026-1' | grep -q 'tehran_ai_logo.png'
+          curl -fsS "${PUBLIC_URL}/assets/tehran_ai_logo.png?v=20261026-1" -o "$RUNNER_TEMP/logo.png"
+          test -s "$RUNNER_TEMP/logo.png"
+          curl -fsS "${PUBLIC_URL}/?v=ai-logo-20261026" | grep -q 'ai_logo_override.js?v=20261026-1'
+          curl -fsS "${PUBLIC_URL}/assets/ai_logo_override.js?v=20261026-1" | grep -q 'tehran_ai_logo.png'
+          echo AI_LOGO_LIVE_OK
