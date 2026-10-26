@@ -1,0 +1,58 @@
+name: Categorize Tehran Products
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/triggers/categorize-tehran-products'
+
+permissions:
+  contents: read
+
+jobs:
+  categorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_BASE: https://mch4444.dnsuserver.com:2083
+      CPANEL_USER: vt6qdx8
+      SITE_DIR: public_html/tehran
+      SITE_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Deploy tobacco UI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          curl -sS --fail-with-body -H "$AUTH" -F "file-1=@TehranSupermarket/index.php;filename=index.php" -F "dir=$SITE_DIR" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null
+      - name: Categorize all active products
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          TOKEN=$(openssl rand -hex 32)
+          NAME="categorize_products_$(openssl rand -hex 8).php"
+          cp .github/scripts/tehran_categorize_products_v2.php "$RUNNER_TEMP/$NAME"
+          sed -i "s/__TOKEN__/$TOKEN/g" "$RUNNER_TEMP/$NAME"
+          curl -sS --fail-with-body -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$NAME;filename=$NAME" -F "dir=$SITE_DIR" -F 'overwrite=1' "$CPANEL_BASE/execute/Fileman/upload_files" | jq -e '(.result.status // .status)==1' >/dev/null
+          code=$(curl -sS -o "$RUNNER_TEMP/categories.json" -w '%{http_code}' -H "X-Task-Token: $TOKEN" "$SITE_URL/$NAME")
+          test "$code" = 200
+          jq -e '.ok==true and .total>0' "$RUNNER_TEMP/categories.json" >/dev/null
+          cat "$RUNNER_TEMP/categories.json"
+      - name: Verify tobacco category warning and site
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -sS --fail --max-time 30 "$SITE_URL/" -o "$RUNNER_TEMP/home.html"
+          curl -sS --fail --max-time 30 --get --data-urlencode 'cat=دخانیات' "$SITE_URL/index.php" -o "$RUNNER_TEMP/tobacco.html"
+          grep -q 'فروش دخانیات به افراد زیر ۱۸ سال نداریم' "$RUNNER_TEMP/tobacco.html"
+          grep -q 'دخانیات' "$RUNNER_TEMP/tobacco.html"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tehran-category-report
+          path: ${{ runner.temp }}/categories.json
+          retention-days: 3
