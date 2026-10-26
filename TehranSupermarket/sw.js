@@ -1,4 +1,4 @@
-const CACHE='tehran-pwa-v6';
+const CACHE='tehran-pwa-v7';
 const SHELL=['/tehran/offline.html'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL).catch(()=>{})));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
@@ -11,7 +11,7 @@ self.addEventListener('fetch',event=>{
     event.respondWith(fetch(req,{cache:'no-store'}).catch(()=>caches.match('/tehran/offline.html')));return;
   }
   if(p.startsWith('/tehran/assets/')||p.includes('/uploads/products/')){
-    event.respondWith(fetch(req,{cache:'no-store'}).then(r=>{
+    event.respondWith(fetch(req,{cache:'reload'}).then(r=>{
       if(r.ok){const copy=r.clone();caches.open(CACHE).then(c=>c.put(req,copy));}
       return r;
     }).catch(()=>caches.match(req)));
