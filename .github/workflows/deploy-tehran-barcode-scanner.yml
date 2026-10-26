@@ -42,15 +42,22 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          curl -sS --fail --max-time 30 "$SITE_URL/" -o "$RUNNER_TEMP/home.html"
+          nonce=$(date +%s)
+          curl -L -sS --fail --max-time 30 "$SITE_URL/?scanner_verify=$nonce" -o "$RUNNER_TEMP/home.html"
+          echo "scanner_marker_count=$(grep -c 'barcode-scan-fab' "$RUNNER_TEMP/home.html" || true)"
+          echo "scanner_title_count=$(grep -c 'اسکن بارکد محصول' "$RUNNER_TEMP/home.html" || true)"
           grep -q 'barcode-scan-fab' "$RUNNER_TEMP/home.html"
           grep -q 'اسکن بارکد محصول' "$RUNNER_TEMP/home.html"
-          code=$(curl -sS -o "$RUNNER_TEMP/lookup.json" -w '%{http_code}' --get --data-urlencode 'barcode=6260161501830' "$SITE_URL/barcode_lookup.php")
+          code=$(curl -L -sS -o "$RUNNER_TEMP/lookup.json" -w '%{http_code}' --get --data-urlencode 'barcode=6260161501830' --data-urlencode "v=$nonce" "$SITE_URL/barcode_lookup.php")
+          echo "lookup_http=$code"
+          cat "$RUNNER_TEMP/lookup.json"
           test "$code" = 200
           jq -e 'has("ok")' "$RUNNER_TEMP/lookup.json" >/dev/null
-          cat "$RUNNER_TEMP/lookup.json"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: tehran-barcode-scanner-verification
-          path: ${{ runner.temp }}/lookup.json
+          path: |
+            ${{ runner.temp }}/lookup.json
+            ${{ runner.temp }}/home.html
           retention-days: 2
