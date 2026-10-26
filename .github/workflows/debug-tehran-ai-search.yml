@@ -1,0 +1,21 @@
+name: Debug Tehran AI Search
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/debug-tehran-ai-search.yml']
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show live AI search responses
+        shell: bash
+        run: |
+          set -euo pipefail
+          for q in 'شیر' 'آبمیوه' 'ماست'; do
+            echo "=== $q ==="
+            curl -sS -L --max-time 30 --get --data-urlencode 'action=search' --data-urlencode "q=$q" 'https://websaza.ir/tehran/ai_assistant.php'
+            echo
+          done
+          echo '=== home loader ==='
+          curl -sS -L --max-time 30 'https://websaza.ir/tehran/?v=ai-debug' | grep -o 'ai_location_checkout.js[^<]*' || true
