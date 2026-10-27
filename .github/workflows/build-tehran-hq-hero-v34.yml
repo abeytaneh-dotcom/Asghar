@@ -1,0 +1,180 @@
+name: Build Tehran HQ Hero V34
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/build-tehran-hq-hero-v34.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tehran-hq-hero-v34
+  cancel-in-progress: true
+
+jobs:
+  build-deploy-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+          fetch-depth: 0
+
+      - name: Extract exact current storefront raster
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64,re
+          src=Path('TehranSupermarket/assets/tehran-storefront-v3.svg').read_text(encoding='utf-8')
+          m=re.search(r'data:image/(?:jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=\s]+)',src,re.S)
+          if not m:
+              raise SystemExit('embedded raster not found in storefront svg')
+          raw=base64.b64decode(re.sub(r'\s+','',m.group(1)))
+          ext='jpg' if raw[:2]==b'\xff\xd8' else ('png' if raw[:8]==b'\x89PNG\r\n\x1a\n' else 'bin')
+          out=Path(f'/tmp/tehran-source.{ext}')
+          out.write_bytes(raw)
+          print('SOURCE_BYTES',len(raw),'PATH',out)
+          PY
+          file /tmp/tehran-source.*
+
+      - name: Install CPU super-resolution runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet opencv-contrib-python-headless==4.10.0.84
+          curl -L --fail --retry 3 --connect-timeout 20 \
+            -o /tmp/EDSR_x4.pb \
+            https://github.com/Saafke/EDSR_Tensorflow/raw/master/models/EDSR_x4.pb
+          test -s /tmp/EDSR_x4.pb
+
+      - name: Reconstruct exact hero at 4x resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import cv2,glob,os
+          src=glob.glob('/tmp/tehran-source.*')[0]
+          img=cv2.imread(src,cv2.IMREAD_COLOR)
+          if img is None: raise SystemExit('cannot decode source')
+          h,w=img.shape[:2]
+          print('SOURCE_DIMENSIONS',w,h)
+          sr=cv2.dnn_superres.DnnSuperResImpl_create()
+          sr.readModel('/tmp/EDSR_x4.pb')
+          sr.setModel('edsr',4)
+          up=sr.upsample(img)
+          # Gentle local sharpening after SR; no crop/composition changes.
+          blur=cv2.GaussianBlur(up,(0,0),0.75)
+          up=cv2.addWeighted(up,1.10,blur,-0.10,0)
+          oh,ow=up.shape[:2]
+          if ow < 1600 or oh < 800:
+              raise SystemExit(f'HQ output unexpectedly small: {ow}x{oh}')
+          out='TehranSupermarket/assets/tehran-storefront-hq-v34.webp'
+          ok=cv2.imwrite(out,up,[cv2.IMWRITE_WEBP_QUALITY,94])
+          if not ok: raise SystemExit('webp write failed')
+          print('HQ_DIMENSIONS',ow,oh,'BYTES',os.path.getsize(out))
+          PY
+          file TehranSupermarket/assets/tehran-storefront-hq-v34.webp
+
+      - name: Point desktop and mobile to the same HQ artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          cssp=Path('TehranSupermarket/assets/tehran-final-v16.css')
+          css=cssp.read_text(encoding='utf-8')
+          import re
+          css=re.sub(r"url\(['\"]?(?:assets/)?tehran-storefront-v3\.svg\?[^)'\"]*['\"]?\)","url('tehran-storefront-hq-v34.webp?v=20261027-34')",css)
+          css=re.sub(r"url\(['\"]?(?:assets/)?tehran-storefront-hq-v34\.webp\?[^)'\"]*['\"]?\)","url('tehran-storefront-hq-v34.webp?v=20261027-34')",css)
+          cssp.write_text(css,encoding='utf-8')
+
+          sp=Path('.github/scripts/fix_tehran_mobile_hero_v20.py')
+          s=sp.read_text(encoding='utf-8')
+          s=re.sub(r"url\('shop\.php\?tm_asset=hero_v22&v=[^']+'\)","url('assets/tehran-storefront-hq-v34.webp?v=20261027-34')",s)
+          sp.write_text(s,encoding='utf-8')
+
+          shop=Path('TehranSupermarket/shop.php')
+          t=shop.read_text(encoding='utf-8')
+          t=re.sub(r"url\('shop\.php\?tm_asset=hero_v22&v=[^']+'\)","url('assets/tehran-storefront-hq-v34.webp?v=20261027-34')",t)
+          # Ensure the inline desktop reference style cannot keep the old raster.
+          t=re.sub(r"url\(['\"]?(?:assets/)?tehran-storefront-v3\.svg\?[^)'\"]*['\"]?\)","url('assets/tehran-storefront-hq-v34.webp?v=20261027-34')",t)
+          shop.write_text(t,encoding='utf-8')
+          PY
+          grep -Fq 'tehran-storefront-hq-v34.webp' TehranSupermarket/shop.php
+          grep -Fq 'tehran-storefront-hq-v34.webp' TehranSupermarket/assets/tehran-final-v16.css
+          ! grep -Fq "url('shop.php?tm_asset=hero_v22" TehranSupermarket/shop.php
+
+      - name: Persist HQ asset and references
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/assets/tehran-storefront-hq-v34.webp \
+                  TehranSupermarket/assets/tehran-final-v16.css \
+                  TehranSupermarket/shop.php \
+                  .github/scripts/fix_tehran_mobile_hero_v20.py
+          if ! git diff --cached --quiet; then
+            git commit -m 'Use true HQ storefront artwork on Tehran desktop and mobile'
+            git push origin HEAD:websaza-hosting
+          fi
+
+      - name: Upload HQ binary and updated text files to cPanel
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CPANEL_TOKEN:-}"
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          OUT="$RUNNER_TEMP/upload-hq.json"
+          curl -sS --fail-with-body --connect-timeout 15 --max-time 120 \
+            -H "$AUTH" \
+            -F "dir=${TARGET_DIR}/assets" \
+            -F "file-1=@TehranSupermarket/assets/tehran-storefront-hq-v34.webp;type=image/webp" \
+            "${BASE}/execute/Fileman/upload_files" -o "$OUT"
+          cat "$OUT" | jq -c '{status:(.result.status // .status),errors:(.result.errors // .errors)}'
+          test "$(jq -r '.result.status // .status // 0' "$OUT")" = '1'
+
+          save(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save-${file//\//_}.json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          save TehranSupermarket/shop.php "$TARGET_DIR" shop.php
+          save TehranSupermarket/assets/tehran-final-v16.css "$TARGET_DIR/assets" tehran-final-v16.css
+
+      - name: Verify the live site is using the HQ file
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 3
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' \
+            "${PUBLIC_URL}/assets/tehran-storefront-hq-v34.webp?v=20261027-34" -o /tmp/live.webp
+          python3 - <<'PY'
+          import cv2,os
+          p='/tmp/live.webp'; img=cv2.imread(p)
+          if img is None: raise SystemExit('live HQ image cannot be decoded')
+          h,w=img.shape[:2]
+          print('LIVE_HQ_DIMENSIONS',w,h,'BYTES',os.path.getsize(p))
+          assert w>=1600 and h>=800
+          assert os.path.getsize(p)>100000
+          PY
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' \
+            "${PUBLIC_URL}/?hqcheck=20261027-34" -o /tmp/home.html
+          grep -Fq 'tehran-storefront-hq-v34.webp' /tmp/home.html
+          ! grep -Fq "url('shop.php?tm_asset=hero_v22" /tmp/home.html
+          echo 'TEHRAN_HQ_LIVE_OK desktop=HQ mobile=HQ layout=unchanged'
