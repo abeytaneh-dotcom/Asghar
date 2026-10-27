@@ -69,14 +69,16 @@ jobs:
           jq -e '.ok==true and (.items|length)>0' "$RUNNER_TEMP/آبمیوه.json" >/dev/null
           if jq -r '.items[].name' "$RUNNER_TEMP/شیر.json" | grep -Eq 'ماست|کشک'; then exit 1; fi
 
-      - name: Build inline Tehran reference storefront v18
+      - name: Build inline Tehran reference storefront v20
         shell: bash
         run: |
           set -euo pipefail
           python3 .github/scripts/inline_tehran_v18.py
+          python3 .github/scripts/fix_tehran_mobile_hero_v20.py
           php -l TehranSupermarket/shop.php
           grep -Fq 'tm-ref-inline-v18' TehranSupermarket/shop.php
-          grep -Fq 'assets/tehran-storefront-v3.svg?v=20261027-ref18' TehranSupermarket/shop.php
+          grep -Fq 'tm-ref-mobile-v20' TehranSupermarket/shop.php
+          grep -Fq 'tm-ref-mobile-picture-v20' TehranSupermarket/shop.php
 
       - name: Persist inline Tehran storefront
         shell: bash
@@ -86,7 +88,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add TehranSupermarket/shop.php
           if ! git diff --cached --quiet; then
-            git commit -m 'Generate inline Tehran storefront v18'
+            git commit -m 'Generate reliable Tehran mobile hero v20'
             git push origin HEAD:websaza-hosting
           fi
 
@@ -103,12 +105,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-18" -o "$RUNNER_TEMP/home.html"
-          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-v3.svg?v=20261027-ref18" -o "$RUNNER_TEMP/hero.svg"
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-20" -o "$RUNNER_TEMP/home.html"
           grep -Fq 'tm-ref-inline-v18' "$RUNNER_TEMP/home.html"
-          grep -Fq '.tm-ref-header{background:#080a0d' "$RUNNER_TEMP/home.html"
-          grep -Fq '.tm-ref-hero{' "$RUNNER_TEMP/home.html"
-          grep -Fq 'assets/tehran-storefront-v3.svg?v=20261027-ref18' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-ref-mobile-v20' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-ref-mobile-picture-v20' "$RUNNER_TEMP/home.html"
+          grep -Fq 'data:image/jpeg;base64,' "$RUNNER_TEMP/home.html"
           grep -Fq '#barcode-scan-fab,#tehran-ai-fab-v2' "$RUNNER_TEMP/home.html"
-          test -s "$RUNNER_TEMP/hero.svg"
-          echo 'TEHRAN_REFERENCE_V18_LIVE_OK inline_css=ok hero=ok legacy_fabs_hidden=ok'
+          echo 'TEHRAN_REFERENCE_V20_LIVE_OK inline_css=ok mobile_real_img=ok header=ok legacy_fabs_hidden=ok'
