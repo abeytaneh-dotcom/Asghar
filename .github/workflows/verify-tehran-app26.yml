@@ -20,6 +20,7 @@ jobs:
                grep -Fq 'tm26-app' /tmp/tm26-app.js &&
                curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm27-showcase.css?v=20261028-1' -o /tmp/tm27.css &&
                grep -Fq 'Approved light grocery mockup' /tmp/tm27.css &&
+               grep -Fq 'width:52%!important;background:url' /tmp/tm27.css &&
                curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-storefront-daylight.webp?v=1' -o /tmp/tm27-hero.webp &&
                curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm27-cat-pantry.webp?v=1' -o /tmp/tm27-pantry.webp &&
                curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm27-cat-snacks.webp?v=1' -o /tmp/tm27-snacks.webp &&
