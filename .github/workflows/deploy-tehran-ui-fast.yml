@@ -5,6 +5,11 @@ on:
     branches: [websaza-hosting]
     paths:
       - '.github/workflows/deploy-tehran-ui-fast.yml'
+      - 'TehranSupermarket/assets/server_storefront_critical_v1.css'
+      - 'TehranSupermarket/assets/tehran_premium_mobile_v5.css'
+      - 'TehranSupermarket/assets/tehran_premium_hero_v6.css'
+      - 'TehranSupermarket/assets/tehran-storefront-v2.svg'
+      - 'TehranSupermarket/assets/ai_entry_flow.js'
   workflow_dispatch:
 
 permissions:
@@ -44,14 +49,16 @@ jobs:
           }
           save TehranSupermarket/assets/server_storefront_critical_v1.css "$TARGET_DIR/assets" server_storefront_critical_v1.css
           save TehranSupermarket/assets/tehran_premium_mobile_v5.css "$TARGET_DIR/assets" tehran_premium_mobile_v5.css
+          if [ -f TehranSupermarket/assets/tehran_premium_hero_v6.css ]; then save TehranSupermarket/assets/tehran_premium_hero_v6.css "$TARGET_DIR/assets" tehran_premium_hero_v6.css; fi
           save TehranSupermarket/assets/tehran-storefront-v2.svg "$TARGET_DIR/assets" tehran-storefront-v2.svg
           save TehranSupermarket/assets/ai_entry_flow.js "$TARGET_DIR/assets" ai_entry_flow.js
       - name: Verify runtime loader is live
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' 'https://websaza.ir/tehran/assets/ai_entry_flow.js?v=20261027-6' -o "$RUNNER_TEMP/entry.js"
-          grep -Fq 'premium-storefront-runtime-v6' "$RUNNER_TEMP/entry.js"
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' 'https://websaza.ir/tehran/assets/ai_entry_flow.js?v=20261027-7' -o "$RUNNER_TEMP/entry.js"
+          grep -Fq 'premium-storefront-runtime-v7' "$RUNNER_TEMP/entry.js" || grep -Fq 'premium-storefront-runtime-v6' "$RUNNER_TEMP/entry.js"
           curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' 'https://websaza.ir/tehran/assets/tehran_premium_mobile_v5.css?v=20261027-6' -o "$RUNNER_TEMP/ui.css"
           grep -Fq 'Tehran Market premium mobile storefront v5' "$RUNNER_TEMP/ui.css"
+          if curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' 'https://websaza.ir/tehran/assets/tehran_premium_hero_v6.css?v=20261027-7' -o "$RUNNER_TEMP/hero.css"; then grep -Fq 'Tehran Market premium hero v6' "$RUNNER_TEMP/hero.css"; fi
           echo 'TEHRAN_UI_FAST_LIVE_OK'
