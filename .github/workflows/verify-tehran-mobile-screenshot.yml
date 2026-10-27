@@ -1,0 +1,42 @@
+name: Verify Tehran Mobile Screenshot
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/verify-tehran-mobile-screenshot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Capture live mobile storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://websaza.ir/tehran/?visualcheck=20261027-6'
+          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)
+          if [ -z "$CHROME" ]; then echo 'Chrome not found'; exit 1; fi
+          "$CHROME" --headless=new --no-sandbox --disable-gpu --hide-scrollbars \
+            --user-agent='Mozilla/5.0 (Linux; Android 13; SM-A715F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36' \
+            --window-size=390,844 --virtual-time-budget=5000 \
+            --screenshot="$RUNNER_TEMP/tehran-mobile-live.png" "$URL"
+          test -s "$RUNNER_TEMP/tehran-mobile-live.png"
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "$URL" -o "$RUNNER_TEMP/home.html"
+          grep -o "tehran_premium_mobile_v5.css[^'\"<> ]*" "$RUNNER_TEMP/home.html" > "$RUNNER_TEMP/visual-markers.txt" || true
+          grep -o "server_storefront_critical_v1.css[^'\"<> ]*" "$RUNNER_TEMP/home.html" >> "$RUNNER_TEMP/visual-markers.txt" || true
+          grep -o "طهران مارکت" "$RUNNER_TEMP/home.html" | head -n 3 >> "$RUNNER_TEMP/visual-markers.txt" || true
+          echo "url=$URL" >> "$RUNNER_TEMP/visual-markers.txt"
+      - name: Upload screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: tehran-mobile-live
+          path: |
+            ${{ runner.temp }}/tehran-mobile-live.png
+            ${{ runner.temp }}/visual-markers.txt
+          retention-days: 1
