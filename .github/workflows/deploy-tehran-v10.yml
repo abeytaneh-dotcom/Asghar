@@ -1,4 +1,4 @@
-name: Deploy Tehran Market V12
+name: Deploy Tehran Market V13
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
           ref: websaza-hosting
           fetch-depth: 0
 
-      - name: Remove blocking hero inline styles and load v12
+      - name: Inject cache-proof mobile composition v13
         shell: bash
         run: |
           set -euo pipefail
@@ -35,24 +35,66 @@ jobs:
           p=Path('TehranSupermarket/shop.php')
           s=p.read_text(encoding='utf-8')
 
-          # Remove old external mobile polish links and load the new one.
-          s=re.sub(r'<link rel="stylesheet" href="assets/tehran-mobile-polish-v\d+\.css\?v=[^"]+">','',s)
-          s=s.replace('</head>','<link rel="stylesheet" href="assets/tehran-mobile-polish-v12.css?v=20261027-12"></head>',1)
+          # Remove any older inline critical block.
+          s=re.sub(r'<style id="tmx-mobile-critical-v\d+">.*?</style>','',s,flags=re.S)
 
-          # Inline !important styles were stronger than the mobile CSS and kept the old composition.
-          s=re.sub(r'(<section class="hero tmx-hero" id="smart-shopping") style="[^"]*"',r'\1',s,count=1)
-          s=re.sub(r'(<img class="tmx-hero-real-image-v10"[^>]*?) style="[^"]*"',r'\1',s,count=1)
-          s=re.sub(r'<span aria-hidden="true" style="[^"]*"></span>','<span aria-hidden="true"></span>',s,count=1)
-          s=re.sub(r'<div class="tmx-hero-copy" style="[^"]*">','<div class="tmx-hero-copy">',s,count=1)
+          critical=r'''<style id="tmx-mobile-critical-v13">
+          @media(max-width:800px){
+            html body .tmx-header{padding:7px 9px 8px!important;gap:6px!important;background:#080a0c!important}
+            html body .tmx-head-search{height:39px!important;border-radius:11px!important}
+            html body .tmx-head-search input{font-size:10px!important;padding:7px 10px!important}
+            html body .tmx-head-search button{width:31px!important;height:31px!important;flex-basis:31px!important}
 
+            html body .tmx-hero{height:360px!important;min-height:360px!important;padding:0!important;border-radius:0 0 20px 20px!important;display:block!important;position:relative!important;overflow:hidden!important;background:#07090b!important;isolation:isolate!important}
+            html body .tmx-hero .tmx-hero-picture-v10{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:auto!important;height:235px!important;width:100%!important;display:block!important;z-index:0!important;overflow:hidden!important;background:#07090b!important}
+            html body .tmx-hero .tmx-hero-picture-v10 img{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important;object-position:center 11%!important;display:block!important;visibility:visible!important;opacity:1!important;filter:saturate(1.05) contrast(1.04) brightness(1.18)!important}
+            html body .tmx-hero>span[aria-hidden="true"]{position:absolute!important;left:0!important;right:0!important;top:165px!important;bottom:0!important;height:auto!important;background:linear-gradient(180deg,rgba(7,9,11,0) 0%,rgba(7,9,11,.70) 25%,#07090b 52%,#07090b 100%)!important;z-index:1!important;pointer-events:none!important}
+            html body .tmx-hero:before{content:none!important}
+            html body .tmx-hero .tmx-hero-copy{position:absolute!important;left:12px!important;right:12px!important;bottom:11px!important;top:auto!important;width:auto!important;max-width:none!important;z-index:3!important;text-align:center!important;padding:0!important;display:block!important;visibility:visible!important;opacity:1!important}
+            html body .tmx-hero .tmx-eyebrow{display:inline-flex!important;font-size:7.5px!important;padding:4px 8px!important;background:rgba(12,14,17,.84)!important;border:1px solid rgba(244,201,77,.30)!important;border-radius:999px!important;margin:0 auto 5px!important;color:#f4c94d!important}
+            html body .tmx-hero h1{font-size:18px!important;line-height:1.18!important;margin:1px auto 7px!important;max-width:100%!important;width:100%!important;text-align:center!important;white-space:normal!important;overflow:visible!important;text-shadow:0 2px 10px #000!important;color:#fff!important}
+            html body .tmx-hero h1 strong{display:block!important;font-size:20px!important;line-height:1.20!important;color:#f4c94d!important;margin-top:2px!important;white-space:normal!important}
+            html body .tmx-hero p{display:none!important}
+            html body .tmx-hero-actions{display:flex!important;justify-content:center!important;align-items:center!important;gap:6px!important;flex-wrap:nowrap!important;width:100%!important;margin:0 auto!important}
+            html body .tmx-primary,html body .tmx-secondary{min-height:34px!important;padding:6px 9px!important;font-size:8px!important;border-radius:9px!important;white-space:nowrap!important;flex:0 1 auto!important}
+            html body .tmx-primary{background:#f1c445!important;color:#141414!important;box-shadow:0 5px 16px rgba(241,196,69,.18)!important}
+            html body .tmx-secondary{background:rgba(11,14,17,.90)!important;color:#fff!important;border:1px solid rgba(255,255,255,.16)!important}
+
+            html body .tmx-smart-row{margin:8px auto 0!important;padding:0 9px!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important;position:relative!important;z-index:20!important}
+            html body .tmx-smart-card{min-height:68px!important;padding:6px 3px!important;border-radius:13px!important;display:flex!important;flex-direction:column!important;justify-content:center!important;text-align:center!important;gap:4px!important;box-shadow:0 7px 18px rgba(0,0,0,.06)!important}
+            html body .tmx-smart-ico{width:30px!important;height:30px!important;flex-basis:30px!important;border-radius:9px!important;font-size:14px!important}
+            html body .tmx-smart-card b{font-size:8.2px!important;margin:0!important}
+            html body .tmx-smart-card small{display:none!important}
+
+            html body main{padding-top:12px!important;padding-bottom:104px!important}
+            html body .state{margin:7px 10px 10px!important;font-size:8.5px!important;padding:7px 9px!important;border-radius:11px!important}
+            html body #products{scroll-margin-top:86px!important}
+            html body #products .sectionhead{margin-top:4px!important;margin-bottom:8px!important}
+            html body #products .sectionhead h2{font-size:19px!important;margin:0!important}
+            html body #products .sectionhead p{font-size:9px!important;margin-top:3px!important}
+            html body #tmx-mobile-nav{height:58px!important;padding:4px 8px calc(4px + env(safe-area-inset-bottom))!important;box-shadow:0 -6px 18px rgba(0,0,0,.08)!important}
+            html body #tmx-mobile-nav button,html body #tmx-mobile-nav a{font-size:8.2px!important;gap:1px!important}
+            html body #tmx-mobile-nav .tmx-nav-ico{font-size:15px!important}
+            html body #tmx-mobile-nav .tmx-scan{width:48px!important;height:48px!important;transform:translateY(-6px)!important}
+            html body .sticky{bottom:62px!important;left:8px!important;right:8px!important}
+          }
+          @media(max-width:390px){
+            html body .tmx-hero{height:345px!important;min-height:345px!important}
+            html body .tmx-hero .tmx-hero-picture-v10{height:225px!important}
+            html body .tmx-hero>span[aria-hidden="true"]{top:158px!important}
+            html body .tmx-hero h1{font-size:17px!important}
+            html body .tmx-hero h1 strong{font-size:19px!important}
+          }
+          </style>'''
+          s=s.replace('</head>',critical+'</head>',1)
           p.write_text(s,encoding='utf-8')
           PY
           php -l TehranSupermarket/shop.php
-          grep -Fq 'tehran-mobile-polish-v12.css?v=20261027-12' TehranSupermarket/shop.php
-          ! grep -Fq 'tmx-hero-copy" style=' TehranSupermarket/shop.php
-          ! grep -Fq 'aria-hidden="true" style=' TehranSupermarket/shop.php
+          grep -Fq 'tmx-mobile-critical-v13' TehranSupermarket/shop.php
+          grep -Fq 'height:360px!important' TehranSupermarket/shop.php
+          grep -Fq 'tmx-hero p{display:none!important}' TehranSupermarket/shop.php
 
-      - name: Persist storefront v12
+      - name: Persist storefront v13
         shell: bash
         run: |
           set -euo pipefail
@@ -60,11 +102,11 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add TehranSupermarket/shop.php
           if ! git diff --cached --quiet; then
-            git commit -m 'Remove inline hero styles and activate mobile v12'
+            git commit -m 'Inline final Tehran mobile composition v13'
             git push origin HEAD:websaza-hosting
           fi
 
-      - name: Upload v12 storefront
+      - name: Upload v13 storefront
         shell: bash
         run: |
           set -euo pipefail
@@ -78,18 +120,14 @@ jobs:
             test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
           }
           upload TehranSupermarket/shop.php "$TARGET_DIR" shop.php
-          upload TehranSupermarket/assets/tehran-mobile-polish-v12.css "$TARGET_DIR/assets" tehran-mobile-polish-v12.css
 
-      - name: Verify live v12
+      - name: Verify live v13
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-12" -o "$RUNNER_TEMP/home.html"
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-mobile-polish-v12.css?v=20261027-12" -o "$RUNNER_TEMP/polish.css"
-          grep -Fq 'tehran-mobile-polish-v12.css?v=20261027-12' "$RUNNER_TEMP/home.html"
-          ! grep -Fq 'tmx-hero-copy" style=' "$RUNNER_TEMP/home.html"
-          ! grep -Fq 'aria-hidden="true" style=' "$RUNNER_TEMP/home.html"
-          grep -Fq 'height:430px!important' "$RUNNER_TEMP/polish.css"
-          grep -Fq 'top:205px!important' "$RUNNER_TEMP/polish.css"
-          grep -Fq 'text-align:center!important' "$RUNNER_TEMP/polish.css"
-          echo 'TEHRAN_V12_LIVE_OK inline_conflicts_removed=ok store_visible=ok copy_bottom_panel=ok title_centered=ok'
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-13" -o "$RUNNER_TEMP/home.html"
+          grep -Fq 'tmx-mobile-critical-v13' "$RUNNER_TEMP/home.html"
+          grep -Fq 'height:360px!important' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tmx-hero p{display:none!important}' "$RUNNER_TEMP/home.html"
+          grep -Fq 'min-height:68px!important' "$RUNNER_TEMP/home.html"
+          echo 'TEHRAN_V13_LIVE_OK inline_mobile_css=ok compact_hero=ok compact_smart_cards=ok products_higher=ok'
