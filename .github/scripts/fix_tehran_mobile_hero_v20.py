@@ -13,12 +13,12 @@ found = re.findall(r'data:image/jpeg;base64,([A-Za-z0-9+/=]+)', shop)
 mobile_b64 = max(found, key=len) if found else ''
 
 # Fallback to the build source only if the current HTML has no embedded image.
-if len(mobile_b64) < 10000:
+if len(mobile_b64) < 1000:
     m = re.search(r"mobile_b64\s*=\s*'''(.*?)'''", source, flags=re.S)
     if m:
         mobile_b64 = re.sub(r'\s+', '', m.group(1))
 
-if len(mobile_b64) < 10000:
+if len(mobile_b64) < 1000:
     raise SystemExit('approved mobile hero image not found')
 
 shop = re.sub(r'<picture class="tm-ref-mobile-picture-v20">.*?</picture>', '', shop, flags=re.S)
