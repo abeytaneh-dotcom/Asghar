@@ -1,0 +1,57 @@
+name: Diagnose Tehran V33 Staged Hero
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/diagnose-tehran-v33.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Inspect staged HQ pieces
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pillow
+          python3 - <<'PY'
+          from pathlib import Path
+          from itertools import permutations
+          import base64, io, re
+          from PIL import Image, ImageFile
+          ImageFile.LOAD_TRUNCATED_IMAGES=True
+          files=[Path(f'.github/tehran-v33/part0{i}.b64') for i in range(3)]
+          parts=[re.sub(r'\s+','',p.read_text()) for p in files]
+          for i,s in enumerate(parts):
+              print(f'PART{i} len={len(s)} first={s[:20]!r} last={s[-20:]!r}')
+          signatures=['UklGR','/9j/','iVBORw0']
+          found=False
+          for perm in permutations(range(3)):
+              s=''.join(parts[i] for i in perm)
+              for sig in signatures:
+                  start=0
+                  while True:
+                      pos=s.find(sig,start)
+                      if pos<0: break
+                      cand=s[pos:]
+                      cand += '='*((-len(cand))%4)
+                      try:
+                          raw=base64.b64decode(cand,validate=False)
+                          im=Image.open(io.BytesIO(raw)); im.load()
+                          print('VALID',perm,'sig',sig,'pos',pos,'bytes',len(raw),'format',im.format,'size',im.size)
+                          found=True
+                      except Exception as e:
+                          print('TRY',perm,'sig',sig,'pos',pos,'failed',type(e).__name__,str(e)[:100])
+                      start=pos+1
+          if not found:
+              print('NO_VALID_IMAGE_FOUND')
+          PY
