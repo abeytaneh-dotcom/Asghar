@@ -1,14 +1,7 @@
 name: Build Deploy Tehran SuperRes V32
 
 on:
-  push:
-    branches: [websaza-hosting]
-    paths:
-      - 'TehranSupermarket/assets/tehran-storefront-v3.svg'
-      - 'TehranSupermarket/assets/hero-hq-v32.css'
-      - 'TehranSupermarket/hero_hq_v32.php'
-      - 'TehranSupermarket/.htaccess'
-      - '.github/workflows/build-deploy-tehran-superres-v32.yml'
+  # Legacy builder remains available manually; canonical HQ deploy owns automatic writes.
   workflow_dispatch:
 
 permissions:
