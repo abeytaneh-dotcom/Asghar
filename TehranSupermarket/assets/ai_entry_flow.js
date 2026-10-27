@@ -19,3 +19,4 @@ try{
 }catch(e){}
 })();
 // deploy-marker: premium-storefront-runtime-v7 no-apache-injection-dependency
+// visual-verification-trigger: 20261027-v8
