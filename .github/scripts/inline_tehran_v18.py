@@ -1,6 +1,7 @@
 from pathlib import Path
 import re
 
+# deploy trigger: v18 inline storefront
 shop = Path('TehranSupermarket/shop.php')
 cssp = Path('TehranSupermarket/assets/tehran-final-v16.css')
 s = shop.read_text(encoding='utf-8')
