@@ -1,0 +1,40 @@
+/* Tehran Market premium hero v6 — stronger real-store composition */
+.tm-ref-hero{position:relative!important;isolation:isolate!important;background-color:#050608!important;background-image:linear-gradient(90deg,rgba(3,4,5,.88) 0%,rgba(3,4,5,.65) 29%,rgba(3,4,5,.17) 56%,rgba(3,4,5,.02) 100%),url('tehran-storefront-v2.svg?v=20261027-7')!important;background-size:cover!important;background-position:60% center!important;overflow:hidden!important}
+.tm-ref-hero:before{content:''!important;display:block!important;position:absolute!important;inset:0!important;background:radial-gradient(circle at 76% 47%,rgba(255,211,91,.10),transparent 30%),linear-gradient(180deg,rgba(255,255,255,.025),transparent 28%,rgba(0,0,0,.20))!important;pointer-events:none!important;z-index:1!important}
+.tm-ref-hero:after{content:''!important;display:block!important;position:absolute!important;left:5%!important;right:5%!important;bottom:0!important;height:1px!important;background:linear-gradient(90deg,transparent,#f4c93d,transparent)!important;opacity:.65!important;z-index:5!important}
+.tm-ref-hero-inner{display:flex!important;position:relative!important;z-index:4!important;max-width:1240px!important;margin:0 auto!important;align-items:center!important;justify-content:flex-start!important}
+.tm-ref-hero-copy{display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;z-index:6!important;color:#fff!important}
+.tm-ref-hero-copy:before{content:'طهران مارکت • فروشگاه هوشمند'!important;display:inline-flex!important;visibility:visible!important;opacity:1!important;align-items:center!important;border:1px solid rgba(244,201,61,.42)!important;background:rgba(5,8,10,.76)!important;color:#f4c93d!important;border-radius:999px!important;font-weight:900!important;backdrop-filter:blur(9px)!important;-webkit-backdrop-filter:blur(9px)!important}
+.tm-ref-hero-copy h1{display:block!important;visibility:visible!important;opacity:1!important;color:#fff!important;font-weight:950!important;text-shadow:0 4px 25px rgba(0,0,0,.88)!important}
+.tm-ref-hero-copy h1 strong{color:#f4c93d!important;font-weight:950!important}
+.tm-ref-hero-copy p{display:block!important;visibility:visible!important;opacity:1!important;color:#d9dee1!important;text-shadow:0 2px 15px rgba(0,0,0,.9)!important}
+.tm-ref-hero-copy .tm-ref-cta,.tm-ref-cta{display:inline-flex!important;visibility:visible!important;opacity:1!important;align-items:center!important;justify-content:center!important;background:linear-gradient(145deg,#ffe67d,#e5b329)!important;color:#17120a!important;border:0!important;font-weight:950!important;box-shadow:0 9px 25px rgba(0,0,0,.42)!important}
+
+@media(min-width:801px){
+ .tm-ref-hero{min-height:520px!important;background-position:62% center!important}
+ .tm-ref-hero-inner{min-height:520px!important;padding:60px 24px!important}
+ .tm-ref-hero-copy{width:49%!important;max-width:610px!important}
+ .tm-ref-hero-copy:before{padding:8px 13px!important;font-size:10px!important}
+ .tm-ref-hero-copy h1{font-size:clamp(42px,4.6vw,68px)!important;line-height:1.24!important;margin:15px 0 11px!important;letter-spacing:-1.2px!important}
+ .tm-ref-hero-copy p{max-width:520px!important;font-size:14px!important;line-height:2!important;margin:0 0 20px!important}
+ .tm-ref-cta{min-height:46px!important;padding:0 24px!important;border-radius:999px!important;font-size:12px!important}
+}
+
+@media(max-width:800px){
+ .tm-ref-hero{height:318px!important;min-height:318px!important;border-radius:0 0 20px 20px!important;background-image:linear-gradient(90deg,rgba(2,3,4,.88) 0%,rgba(2,3,4,.68) 35%,rgba(2,3,4,.10) 64%,rgba(2,3,4,.01) 100%),url('tehran-storefront-v2.svg?v=20261027-7')!important;background-size:auto 112%!important;background-position:65% 50%!important;background-repeat:no-repeat!important;box-shadow:0 18px 44px rgba(0,0,0,.48)!important}
+ .tm-ref-hero-inner{display:block!important;position:absolute!important;inset:0!important;width:100%!important;height:318px!important;min-height:318px!important;padding:0!important;margin:0!important;z-index:4!important}
+ .tm-ref-hero-copy{display:block!important;position:absolute!important;left:14px!important;right:auto!important;bottom:18px!important;width:58%!important;max-width:225px!important;text-align:right!important;direction:rtl!important;margin:0!important;padding:0!important}
+ .tm-ref-hero-copy:before{padding:5px 8px!important;font-size:6.8px!important;line-height:1!important;margin:0 0 6px!important;white-space:nowrap!important}
+ .tm-ref-hero-copy h1{font-size:21px!important;line-height:1.28!important;margin:0 0 6px!important;letter-spacing:-.35px!important}
+ .tm-ref-hero-copy h1 strong{display:block!important;font-size:24px!important;line-height:1.24!important;margin-top:1px!important}
+ .tm-ref-hero-copy p{font-size:7.8px!important;line-height:1.7!important;margin:0 0 9px!important;max-width:100%!important}
+ .tm-ref-cta{height:33px!important;min-height:33px!important;padding:0 14px!important;border-radius:999px!important;font-size:8.7px!important}
+ .tm-ref-hero-features,.tm-ref-mobile-picture-v20,.tm-ref-mobile-copy-v22,.tm-ref-dots{display:none!important}
+}
+
+@media(max-width:390px){
+ .tm-ref-hero{height:302px!important;min-height:302px!important;background-size:auto 111%!important;background-position:67% 50%!important}
+ .tm-ref-hero-inner{height:302px!important;min-height:302px!important}
+ .tm-ref-hero-copy{left:12px!important;bottom:15px!important;width:61%!important;max-width:215px!important}
+ .tm-ref-hero-copy h1{font-size:19px!important}.tm-ref-hero-copy h1 strong{font-size:22px!important}.tm-ref-hero-copy p{font-size:7.3px!important}
+}
