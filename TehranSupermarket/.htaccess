@@ -6,7 +6,7 @@ DirectoryIndex index.php
  # Preserve Bearer authentication for PHP-FPM/CGI so Websaz Store desktop sync can authenticate.
  RewriteCond %{HTTP:Authorization} ^(.+)$
  RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
- # Serve the repaired mobile hero without changing the public URL used by the storefront.
+ # Preserve the legacy hero endpoint for compatibility; v32 CSS overrides it visually.
  RewriteCond %{QUERY_STRING} (^|&)tm_asset=hero_v22(&|$)
  RewriteRule ^shop\.php$ hero_v22.php [END]
  RewriteRule ^install\.php$ error.php?s=403 [END,QSA]
@@ -48,5 +48,5 @@ ErrorDocument 500 /tehran/error.php?s=500
 <IfModule mod_substitute.c>
   Substitute "s|assets/ai_entry_flow.js?v=20261026-1|assets/ai_entry_flow.js?v=20261027-102|ni"
   Substitute "s|assets/style.css?v=20261024-shop3|assets/style.css?v=20261027-critical7|ni"
-  Substitute "s|</head>|<link id='tm-hq31-css' rel='stylesheet' href='assets/ref30/hq-shell.css?v=20261027-hq31'></head>|ni"
+  Substitute "s|</head>|<link id='tm-hq32-css' rel='stylesheet' href='assets/hero-hq-v32.css?v=20261027-32'></head>|ni"
 </IfModule>
