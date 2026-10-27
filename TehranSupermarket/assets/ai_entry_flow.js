@@ -3,12 +3,18 @@
 document.documentElement.classList.add('tm-js');
 function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[c];});}
 function qParam(name){try{return new URLSearchParams(location.search).get(name)||'';}catch(e){return '';}}
+function isReferenceShell(){return !!document.querySelector('.tm-ref-header,.tm-ref-hero');}
+function clearLegacyVisualOverrides(){
+  ['tehran-premium-css','tehran-header-hotfix','tehran-mobile-polish','tehran-product-nav-fix'].forEach(function(id){var n=document.getElementById(id);if(n)n.remove();});
+  if(document.body){document.body.classList.remove('tehran-premium-home','tm-shell-ready');}
+}
 function ensureCss(id,href){
   var old=document.getElementById(id);
   if(old){old.href=href;return old;}
   var l=document.createElement('link');l.id=id;l.rel='stylesheet';l.href=href;document.head.appendChild(l);return l;
 }
 function loadCss(){
+  if(isReferenceShell()){clearLegacyVisualOverrides();return;}
   ensureCss('tehran-premium-css','assets/tehran-premium-v1.css?v=20261027-5');
   ensureCss('tehran-header-hotfix','assets/header-logo-hotfix.css?v=20261027-2');
   ensureCss('tehran-mobile-polish','assets/mobile-polish-v3.css?v=20261027-2');
@@ -39,6 +45,7 @@ function handleMobileNav(e){
 }
 document.addEventListener('click',handleMobileNav,true);
 function rebuild(){
+  if(isReferenceShell()){clearLegacyVisualOverrides();return;}
   loadCss();
   document.body.classList.add('tehran-premium-home');
   document.body.id=document.body.id||'page-top';
@@ -78,7 +85,7 @@ document.addEventListener('click',function(e){
   var smooth=e.target.closest('[data-tm-scroll]');if(smooth){e.preventDefault();var id=smooth.getAttribute('data-tm-scroll');if(id==='top'){window.scrollTo({top:0,behavior:'smooth'});}else{scrollToEl(document.getElementById(id));}return;}
 });
 loadCss();
-if(document.body)document.body.classList.add('tehran-premium-home');
+if(document.body&&!isReferenceShell())document.body.classList.add('tehran-premium-home');
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',rebuild,{once:true});else rebuild();
 })();
-// deploy-marker: premium-reference-shell-v1 premium-reference-shell-v2-clean header-logo-fallback-v1 mobile-polish-v3 product-nav-fix-v4 hard-no-reload-v5
+// deploy-marker: premium-reference-shell-v1 premium-reference-shell-v2-clean header-logo-fallback-v1 mobile-polish-v3 product-nav-fix-v4 hard-no-reload-v5 reference-shell-authoritative-v1
