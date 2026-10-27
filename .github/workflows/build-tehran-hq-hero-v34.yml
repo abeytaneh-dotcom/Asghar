@@ -110,6 +110,11 @@ jobs:
           t=re.sub(r"url\('shop\.php\?tm_asset=hero_v22&v=[^']+'\)","url('assets/tehran-storefront-hq-v34.webp?v=20261027-34')",t)
           # Ensure the inline desktop reference style cannot keep the old raster.
           t=re.sub(r"url\(['\"]?(?:assets/)?tehran-storefront-v3\.svg\?[^)'\"]*['\"]?\)","url('assets/tehran-storefront-hq-v34.webp?v=20261027-34')",t)
+          old_csrf="if(!hash_equals($_SESSION['csrf']??'',$_POST['csrf']??''))"
+          safe_csrf="if(empty($_SESSION['csrf'])||!is_string($_POST['csrf']??null)||!hash_equals($_SESSION['csrf'],$_POST['csrf']))"
+          if old_csrf not in t and safe_csrf not in t:
+              raise SystemExit('Unrecognized CSRF guard; refusing unsafe patch')
+          t=t.replace(old_csrf,safe_csrf)
           shop.write_text(t,encoding='utf-8')
           PY
           grep -Fq 'tehran-storefront-hq-v34.webp' TehranSupermarket/shop.php
@@ -188,4 +193,6 @@ jobs:
             "${PUBLIC_URL}/?hqcheck=20261027-34" -o /tmp/home.html
           grep -Fq 'tehran-storefront-hq-v34.webp' /tmp/home.html
           ! grep -Fq "url('shop.php?tm_asset=hero_v22" /tmp/home.html
-          echo 'TEHRAN_HQ_LIVE_OK desktop=HQ mobile=HQ layout=unchanged'
+          CSRF_CODE=$(curl -sS --max-time 30 -o /tmp/csrf-probe.html -w '%{http_code}' --data 'action=add&product_id=0' "${PUBLIC_URL}/shop.php")
+          test "$CSRF_CODE" = '419'
+          echo 'TEHRAN_HQ_LIVE_OK desktop=HQ mobile=HQ csrf_missing_rejected=419'
