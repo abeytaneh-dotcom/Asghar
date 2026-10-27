@@ -13,7 +13,7 @@ html body.tm27-showcase .tm26-search button svg{width:26px!important;height:26px
 html body.tm27-showcase .tm26-search input{font-size:14px!important;text-align:center!important}
 html body.tm27-showcase .tm-ref-hero{background:#fff8e9!important;border:1px solid #ede8dc!important;height:280px!important;min-height:280px!important;margin:20px auto 0!important;border-radius:28px!important;box-shadow:0 8px 24px #182e4207!important;position:relative!important}
 html body.tm27-showcase .tm-ref-hero:before{display:none!important}
-html body.tm27-showcase .tm-ref-hero:after{content:''!important;display:block!important;position:absolute!important;left:0!important;top:0!important;bottom:0!important;width:61%!important;background:url('tm26-storefront-daylight.webp?v=1') center/cover no-repeat!important;clip-path:polygon(0 0,100% 0,82% 100%,0 100%)!important;z-index:0!important}
+html body.tm27-showcase .tm-ref-hero:after{content:''!important;display:block!important;position:absolute!important;left:0!important;top:0!important;bottom:0!important;width:52%!important;background:url('tm26-storefront-daylight.webp?v=1') center/cover no-repeat!important;clip-path:polygon(0 0,100% 0,82% 100%,0 100%)!important;z-index:0!important}
 html body.tm27-showcase .tm-ref-hero-inner{height:280px!important;min-height:280px!important;padding:25px 36px!important;display:flex!important;align-items:center!important;justify-content:flex-start!important}
 html body.tm27-showcase .tm-ref-hero-copy{width:46%!important;max-width:none!important;text-align:right!important;position:relative!important;z-index:2!important}
 html body.tm27-showcase .tm-ref-hero-copy h1{font-size:32px!important;line-height:1.7!important;letter-spacing:-.7px!important;color:#101f30!important;margin:0 0 15px!important}
@@ -70,7 +70,7 @@ html body.tm27-showcase #tmx-mobile-nav .is-current[data-tmx-nav="home"] svg{fil
  html body.tm27-showcase .tm-ref-hero-copy{width:48%!important;max-width:none!important;align-self:center!important}
  html body.tm27-showcase .tm-ref-hero-copy h1{font-size:17px!important;line-height:1.7!important;letter-spacing:-.4px!important;margin:0 0 12px!important}
  html body.tm27-showcase .tm-ref-hero-copy .tm-ref-cta{height:32px!important;font-size:9px!important;padding:0 10px!important;border-radius:11px!important;display:inline-flex!important}
- html body.tm27-showcase .tm-ref-hero:after{width:60%!important;clip-path:polygon(0 0,100% 0,80% 100%,0 100%)!important;background-position:center!important}
+ html body.tm27-showcase .tm-ref-hero:after{width:52%!important;clip-path:polygon(0 0,100% 0,80% 100%,0 100%)!important;background-position:center!important}
  html body.tm27-showcase .tm27-address{width:calc(100% - 24px);margin:10px 12px 0;padding:10px 13px;border-radius:15px;font-size:12px;min-height:44px}
  html body.tm27-showcase .state.closed{font-size:9px!important;margin:10px 0 14px!important;padding:7px 10px!important}
  html body.tm27-showcase .tm-ref-section-head{margin:15px 0 10px!important}
