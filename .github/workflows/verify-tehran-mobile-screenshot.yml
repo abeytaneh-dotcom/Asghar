@@ -14,28 +14,62 @@ jobs:
   screenshot:
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Push current storefront UI to cPanel
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          save(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+            for n in 1 2 3; do
+              if curl -sS --fail-with-body --connect-timeout 15 --max-time 90 -H "$AUTH" --request POST \
+                --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+                "${BASE}/execute/Fileman/save_file_content" -o "$out" && [ "$(jq -r '.result.status // .status // 0' "$out")" = 1 ]; then
+                echo "uploaded $file"; return 0
+              fi
+              sleep $((n*2))
+            done
+            cat "$out" || true
+            return 1
+          }
+          save TehranSupermarket/assets/server_storefront_critical_v1.css "$TARGET_DIR/assets" server_storefront_critical_v1.css
+          save TehranSupermarket/assets/tehran_premium_mobile_v5.css "$TARGET_DIR/assets" tehran_premium_mobile_v5.css
+          save TehranSupermarket/assets/tehran-storefront-v2.svg "$TARGET_DIR/assets" tehran-storefront-v2.svg
+          save TehranSupermarket/assets/ai_entry_flow.js "$TARGET_DIR/assets" ai_entry_flow.js
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' 'https://websaza.ir/tehran/assets/ai_entry_flow.js?v=20261027-6' -o "$RUNNER_TEMP/live-entry.js"
+          grep -Fq 'premium-storefront-runtime-v6' "$RUNNER_TEMP/live-entry.js"
       - name: Capture live mobile storefront
         shell: bash
         run: |
           set -euo pipefail
-          URL='https://websaza.ir/tehran/?visualcheck=20261027-6'
+          URL='https://websaza.ir/tehran/?visualcheck=20261027-7'
           CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)
           if [ -z "$CHROME" ]; then echo 'Chrome not found'; exit 1; fi
           "$CHROME" --headless=new --no-sandbox --disable-gpu --hide-scrollbars \
             --user-agent='Mozilla/5.0 (Linux; Android 13; SM-A715F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36' \
-            --window-size=390,844 --virtual-time-budget=5000 \
+            --window-size=390,844 --virtual-time-budget=7000 \
             --screenshot="$RUNNER_TEMP/tehran-mobile-live.png" "$URL"
           test -s "$RUNNER_TEMP/tehran-mobile-live.png"
           curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "$URL" -o "$RUNNER_TEMP/home.html"
-          grep -o "tehran_premium_mobile_v5.css[^'\"<> ]*" "$RUNNER_TEMP/home.html" > "$RUNNER_TEMP/visual-markers.txt" || true
-          grep -o "server_storefront_critical_v1.css[^'\"<> ]*" "$RUNNER_TEMP/home.html" >> "$RUNNER_TEMP/visual-markers.txt" || true
-          grep -o "طهران مارکت" "$RUNNER_TEMP/home.html" | head -n 3 >> "$RUNNER_TEMP/visual-markers.txt" || true
+          printf 'runtime_loader=' > "$RUNNER_TEMP/visual-markers.txt"
+          if grep -Fq 'assets/ai_entry_flow.js' "$RUNNER_TEMP/home.html"; then echo yes >> "$RUNNER_TEMP/visual-markers.txt"; else echo no >> "$RUNNER_TEMP/visual-markers.txt"; fi
+          echo 'expected_css=assets/tehran_premium_mobile_v5.css?v=20261027-6' >> "$RUNNER_TEMP/visual-markers.txt"
+          echo 'expected_storefront=assets/tehran-storefront-v2.svg?v=20261027-5' >> "$RUNNER_TEMP/visual-markers.txt"
           echo "url=$URL" >> "$RUNNER_TEMP/visual-markers.txt"
       - name: Upload screenshot
         uses: actions/upload-artifact@v4
         with:
-          name: tehran-mobile-live
+          name: tehran-mobile-live-v7
           path: |
             ${{ runner.temp }}/tehran-mobile-live.png
             ${{ runner.temp }}/visual-markers.txt
