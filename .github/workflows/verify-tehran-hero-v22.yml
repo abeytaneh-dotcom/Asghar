@@ -1,4 +1,4 @@
-name: Verify Tehran Hero V22
+name: Verify Tehran Hero HQ
 on:
   push:
     branches: [websaza-hosting]
@@ -11,39 +11,31 @@ jobs:
       - name: Allow deployment to finish
         shell: bash
         run: sleep 20
-      - name: Verify live hero JPEG endpoint
+      - name: Verify live vector hero
         shell: bash
         run: |
           set -euo pipefail
-          URL='https://websaza.ir/tehran/shop.php?tm_asset=hero_v22&v=20261027-22'
-          curl -sS -L --fail --max-time 30 -D "$RUNNER_TEMP/headers.txt" "$URL" -o "$RUNNER_TEMP/hero.jpg"
+          URL='https://websaza.ir/tehran/assets/tehran-storefront-v3.svg?v=20261027-hq1'
+          curl -sS -L --fail --max-time 30 -D "$RUNNER_TEMP/headers.txt" "$URL" -o "$RUNNER_TEMP/hero.svg"
           cat "$RUNNER_TEMP/headers.txt"
-          BYTES="$(wc -c < "$RUNNER_TEMP/hero.jpg")"
+          BYTES="$(wc -c < "$RUNNER_TEMP/hero.svg")"
           echo "hero_bytes=$BYTES"
-          grep -Eqi '^content-type:[[:space:]]*image/jpeg' "$RUNNER_TEMP/headers.txt"
-          test "$BYTES" -gt 5000
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('/home/runner/work/_temp/hero.jpg')
-          b=p.read_bytes()
-          assert b[:2] == b'\xff\xd8', 'not a JPEG start marker'
-          assert b[-2:] == b'\xff\xd9', 'not a JPEG end marker'
-          print('JPEG_OK', len(b))
-          PY
-      - name: Verify homepage has no broken image hero elements
+          grep -Eqi '^content-type:[[:space:]]*(image/svg\+xml|text/xml|application/xml)' "$RUNNER_TEMP/headers.txt"
+          test "$BYTES" -gt 3000
+          grep -Fq 'viewBox="0 0 1600 900"' "$RUNNER_TEMP/hero.svg"
+          grep -Fq 'طهران مارکت' "$RUNNER_TEMP/hero.svg"
+          ! grep -Fq 'data:image/jpeg;base64' "$RUNNER_TEMP/hero.svg"
+          echo 'VECTOR_HERO_OK true_vector=1 no_embedded_jpeg=1'
+      - name: Verify homepage uses vector hero on mobile and desktop
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' 'https://websaza.ir/tehran/?reference=20261027-22' -o "$RUNNER_TEMP/home.html"
-          grep -Fq 'tm_asset=hero_v22' "$RUNNER_TEMP/home.html"
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' 'https://websaza.ir/tehran/?reference=20261027-hq1' -o "$RUNNER_TEMP/home.html"
+          grep -Fq 'assets/tehran-storefront-v3.svg?v=20261027-hq1' "$RUNNER_TEMP/home.html"
           grep -Fq 'tm-ref-mobile-copy-v22' "$RUNNER_TEMP/home.html"
           grep -Fq 'tm-ref-mobile-picture-v20' "$RUNNER_TEMP/home.html"
-          if grep -Fq '<picture class="tm-ref-mobile-picture-v20"' "$RUNNER_TEMP/home.html"; then
-            echo 'legacy picture element still present' >&2
+          if grep -Fq 'shop.php?tm_asset=hero_v22' "$RUNNER_TEMP/home.html"; then
+            echo 'low-resolution mobile JPEG is still referenced' >&2
             exit 1
           fi
-          if grep -Fq '<picture class="tm-ref-mobile-picture-v21"' "$RUNNER_TEMP/home.html"; then
-            echo 'legacy v21 picture element still present' >&2
-            exit 1
-          fi
-          echo 'TEHRAN_HERO_V22_LIVE_OK jpeg_endpoint=ok no_broken_img_layers=ok'
+          echo 'TEHRAN_HERO_HQ_LIVE_OK vector_hero=ok mobile_uses_vector=ok'
