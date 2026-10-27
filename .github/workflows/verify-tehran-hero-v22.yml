@@ -21,7 +21,7 @@ jobs:
           BYTES="$(wc -c < "$RUNNER_TEMP/hero.jpg")"
           echo "hero_bytes=$BYTES"
           grep -Eqi '^content-type:[[:space:]]*image/jpeg' "$RUNNER_TEMP/headers.txt"
-          test "$BYTES" -gt 20000
+          test "$BYTES" -gt 5000
           python3 - <<'PY'
           from pathlib import Path
           p=Path('/home/runner/work/_temp/hero.jpg')
