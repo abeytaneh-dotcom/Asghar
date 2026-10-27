@@ -143,3 +143,8 @@ html body #tmx-mobile-nav{display:none!important}
  html body .sticky{bottom:110px!important;left:16px!important;right:16px!important;padding:10px 13px!important;font-size:11px!important}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}*{transition:none!important;animation:none!important}}
+
+/* Redundant promo cards removed; assistant dock and search scanner stay available. */
+html body .tm-ref-promo.ai,html body .tm-ref-promo.scan{display:none!important}
+html body .tm-ref-promos{grid-template-columns:1fr!important}
+@media(max-width:800px){html body .tm-ref-promos{display:none!important}}
