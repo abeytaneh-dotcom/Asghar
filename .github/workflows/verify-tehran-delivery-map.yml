@@ -1,0 +1,132 @@
+name: Verify Tehran Delivery Map
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/verify-tehran-delivery-map.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  location-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Wait for the delivery map release
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/ai_location_checkout.js?mapqa=20261028' -o /tmp/location.js && grep -Fq 'function confirmLocation' /tmp/location.js; then exit 0; fi
+            sleep 10
+          done
+          exit 1
+      - name: Install browser driver
+        run: npm install --prefix "$RUNNER_TEMP/map-qa" --no-audit --no-fund playwright-core@1.56.0
+      - name: Test real map rendering and synthetic location scenarios
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
+          node <<'JS'
+          const {chromium}=require(process.env.RUNNER_TEMP+'/map-qa/node_modules/playwright-core');
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const base='https://websaza.ir/tehran/';
+          async function openCheckout(page){
+            await page.goto(base,{waitUntil:'networkidle',timeout:60000});
+            const sheet=page.locator('.tehran-ai-sheet');
+            if(!await sheet.isVisible())await page.locator('#tehran-ai-fab-v2').click();
+            await sheet.waitFor({state:'visible'});
+            await page.locator('.tehran-ai-quick [data-q="تکمیل سفارش"]').click();
+            const box=page.locator('.tehran-ai-check').last();await box.waitFor();
+            await box.locator('[data-ai-fulfillment="delivery"]').click();
+            await box.locator('[data-ai-delivery-map].leaflet-container').waitFor();
+            return box;
+          }
+          async function until(page,selector,key,value){
+            await page.waitForFunction(([s,k,v])=>{const el=document.querySelector(s);return el&&el.dataset[k]===v;},[selector,key,value]);
+          }
+          async function submitCaptured(page,box,method){
+            await box.locator('[data-name]').fill('آزمایش نقشه');await box.locator('[data-phone]').fill('09120000000');
+            if(method==='delivery')await box.locator('[data-address]').fill('آدرس آزمایشی انتخاب نقشه');
+            let resolve;const captured=new Promise(r=>resolve=r);
+            // Intercept the test submission in the browser: never create a real order.
+            await page.route('**/index.php',async route=>{
+              if(route.request().method()!=='POST'){await route.continue();return;}
+              resolve(new URLSearchParams(route.request().postData()));
+              await route.fulfill({status:200,contentType:'text/html',body:'<title>Captured test submission</title>'});
+            });
+            await box.locator('[data-final]').click();return await captured;
+          }
+          (async()=>{
+            const browser=await chromium.launch({executablePath:process.env.CHROME,headless:true,args:['--no-sandbox']});const report=[];
+            try{
+              for(const width of [390,1440]){
+                const context=await browser.newContext({viewport:{width,height:width<800?844:1100},isMobile:width<800,hasTouch:width<800,permissions:['geolocation'],geolocation:{latitude:35.7,longitude:51.4,accuracy:30}});
+                const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+                let box=await openCheckout(page),map=box.locator('[data-ai-delivery-map]');
+                await map.locator('img.leaflet-tile-loaded').first().waitFor({timeout:60000});
+                assert.equal(await box.getAttribute('data-delivery-lat'),null,'Default map center must not silently become a destination');
+                await box.locator('[data-ai-location]').click();
+                await until(page,'[data-ai-delivery-map]','centerLat','35.7000000');
+                assert.equal(await box.getAttribute('data-delivery-lat'),null,'GPS needs explicit confirmation');
+                await box.locator('[data-ai-location-confirm]').click();
+                assert.equal(await box.getAttribute('data-delivery-lat'),'35.7000000');
+                assert.equal(await box.getAttribute('data-delivery-lng'),'51.4000000');
+                await map.click({position:{x:85,y:105}});
+                await until(page,'.tehran-ai-check','locationPending','1');
+                assert.equal(await box.getAttribute('data-delivery-lat'),'35.7000000','Moving the map must not submit an unconfirmed point');
+                await box.locator('[data-ai-location-confirm]').click();
+                const lat=await box.getAttribute('data-delivery-lat'),lng=await box.getAttribute('data-delivery-lng');
+                assert.ok(lat!=='35.7000000'||lng!=='51.4000000');
+                assert.equal(await box.getAttribute('data-delivery-accuracy'),'','A manually changed point must not claim GPS accuracy');
+                await box.locator('.tehran-ai-location-box').scrollIntoViewIfNeeded();
+                await page.screenshot({path:'/tmp/delivery-map-'+width+'.png'});
+                const sent=await submitCaptured(page,box,'delivery');
+                assert.equal(sent.get('delivery_lat'),lat);assert.equal(sent.get('delivery_lng'),lng);assert.equal(sent.get('fulfillment_method'),'delivery');
+                await page.unroute('**/index.php');
+                box=await openCheckout(page);
+                assert.equal(await box.getAttribute('data-delivery-lat'),lat,'Confirmed destination must survive navigation');
+                await box.locator('[data-ai-fulfillment="pickup"]').click();
+                assert.equal(await box.locator('.tehran-ai-location-box').isVisible(),false);
+                const pickup=await submitCaptured(page,box,'pickup');
+                assert.equal(pickup.get('delivery_lat'),'');assert.equal(pickup.get('delivery_lng'),'');assert.equal(pickup.get('fulfillment_method'),'pickup');
+                assert.deepEqual(errors,[]);report.push({width,mapTiles:true,gps:true,manualDestination:true,explicitConfirmation:true,deliveryCoordinates:true,pickupWithoutCoordinates:true,preservedDestination:true,errors});
+                await context.close();
+              }
+              for(const scenario of ['denied','fallback']){
+                const context=await browser.newContext({viewport:{width:390,height:844}});
+                await context.addInitScript(scenario=>{
+                  let calls=0;window.syntheticGeoOptions=[];
+                  Object.defineProperty(navigator.geolocation,'getCurrentPosition',{configurable:true,value:(success,error,options)=>{
+                    window.syntheticGeoOptions.push(options);calls++;
+                    if(scenario==='denied')setTimeout(()=>error({code:1}),0);
+                    else if(calls===1)setTimeout(()=>error({code:3}),0);
+                    else setTimeout(()=>success({coords:{latitude:35.701,longitude:51.401,accuracy:800}}),0);
+                  }});
+                },scenario);
+                const page=await context.newPage(),box=await openCheckout(page),map=box.locator('[data-ai-delivery-map]');
+                await box.locator('[data-ai-location]').click();
+                if(scenario==='denied'){
+                  await page.waitForFunction(()=>document.querySelector('[data-ai-location-status]').textContent.includes('اجازه'));
+                  assert.equal(await box.locator('[data-ai-location]').isEnabled(),true);
+                  await map.click({position:{x:85,y:105}});await until(page,'.tehran-ai-check','locationPending','1');
+                  await box.locator('[data-ai-location-confirm]').click();assert.ok(await box.getAttribute('data-delivery-lat'));
+                }else{
+                  await until(page,'[data-ai-delivery-map]','centerLat','35.7010000');
+                  const options=await page.evaluate(()=>window.syntheticGeoOptions);
+                  assert.equal(options.length,2);assert.equal(options[0].enableHighAccuracy,true);assert.equal(options[1].enableHighAccuracy,false);
+                }
+                report.push({scenario,passed:true});await context.close();
+              }
+            }finally{await browser.close();}
+            fs.writeFileSync('/tmp/delivery-map-qa.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tehran-delivery-map-qa
+          path: |
+            /tmp/delivery-map-*.png
+            /tmp/delivery-map-qa.json
+          retention-days: 3
