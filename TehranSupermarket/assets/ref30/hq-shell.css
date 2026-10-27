@@ -1,0 +1,45 @@
+/* Tehran Market HQ reference image override v31
+   Keep the reference HTML5 layout; only replace the low-resolution stretched hero. */
+.tm-ref-hero{
+  background-color:#090b0d!important;
+  background-image:
+    linear-gradient(90deg,rgba(3,5,7,.90) 0%,rgba(3,5,7,.50) 27%,rgba(3,5,7,.08) 55%,rgba(3,5,7,.34) 100%),
+    url('../../hero_ref30.php?v=20261027-hq31')!important;
+  background-repeat:no-repeat,no-repeat!important;
+  background-position:center,center!important;
+  /* Critical: the photo is not stretched wider than its native aspect ratio. */
+  background-size:100% 100%,auto 100%!important;
+  image-rendering:auto!important;
+}
+.tm-ref-hero:before{
+  background:linear-gradient(90deg,rgba(3,5,7,.78) 0%,rgba(3,5,7,.22) 36%,rgba(3,5,7,0) 64%,rgba(3,5,7,.16) 100%)!important;
+}
+
+/* The mobile reference shell previously loaded a small JPEG. Use the same HQ
+   WebP but downscale it, never upscale it. */
+.tm-ref-mobile-picture-v20{
+  background-color:#090b0d!important;
+  background-image:
+    linear-gradient(90deg,rgba(0,0,0,.74),rgba(0,0,0,.38) 36%,rgba(0,0,0,.04) 68%),
+    url('../../hero_ref30.php?v=20261027-hq31')!important;
+  background-repeat:no-repeat,no-repeat!important;
+  background-position:center,center!important;
+  background-size:100% 100%,auto 100%!important;
+  image-rendering:auto!important;
+}
+
+/* Keep raster content crisp on high-density displays by avoiding transforms
+   and blur/filter effects on the hero image container. */
+.tm-ref-hero,.tm-ref-mobile-picture-v20{
+  filter:none!important;
+  transform:none!important;
+  backdrop-filter:none!important;
+}
+
+@media (min-width:1400px){
+  .tm-ref-hero{background-size:100% 100%,auto 100%!important}
+}
+@media (max-width:800px){
+  .tm-ref-hero{background-image:none!important;background:#090b0d!important}
+  .tm-ref-mobile-picture-v20{background-size:100% 100%,auto 100%!important}
+}
