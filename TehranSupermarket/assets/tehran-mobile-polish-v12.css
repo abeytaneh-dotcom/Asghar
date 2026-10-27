@@ -1,0 +1,46 @@
+/* Tehran Market mobile storefront v12 */
+@media(max-width:800px){
+  .tmx-header{padding:7px 9px 8px!important;gap:6px!important;background:#080a0c!important}
+  .tmx-head-search{height:39px!important;border-radius:11px!important}
+  .tmx-head-search input{font-size:10px!important;padding:7px 10px!important}
+  .tmx-head-search button{width:31px!important;height:31px!important;flex-basis:31px!important}
+
+  html body .tmx-hero{height:430px!important;min-height:430px!important;padding:0!important;border-radius:0 0 22px 22px!important;display:block!important;position:relative!important;overflow:hidden!important;background:#07090b!important;isolation:isolate!important}
+  html body .tmx-hero .tmx-hero-picture-v10{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:auto!important;height:285px!important;width:100%!important;display:block!important;z-index:0!important;overflow:hidden!important;background:#07090b!important}
+  html body .tmx-hero .tmx-hero-picture-v10 img{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important;object-position:center 12%!important;display:block!important;visibility:visible!important;opacity:1!important;filter:saturate(1.05) contrast(1.04) brightness(1.16)!important}
+  html body .tmx-hero>span[aria-hidden="true"]{position:absolute!important;left:0!important;right:0!important;top:205px!important;bottom:0!important;height:auto!important;background:linear-gradient(180deg,rgba(7,9,11,0) 0%,rgba(7,9,11,.82) 27%,#07090b 52%,#07090b 100%)!important;z-index:1!important;pointer-events:none!important}
+  html body .tmx-hero:before{content:none!important}
+
+  html body .tmx-hero .tmx-hero-copy{position:absolute!important;left:14px!important;right:14px!important;bottom:14px!important;top:auto!important;width:auto!important;max-width:none!important;z-index:3!important;text-align:center!important;padding:0!important;display:block!important;visibility:visible!important;opacity:1!important}
+  html body .tmx-hero .tmx-eyebrow{display:inline-flex!important;font-size:8px!important;padding:5px 9px!important;background:rgba(12,14,17,.82)!important;border:1px solid rgba(244,201,77,.32)!important;border-radius:999px!important;margin:0 auto 7px!important;color:#f4c94d!important}
+  html body .tmx-hero h1{font-size:21px!important;line-height:1.2!important;margin:2px auto 8px!important;max-width:100%!important;width:100%!important;text-align:center!important;white-space:normal!important;overflow:visible!important;text-shadow:0 2px 10px #000!important;color:#fff!important}
+  html body .tmx-hero h1 strong{display:block!important;font-size:23px!important;line-height:1.22!important;color:#f4c94d!important;margin-top:3px!important;white-space:normal!important}
+  html body .tmx-hero p{display:none!important}
+  html body .tmx-hero-actions{display:flex!important;justify-content:center!important;align-items:center!important;gap:7px!important;flex-wrap:nowrap!important;width:100%!important;margin:0 auto!important}
+  html body .tmx-primary,html body .tmx-secondary{min-height:36px!important;padding:7px 10px!important;font-size:8.5px!important;border-radius:10px!important;white-space:nowrap!important;flex:0 1 auto!important}
+  html body .tmx-primary{background:#f1c445!important;color:#141414!important;box-shadow:0 5px 16px rgba(241,196,69,.20)!important}
+  html body .tmx-secondary{background:rgba(11,14,17,.88)!important;color:#fff!important;border:1px solid rgba(255,255,255,.16)!important}
+
+  html body .tmx-smart-row{margin:14px auto 0!important;padding:0 10px!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:7px!important;position:relative!important;z-index:20!important}
+  html body .tmx-smart-card{min-height:82px!important;padding:8px 4px!important;border-radius:14px!important;display:flex!important;flex-direction:column!important;justify-content:center!important;text-align:center!important;gap:5px!important;box-shadow:0 8px 22px rgba(0,0,0,.07)!important}
+  html body .tmx-smart-ico{width:34px!important;height:34px!important;flex-basis:34px!important;border-radius:10px!important;font-size:15px!important}
+  html body .tmx-smart-card b{font-size:8.8px!important;margin:0!important}
+  html body .tmx-smart-card small{display:none!important}
+
+  html body main{padding-top:22px!important;padding-bottom:112px!important}
+  html body .state{margin:10px 10px 12px!important;font-size:9px!important;padding:8px 10px!important;border-radius:12px!important}
+  html body #products{scroll-margin-top:95px!important}
+  html body #tmx-mobile-nav{height:60px!important;padding:5px 8px calc(5px + env(safe-area-inset-bottom))!important;box-shadow:0 -6px 18px rgba(0,0,0,.08)!important}
+  html body #tmx-mobile-nav button,html body #tmx-mobile-nav a{font-size:8.5px!important;gap:1px!important}
+  html body #tmx-mobile-nav .tmx-nav-ico{font-size:16px!important}
+  html body #tmx-mobile-nav .tmx-scan{width:50px!important;height:50px!important;transform:translateY(-7px)!important}
+  html body .sticky{bottom:64px!important;left:8px!important;right:8px!important}
+}
+@media(max-width:390px){
+  html body .tmx-hero{height:410px!important;min-height:410px!important}
+  html body .tmx-hero .tmx-hero-picture-v10{height:270px!important}
+  html body .tmx-hero>span[aria-hidden="true"]{top:195px!important}
+  html body .tmx-hero h1{font-size:19px!important}
+  html body .tmx-hero h1 strong{font-size:21px!important}
+  html body .tmx-primary,html body .tmx-secondary{font-size:8px!important;padding:7px 9px!important}
+}
