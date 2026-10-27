@@ -5,6 +5,9 @@ shop = Path('TehranSupermarket/shop.php')
 cssp = Path('TehranSupermarket/assets/tehran-final-v16.css')
 s = shop.read_text(encoding='utf-8')
 css = cssp.read_text(encoding='utf-8')
+# Inline CSS resolves URLs relative to shop.php rather than the assets directory.
+css = css.replace("url('tehran-storefront-hq-v34.webp?", "url('assets/tehran-storefront-hq-v34.webp?")
+css = css.replace('url("tehran-storefront-hq-v34.webp?', 'url("assets/tehran-storefront-hq-v34.webp?')
 
 css = css.replace("url('tehran-storefront-v3.svg?v=20261027-ref17')", "url('assets/tehran-storefront-v3.svg?v=20261027-ref18')")
 css = css.replace('url("tehran-storefront-v3.svg?v=20261027-ref17")', 'url("assets/tehran-storefront-v3.svg?v=20261027-ref18")')
