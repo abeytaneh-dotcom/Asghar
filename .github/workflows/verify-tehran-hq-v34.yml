@@ -1,0 +1,58 @@
+name: Verify Tehran HQ V34
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/verify-tehran-hq-v34.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify live HQ asset before screenshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --fail -H 'Cache-Control: no-cache' 'https://websaza.ir/tehran/assets/tehran-storefront-hq-v34.webp?v=20261027-34' -o /tmp/hq.webp
+          file /tmp/hq.webp
+          test "$(wc -c < /tmp/hq.webp)" -gt 100000
+          python3 - <<'PY'
+          import struct
+          p='/tmp/hq.webp'; b=open(p,'rb').read(40)
+          assert b[:4]==b'RIFF' and b[8:12]==b'WEBP'
+          print('HQ_WEBP_OK')
+          PY
+          curl -sS -L --fail -H 'Cache-Control: no-cache' 'https://websaza.ir/tehran/?visual=20261027-34' -o /tmp/home.html
+          grep -Fq 'tehran-storefront-hq-v34.webp' /tmp/home.html
+
+      - name: Capture real desktop and mobile rendering
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
+          "$CHROME" --headless --no-sandbox --disable-gpu --hide-scrollbars \
+            --window-size=1440,1100 --force-device-scale-factor=1 \
+            --screenshot=/tmp/tehran-desktop-hq-v34.png \
+            'https://websaza.ir/tehran/?visual=20261027-34&desktop=1'
+          "$CHROME" --headless --no-sandbox --disable-gpu --hide-scrollbars \
+            --window-size=390,844 --force-device-scale-factor=1 \
+            --user-agent='Mozilla/5.0 (Linux; Android 13; SM-A715F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Mobile Safari/537.36' \
+            --screenshot=/tmp/tehran-mobile-hq-v34.png \
+            'https://websaza.ir/tehran/?visual=20261027-34&mobile=1'
+          test -s /tmp/tehran-desktop-hq-v34.png
+          test -s /tmp/tehran-mobile-hq-v34.png
+          file /tmp/tehran-desktop-hq-v34.png /tmp/tehran-mobile-hq-v34.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tehran-hq-v34-live-screenshots
+          path: |
+            /tmp/tehran-desktop-hq-v34.png
+            /tmp/tehran-mobile-hq-v34.png
+          retention-days: 3
