@@ -1,0 +1,43 @@
+name: Verify Tehran Hero V22
+on:
+  push:
+    branches: [websaza-hosting]
+permissions:
+  contents: read
+jobs:
+  verify-hero:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify live hero JPEG endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://websaza.ir/tehran/shop.php?tm_asset=hero_v22&v=20261027-22'
+          curl -sS -L --fail --max-time 30 -D "$RUNNER_TEMP/headers.txt" "$URL" -o "$RUNNER_TEMP/hero.jpg"
+          grep -Eqi '^content-type:[[:space:]]*image/jpeg' "$RUNNER_TEMP/headers.txt"
+          test "$(wc -c < "$RUNNER_TEMP/hero.jpg")" -gt 20000
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/home/runner/work/_temp/hero.jpg')
+          b=p.read_bytes()
+          assert b[:2] == b'\xff\xd8', 'not a JPEG start marker'
+          assert b[-2:] == b'\xff\xd9', 'not a JPEG end marker'
+          print('JPEG_OK', len(b))
+          PY
+      - name: Verify homepage has no broken image hero elements
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' 'https://websaza.ir/tehran/?reference=20261027-22' -o "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm_asset=hero_v22' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-ref-mobile-copy-v22' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-ref-mobile-picture-v20' "$RUNNER_TEMP/home.html"
+          if grep -Fq '<picture class="tm-ref-mobile-picture-v20"' "$RUNNER_TEMP/home.html"; then
+            echo 'legacy picture element still present' >&2
+            exit 1
+          fi
+          if grep -Fq '<picture class="tm-ref-mobile-picture-v21"' "$RUNNER_TEMP/home.html"; then
+            echo 'legacy v21 picture element still present' >&2
+            exit 1
+          fi
+          echo 'TEHRAN_HERO_V22_LIVE_OK jpeg_endpoint=ok no_broken_img_layers=ok'
