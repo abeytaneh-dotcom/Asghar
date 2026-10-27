@@ -8,14 +8,20 @@ jobs:
   verify-hero:
     runs-on: ubuntu-latest
     steps:
+      - name: Allow deployment to finish
+        shell: bash
+        run: sleep 20
       - name: Verify live hero JPEG endpoint
         shell: bash
         run: |
           set -euo pipefail
           URL='https://websaza.ir/tehran/shop.php?tm_asset=hero_v22&v=20261027-22'
           curl -sS -L --fail --max-time 30 -D "$RUNNER_TEMP/headers.txt" "$URL" -o "$RUNNER_TEMP/hero.jpg"
+          cat "$RUNNER_TEMP/headers.txt"
+          BYTES="$(wc -c < "$RUNNER_TEMP/hero.jpg")"
+          echo "hero_bytes=$BYTES"
           grep -Eqi '^content-type:[[:space:]]*image/jpeg' "$RUNNER_TEMP/headers.txt"
-          test "$(wc -c < "$RUNNER_TEMP/hero.jpg")" -gt 20000
+          test "$BYTES" -gt 20000
           python3 - <<'PY'
           from pathlib import Path
           p=Path('/home/runner/work/_temp/hero.jpg')
