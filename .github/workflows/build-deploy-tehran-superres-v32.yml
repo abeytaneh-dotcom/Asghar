@@ -44,7 +44,11 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import base64, re, io, os
-          from PIL import Image, ImageFilter, ImageEnhance
+          from PIL import Image, ImageFilter, ImageEnhance, ImageFile
+
+          # The approved legacy storefront JPEG is truncated but browsers render it.
+          # Pillow must explicitly allow that same source so we can create a clean HQ asset.
+          ImageFile.LOAD_TRUNCATED_IMAGES = True
 
           svg=Path('TehranSupermarket/assets/tehran-storefront-v3.svg').read_text(encoding='utf-8')
           m=re.search(r'data:image/jpeg;base64,([^"\']+)',svg)
