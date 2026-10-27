@@ -65,6 +65,12 @@ jobs:
           mkdir_cp "$ROOT/tehran" storage
           mkdir_cp "$ROOT/tehran" uploads
           mkdir_cp "$ROOT/tehran/uploads" products
+          # Ensure every checked-in asset directory, including ref30 and hero parts.
+          while IFS= read -r subdir; do
+            rel="${subdir#TehranSupermarket/}"
+            [ "$rel" = "$subdir" ] && continue
+            mkdir_cp "$ROOT/tehran/$(dirname "$rel")" "$(basename "$rel")"
+          done < <(find TehranSupermarket -mindepth 1 -type d | sort)
           VERIFY="$RUNNER_TEMP/verify.json"
           curl -sS --fail-with-body -H "$AUTH" --get --data-urlencode 'dir=public_html/tehran' --data-urlencode 'show_hidden=1' \
             "${BASE}/execute/Fileman/list_files" -o "$VERIFY"
@@ -75,27 +81,25 @@ jobs:
           set -euo pipefail
           BASE="https://${CPANEL_HOST}:2083"
           AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
-          save_file(){
-            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
+          upload_file(){
+            local src="$1" dir="$2"
+            local out="$RUNNER_TEMP/upload.json"
             echo "Uploading ${src#TehranSupermarket/}"
-            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
-              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
-              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" \
+              -F "dir=$dir" -F 'overwrite=1' -F "file-1=@$src" \
+              "${BASE}/execute/Fileman/upload_files" -o "$out"
             if [ "$(jq -r '.result.status // .status // 0' "$out")" != '1' ]; then
-              cat "$out" | jq -c '{status:(.result.status // .status),errors:(.result.errors // .errors),messages:(.result.messages // .messages)}' || cat "$out"
+              jq -c '{status:(.result.status // .status),errors:(.result.errors // .errors)}' "$out"
               return 1
             fi
           }
           while IFS= read -r -d '' src; do
-            rel="${src#TehranSupermarket/}"; [ "$rel" = 'install.php' ] && continue
-            case "${rel,,}" in
-              *.png|*.jpg|*.jpeg|*.gif|*.webp|*.ico|*.zip|*.rar|*.pdf)
-                echo "Skipping binary asset in text uploader: $rel"
-                continue
-                ;;
-            esac
-            sub="$(dirname "$rel")"; file="$(basename "$rel")"; dir="$TARGET_DIR"; [ "$sub" = '.' ] || dir="$TARGET_DIR/$sub"
-            save_file "$src" "$dir" "$file"
+            rel="${src#TehranSupermarket/}"
+            [ "$rel" = 'install.php' ] && continue
+            sub="$(dirname "$rel")"
+            dir="$TARGET_DIR"
+            [ "$sub" = '.' ] || dir="$TARGET_DIR/$sub"
+            upload_file "$src" "$dir"
           done < <(find TehranSupermarket -type f -print0)
       - name: Verify production, premium shell, map and safe errors
         shell: bash
