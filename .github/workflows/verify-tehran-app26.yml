@@ -18,6 +18,8 @@ jobs:
           for attempt in $(seq 1 30); do
             if curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-app.js?v=20261028-1' -o /tmp/tm26-app.js &&
                grep -Fq 'tm26-app' /tmp/tm26-app.js &&
+               curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/ai_assistant_v2.js?cart-regression=20261028' -o /tmp/tm26-ai.js &&
+               grep -Fq "closest('.tehran-ai-product[data-pid]')" /tmp/tm26-ai.js &&
                curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-assistant.webp?v=1' -o /tmp/assistant.webp &&
                curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-storefront.webp?v=1' -o /tmp/hero.webp &&
                test "$(wc -c < /tmp/hero.webp)" -gt 200000; then
@@ -65,6 +67,30 @@ jobs:
                 await page.screenshot({path:'/tmp/tm26-storefront-'+width+'.png'});
                 await dock.click();await dialog.waitFor({state:'visible'});
                 await page.getByRole('button',{name:'بستن دستیار',exact:true}).click();
+                // A quantity card has data-pid too: its buttons must never select a product again.
+                await dock.click();await dialog.waitFor({state:'visible'});
+                await page.locator('.tehran-ai-quick button[data-q="شیر"]').click();
+                await page.locator('.tehran-ai-product').first().waitFor();
+                await page.locator('.tehran-ai-product').first().click();
+                const cards=page.locator('.tehran-ai-card[data-pid][data-qty]');
+                if(await cards.count()!==1)throw Error('Expected one quantity chooser');
+                const chooser=cards.first();
+                await chooser.locator('[data-plus]').click();
+                if(await chooser.getAttribute('data-qty')!=='2')throw Error('Plus did not update existing chooser');
+                await chooser.locator('[data-minus]').click();
+                if(await chooser.getAttribute('data-qty')!=='1')throw Error('Minus did not update existing chooser');
+                await chooser.locator('[data-plus]').click();
+                for(let attempt=0;attempt<3;attempt++){
+                  const response=page.waitForResponse(r=>r.url().includes('action=set_qty')&&r.request().method()==='POST');
+                  await chooser.locator('[data-add]').click();
+                  const result=await (await response).json();
+                  if(!result.ok||Number(result.product.qty)!==2)throw Error('Cart did not save chosen quantity');
+                  if(await cards.count()!==1)throw Error('Add created another quantity chooser');
+                  const matches=result.cart.items.filter(x=>Number(x.id)===Number(result.product.id));
+                  if(matches.length!==1||Number(matches[0].qty)!==2)throw Error('Repeated add duplicated cart item');
+                }
+                await page.screenshot({path:'/tmp/tm26-cart-fixed-'+width+'.png'});
+                await page.getByRole('button',{name:'بستن دستیار',exact:true}).click();
                 await page.locator('.tm26-search input').fill('کنجد');
                 await page.locator('.tm26-search input').press('Enter');
                 await page.waitForURL(u=>u.searchParams.get('q')==='کنجد');
@@ -72,7 +98,7 @@ jobs:
                 if(await page.locator('#barcode-sheet').isVisible())throw Error('Search unexpectedly opened scanner');
                 if(await dialog.isVisible())throw Error('Assistant reopened during product navigation');
                 if(errors.length)throw Error('Browser errors: '+JSON.stringify(errors));
-                report.push({width,welcome:true,centeredDock:true,scannerRight:true,searchLeft:true,newHero:true,searchWorks:true,errors});
+                report.push({width,welcome:true,centeredDock:true,scannerRight:true,searchLeft:true,newHero:true,searchWorks:true,repeatedAdd:true,quantityControls:true,errors});
                 await context.close();
               }
             }finally{await browser.close();}
