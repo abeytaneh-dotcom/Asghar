@@ -64,8 +64,51 @@ jobs:
           set -euo pipefail
           for q in 'شیر' 'آبمیوه'; do
             curl -sS -L --max-time 30 --get --data-urlencode 'action=search' --data-urlencode "q=$q" "${PUBLIC_URL}/ai_assistant.php" -o "$RUNNER_TEMP/$q.json"
-            echo "=== $q ==="; cat "$RUNNER_TEMP/$q.json"; echo
           done
           jq -e '.ok==true and (.items|length)>0' "$RUNNER_TEMP/شیر.json" >/dev/null
           jq -e '.ok==true and (.items|length)>0' "$RUNNER_TEMP/آبمیوه.json" >/dev/null
           if jq -r '.items[].name' "$RUNNER_TEMP/شیر.json" | grep -Eq 'ماست|کشک'; then exit 1; fi
+
+      - name: Build inline Tehran reference storefront v18
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/inline_tehran_v18.py
+          php -l TehranSupermarket/shop.php
+          grep -Fq 'tm-ref-inline-v18' TehranSupermarket/shop.php
+          grep -Fq 'assets/tehran-storefront-v3.svg?v=20261027-ref18' TehranSupermarket/shop.php
+
+      - name: Persist inline Tehran storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TehranSupermarket/shop.php
+          if ! git diff --cached --quiet; then
+            git commit -m 'Generate inline Tehran storefront v18'
+            git push origin HEAD:websaza-hosting
+          fi
+
+      - name: Deploy inline Tehran storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"; AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){ local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/$3.json"; curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" "${BASE}/execute/Fileman/save_file_content" -o "$out"; test "$(jq -r '.result.status // .status // 0' "$out")" = '1'; }
+          upload TehranSupermarket/shop.php "$TARGET_DIR" shop.php
+          upload TehranSupermarket/assets/tehran-storefront-v3.svg "$TARGET_DIR/assets" tehran-storefront-v3.svg
+
+      - name: Verify live inline Tehran storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-18" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-v3.svg?v=20261027-ref18" -o "$RUNNER_TEMP/hero.svg"
+          grep -Fq 'tm-ref-inline-v18' "$RUNNER_TEMP/home.html"
+          grep -Fq '.tm-ref-header{background:#080a0d' "$RUNNER_TEMP/home.html"
+          grep -Fq '.tm-ref-hero{' "$RUNNER_TEMP/home.html"
+          grep -Fq 'assets/tehran-storefront-v3.svg?v=20261027-ref18' "$RUNNER_TEMP/home.html"
+          grep -Fq '#barcode-scan-fab,#tehran-ai-fab-v2' "$RUNNER_TEMP/home.html"
+          test -s "$RUNNER_TEMP/hero.svg"
+          echo 'TEHRAN_REFERENCE_V18_LIVE_OK inline_css=ok hero=ok legacy_fabs_hidden=ok'
