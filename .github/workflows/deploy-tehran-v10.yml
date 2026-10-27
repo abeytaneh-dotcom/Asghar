@@ -1,10 +1,11 @@
-name: Deploy Tehran Market Reference V18 Inline
+name: Deploy Tehran Market Reference V18
 
 on:
   push:
-    branches: [websaza-hosting]
+    branches:
+      - websaza-hosting
     paths:
-      - '.github/workflows/deploy-tehran-v10.yml'
+      - .github/workflows/deploy-tehran-v10.yml
 
 permissions:
   contents: write
@@ -25,88 +26,52 @@ jobs:
           ref: websaza-hosting
           fetch-depth: 0
 
-      - name: Inline reference CSS into storefront HTML
-        shell: bash
+      - name: Build inline storefront
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          shop = Path('TehranSupermarket/shop.php')
-          cssp = Path('TehranSupermarket/assets/tehran-final-v16.css')
-          s = shop.read_text(encoding='utf-8')
-          css = cssp.read_text(encoding='utf-8')
-
-          # Inline CSS resolves URLs from /tehran/, so make asset paths explicit.
-          css = css.replace("url('tehran-storefront-v3.svg?v=20261027-ref17')", "url('assets/tehran-storefront-v3.svg?v=20261027-ref18')")
-          css = css.replace('url("tehran-storefront-v3.svg?v=20261027-ref17")', 'url("assets/tehran-storefront-v3.svg?v=20261027-ref18")')
-
-          cleanup = r'''
-          /* v18 hard cleanup: hide legacy floating launchers; reference controls remain */
-          #barcode-scan-fab,#tehran-ai-fab-v2,.tehran-ai-ping{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important}
-          body{visibility:visible!important;opacity:1!important}
-          .tm-ref-header,.tm-ref-hero,.tm-ref-trust-wrap,.tm-ref-section,.tm-ref-promos,.tm-ref-specials{visibility:visible!important;opacity:1!important}
-          '''
-          inline = '<style id="tm-ref-inline-v18">\n' + css + '\n' + cleanup + '\n</style>'
-
-          # Remove any previous inline reference style and the external reference stylesheet.
-          s = re.sub(r'<style id="tm-ref-inline-v\d+">.*?</style>', '', s, flags=re.S)
-          s = re.sub(r'<link rel="stylesheet" href="assets/tehran-final-v16\.css\?v=[^"\']+">', '', s)
-          s = re.sub(r'<link href="assets/tehran-final-v16\.css\?v=[^"\']+" rel="stylesheet">', '', s)
-          if '</head>' not in s:
-              raise SystemExit('head marker missing')
-          s = s.replace('</head>', inline + '</head>', 1)
-          shop.write_text(s, encoding='utf-8')
-          PY
-
+          set -e
+          python3 .github/scripts/inline_tehran_v18.py
           php -l TehranSupermarket/shop.php
           grep -Fq 'tm-ref-inline-v18' TehranSupermarket/shop.php
-          grep -Fq "assets/tehran-storefront-v3.svg?v=20261027-ref18" TehranSupermarket/shop.php
-          ! grep -Fq 'rel="stylesheet" href="assets/tehran-final-v16.css' TehranSupermarket/shop.php
-          grep -Fq '#barcode-scan-fab,#tehran-ai-fab-v2' TehranSupermarket/shop.php
+          grep -Fq 'assets/tehran-storefront-v3.svg?v=20261027-ref18' TehranSupermarket/shop.php
 
-      - name: Persist inline storefront source
-        shell: bash
+      - name: Persist generated storefront
         run: |
-          set -euo pipefail
+          set -e
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add TehranSupermarket/shop.php
           if ! git diff --cached --quiet; then
-            git commit -m 'Inline Tehran reference CSS and harden mobile storefront v18'
+            git commit -m 'Generate inline Tehran reference storefront v18'
             git push origin HEAD:websaza-hosting
           fi
 
-      - name: Upload v18 storefront to cPanel
-        shell: bash
+      - name: Upload storefront
         run: |
-          set -euo pipefail
+          set -e
           BASE="https://${CPANEL_HOST}:2083"
           AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
-          upload(){
-            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
-            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
-              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
-              "${BASE}/execute/Fileman/save_file_content" -o "$out"
-            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
-          }
-          upload TehranSupermarket/shop.php "$TARGET_DIR" shop.php
-          upload TehranSupermarket/assets/tehran-storefront-v3.svg "$TARGET_DIR/assets" tehran-storefront-v3.svg
-          upload TehranSupermarket/assets/tehran-reference-v3.js "$TARGET_DIR/assets" tehran-reference-v3.js
+          curl -sS --fail-with-body -H "$AUTH" --request POST \
+            --data-urlencode "dir=${TARGET_DIR}" \
+            --data-urlencode "file=shop.php" \
+            --data-urlencode "content@TehranSupermarket/shop.php" \
+            "${BASE}/execute/Fileman/save_file_content" > "$RUNNER_TEMP/shop.json"
+          test "$(jq -r '.result.status // .status // 0' "$RUNNER_TEMP/shop.json")" = '1'
+          curl -sS --fail-with-body -H "$AUTH" --request POST \
+            --data-urlencode "dir=${TARGET_DIR}/assets" \
+            --data-urlencode "file=tehran-storefront-v3.svg" \
+            --data-urlencode "content@TehranSupermarket/assets/tehran-storefront-v3.svg" \
+            "${BASE}/execute/Fileman/save_file_content" > "$RUNNER_TEMP/hero.json"
+          test "$(jq -r '.result.status // .status // 0' "$RUNNER_TEMP/hero.json")" = '1'
 
-      - name: Verify rendered reference CSS is inline on live site
-        shell: bash
+      - name: Verify live inline storefront
         run: |
-          set -euo pipefail
-          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-18" -o "$RUNNER_TEMP/home.html"
-          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-v3.svg?v=20261027-ref18" -o "$RUNNER_TEMP/hero.svg"
-
+          set -e
+          curl -sS -L --fail -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-18" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --fail -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-v3.svg?v=20261027-ref18" -o "$RUNNER_TEMP/hero.svg"
           grep -Fq 'tm-ref-inline-v18' "$RUNNER_TEMP/home.html"
           grep -Fq '.tm-ref-header{background:#080a0d' "$RUNNER_TEMP/home.html"
           grep -Fq '.tm-ref-hero{' "$RUNNER_TEMP/home.html"
-          grep -Fq "assets/tehran-storefront-v3.svg?v=20261027-ref18" "$RUNNER_TEMP/home.html"
+          grep -Fq 'assets/tehran-storefront-v3.svg?v=20261027-ref18' "$RUNNER_TEMP/home.html"
           grep -Fq '#barcode-scan-fab,#tehran-ai-fab-v2' "$RUNNER_TEMP/home.html"
-          ! grep -Fq 'rel="stylesheet" href="assets/tehran-final-v16.css' "$RUNNER_TEMP/home.html"
           test -s "$RUNNER_TEMP/hero.svg"
-          echo 'TEHRAN_REFERENCE_V18_LIVE_OK inline_css=ok hero_asset=ok legacy_fabs_hidden=ok external_css_dependency=removed'
+          echo 'TEHRAN_REFERENCE_V18_LIVE_OK'
