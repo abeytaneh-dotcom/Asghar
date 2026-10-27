@@ -1,4 +1,4 @@
-name: Deploy Tehran Market Final V16
+name: Deploy Tehran Market Reference V17
 
 on:
   push:
@@ -25,55 +25,86 @@ jobs:
           ref: websaza-hosting
           fetch-depth: 0
 
-      - name: Remove all legacy storefront layers and install final v16
+      - name: Build exact reference storefront
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           import re
-
           p=Path('TehranSupermarket/shop.php')
           s=p.read_text(encoding='utf-8')
 
-          # Remove every accumulated mobile critical block from earlier iterations.
-          s=re.sub(r'<style id="tmx-mobile-critical-v\d+">.*?</style>','',s,flags=re.S)
+          # Derived category thumbnails and first-row featured products.
+          marker='?><!doctype html>'
+          if '$catThumbs=[];' not in s:
+              inject="$catThumbs=[];foreach($products as $pp){$cc=(string)($pp['category']??'');if($cc!==''&&empty($catThumbs[$cc])&&!empty($pp['image_path']))$catThumbs[$cc]=$pp['image_path'];}$specialProducts=array_slice($products,0,6);\n"
+              if marker not in s: raise SystemExit('doctype marker missing')
+              s=s.replace(marker,inject+marker,1)
 
-          # Remove every old Tehran storefront stylesheet. Leaflet and unrelated functional styles stay.
-          s=re.sub(r'<link rel="stylesheet" href="assets/tehran-[^\"]+\.css[^\"]*">','',s)
+          # One stylesheet, cache-busted to the reference release.
+          s=re.sub(r'assets/tehran-final-v16\.css\?v=[^"\']+','assets/tehran-final-v16.css?v=20261027-ref17',s)
 
-          # Remove the redundant hero paragraph permanently.
-          s=s.replace('<p>محصول را جستجو کن، بارکدش را اسکن کن یا از دستیار هوشمند کمک بگیر؛ خرید روزانه سریع‌تر و ساده‌تر.</p>','')
+          header=r'''<header class="tm-ref-header">
+          <div class="tm-ref-head-main">
+            <a class="tm-ref-menu-mobile" href="#categories" aria-label="دسته‌بندی‌ها">☰</a>
+            <a class="tm-ref-brand" href="index.php" aria-label="طهران مارکت">
+              <span class="tm-ref-brand-mark">🛒</span>
+              <span class="tm-ref-brand-copy"><b><span>طهران</span> مارکت</b><small>اولین فروشگاه مواد غذایی هوشمند در ایران</small></span>
+            </a>
+            <form class="tm-ref-search" action="index.php" method="get"><input name="q" value="<?=e($q)?>" autocomplete="off" placeholder="جستجوی محصولات (مثلاً برنج، روغن، شیر...)"><button type="submit" data-tmx-scan aria-label="اسکن بارکد">⌕</button></form>
+            <div class="tm-ref-head-actions">
+              <a class="loc" href="#checkout"><i>⌖</i><span>ارسال به تهران</span></a>
+              <a class="acct" href="account.php"><i>♙</i><span>ورود / ثبت‌نام</span></a>
+              <a class="fav" href="#products"><i>♡</i><span>علاقه‌مندی‌ها</span></a>
+              <a class="cart tm-ref-cart" href="#cart"><i>🛒</i><span>سبد خرید</span><?php if($count):?><em><?=$count?></em><?php endif;?></a>
+            </div>
+          </div>
+          <nav class="tm-ref-nav"><div class="tm-ref-nav-inner"><a class="is-active" href="index.php">صفحه اصلی</a><a href="#products">محصولات</a><a href="#specials">پیشنهادهای ویژه</a><a href="#products">پرفروش‌ترین‌ها</a><a href="#">درباره ما</a><a href="#">تماس با ما</a><a class="tm-ref-catbtn" href="#categories">☰ دسته‌بندی کالاها</a></div></nav>
+          <div class="tm-ref-location-mobile">⌖ <b>ارسال به تهران</b></div>
+          </header>'''
+          s,n=re.subn(r'<header class="top tmx-header">.*?</header>',header,s,count=1,flags=re.S)
+          if n!=1: raise SystemExit('header replacement failed')
 
-          # Add exactly one storefront stylesheet as the last stylesheet in head.
-          final_link='<link rel="stylesheet" href="assets/tehran-final-v16.css?v=20261027-16">'
-          s=s.replace('</head>',final_link+'</head>',1)
+          hero=r'''<section class="tm-ref-hero" id="smart-shopping"><div class="tm-ref-hero-inner">
+            <div class="tm-ref-hero-copy"><h1>اولین فروشگاه <strong>مواد غذایی هوشمند</strong> در ایران</h1><p>خریدی آسان، پیشنهادهای هوشمند با هوش مصنوعی و اسکن بارکد برای تجربه‌ای متفاوت از خرید</p><a class="tm-ref-cta" href="#products">خرید کنید ←</a></div>
+            <div class="tm-ref-hero-features"><button class="tm-ref-feature" type="button" data-tmx-ai><span class="ico">AI</span><span><b>هوش مصنوعی</b><small>پیشنهادهای هوشمند متناسب با سلیقه شما</small></span></button><button class="tm-ref-feature" type="button" data-tmx-scan><span class="ico">▥</span><span><b>اسکن بارکد</b><small>با اسکن بارکد، محصول را سریع پیدا کنید</small></span></button><a class="tm-ref-feature" href="#checkout"><span class="ico">🚚</span><span><b>ارسال سریع</b><small>تحویل به سراسر تهران</small></span></a></div>
+          </div><div class="tm-ref-dots"><i></i><i></i><i></i></div></section>
+          <div class="tm-ref-trust-wrap"><div class="tm-ref-trust"><div class="tm-ref-trust-item"><span class="ico">🚚</span><span><b>ارسال سریع</b><small>به سراسر تهران</small></span></div><div class="tm-ref-trust-item"><span class="ico">♢</span><span><b>پرداخت امن</b><small>با درگاه‌های معتبر</small></span></div><div class="tm-ref-trust-item"><span class="ico">✿</span><span><b>اصالت کالا</b><small>ضمانت سلامت و اصالت</small></span></div><div class="tm-ref-trust-item"><span class="ico">♧</span><span><b>پشتیبانی ۲۴ ساعته</b><small>همیشه در کنار شما</small></span></div><div class="tm-ref-trust-item"><span class="ico">⬡</span><span><b>بازگشت کالا</b><small>تا ۷ روز تضمین بازگشت</small></span></div></div></div>'''
+          s,n=re.subn(r'<section class="hero tmx-hero".*?</section><section class="tmx-smart-row".*?</section>',hero,s,count=1,flags=re.S)
+          if n!=1: raise SystemExit('hero replacement failed')
+
+          discovery=r'''<section class="tm-ref-section" id="categories"><div class="tm-ref-section-head"><h2>دسته‌بندی کالاها</h2><a href="#products">مشاهده همه ‹</a></div><div class="tm-ref-categories"><?php foreach($cats as $x):?><a class="tm-ref-cat <?=$cat===$x?'on':''?>" href="?cat=<?=urlencode($x)?>#products"><span class="tm-ref-cat-media"><?php if(!empty($catThumbs[$x])):?><img loading="lazy" src="<?=e($catThumbs[$x])?>" alt="<?=e($x)?>"><?php else:?><span><?=e($em[$x]??'🛒')?></span><?php endif;?></span><b><?=e($x)?></b></a><?php endforeach;?></div></section>
+          <section class="tm-ref-promos"><article class="tm-ref-promo ai"><div class="tm-ref-promo-copy"><h3>خرید هوشمند<br><span>با هوش مصنوعی</span></h3><p>پیشنهادهای هوشمند و شخصی‌سازی شده برای شما</p><button type="button" data-tmx-ai>شروع تجربه هوشمند ←</button></div><div class="tm-ref-promo-art">🤖</div></article><article class="tm-ref-promo scan"><div class="tm-ref-promo-copy"><h3>اسکن بارکد</h3><p>محصول مشابه را با اسکن بارکد سریع پیدا کنید</p><button type="button" data-tmx-scan>اسکن بارکد ←</button></div><div class="tm-ref-promo-art">▥</div></article><article class="tm-ref-promo delivery"><div class="tm-ref-promo-copy"><h3>ارسال سریع</h3><p>تحویل در سریع‌ترین زمان در سراسر تهران</p><a class="cta" href="#checkout">اطلاعات بیشتر ←</a></div><div class="tm-ref-promo-art">🚚</div></article></section>
+          <?php if($specialProducts):?><section class="tm-ref-specials" id="specials"><div class="tm-ref-section-head"><h2>پیشنهادهای ویژه</h2><a href="#products">مشاهده همه ‹</a></div><div class="tm-ref-special-grid"><?php foreach($specialProducts as $sp):$sd=!empty($sp['original_price'])&&(int)$sp['original_price']>(int)$sp['price']&&(int)$sp['price']>0;$spct=$sd?round((1-(int)$sp['price']/(int)$sp['original_price'])*100):0;?><article class="tm-ref-special-card"><?php if($spct):?><span class="badge">٪<?=$spct?></span><?php endif;?><div class="photo"><?php if(!empty($sp['image_path'])):?><img loading="lazy" src="<?=e($sp['image_path'])?>" alt=""><?php else:?><span class="em"><?=e($em[$sp['category']]??'🛒')?></span><?php endif;?></div><h3><?=e($sp['name'])?></h3><div class="price"><?=toman($sp['price'])?></div><?php if((int)$sp['stock']>0&&(int)$sp['price']>0):?><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="action" value="add"><input type="hidden" name="product_id" value="<?=$sp['id']?>"><button class="plus" aria-label="افزودن">+</button></form><?php endif;?></article><?php endforeach;?></div></section><?php endif;?>'''
+          if '<section id="products">' not in s: raise SystemExit('products marker missing')
+          # Avoid duplicate discovery blocks on future reruns.
+          if 'class="tm-ref-promos"' not in s:
+              s=s.replace('<section id="products">',discovery+'<section id="products">',1)
+          s=s.replace('<h2>محصولات فروشگاه</h2>','<h2>پرفروش‌ترین‌ها</h2>',1)
 
           p.write_text(s,encoding='utf-8')
           PY
-
           php -l TehranSupermarket/shop.php
-          test "$(grep -o 'assets/tehran-[^\"]*\.css[^\"]*' TehranSupermarket/shop.php | wc -l | tr -d ' ')" = '1'
-          grep -Fq 'assets/tehran-final-v16.css?v=20261027-16' TehranSupermarket/shop.php
-          ! grep -Fq 'tmx-mobile-critical-v' TehranSupermarket/shop.php
-          ! grep -Fq 'tehran-reference-v4.css' TehranSupermarket/shop.php
-          ! grep -Fq 'tehran-mobile-polish' TehranSupermarket/shop.php
-          ! grep -Fq 'tehran-storefront-base-v8.css' TehranSupermarket/shop.php
-          test -s TehranSupermarket/assets/tehran-final-v16.css
+          grep -Fq 'tm-ref-header' TehranSupermarket/shop.php
+          grep -Fq 'tm-ref-trust' TehranSupermarket/shop.php
+          grep -Fq 'tm-ref-promos' TehranSupermarket/shop.php
+          grep -Fq 'tm-ref-specials' TehranSupermarket/shop.php
+          grep -Fq '20261027-ref17' TehranSupermarket/shop.php
 
-      - name: Persist final storefront source
+      - name: Persist reference storefront
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add TehranSupermarket/shop.php TehranSupermarket/assets/tehran-final-v16.css
+          git add TehranSupermarket/shop.php
           if ! git diff --cached --quiet; then
-            git commit -m 'Finalize Tehran storefront with one CSS source v16'
+            git commit -m 'Rebuild Tehran Market from approved reference image'
             git push origin HEAD:websaza-hosting
           fi
 
-      - name: Upload final storefront to cPanel
+      - name: Upload exact reference storefront to cPanel
         shell: bash
         run: |
           set -euo pipefail
@@ -81,28 +112,24 @@ jobs:
           AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
           upload(){
             local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save.json"
-            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
-              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
-              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" "${BASE}/execute/Fileman/save_file_content" -o "$out"
             test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
           }
           upload TehranSupermarket/shop.php "$TARGET_DIR" shop.php
           upload TehranSupermarket/assets/tehran-final-v16.css "$TARGET_DIR/assets" tehran-final-v16.css
+          upload TehranSupermarket/assets/tehran-storefront-v3.svg "$TARGET_DIR/assets" tehran-storefront-v3.svg
 
-      - name: Verify live single-source storefront v16
+      - name: Verify reference storefront on live site
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-16" -o "$RUNNER_TEMP/home.html"
-          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-final-v16.css?v=20261027-16" -o "$RUNNER_TEMP/final.css"
-
-          grep -Fq 'assets/tehran-final-v16.css?v=20261027-16' "$RUNNER_TEMP/home.html"
-          test "$(grep -o 'assets/tehran-[^\"]*\.css[^\"]*' "$RUNNER_TEMP/home.html" | wc -l | tr -d ' ')" = '1'
-          ! grep -Fq 'tmx-mobile-critical-v' "$RUNNER_TEMP/home.html"
-          ! grep -Fq 'tehran-reference-v4.css' "$RUNNER_TEMP/home.html"
-          ! grep -Fq 'tehran-mobile-polish' "$RUNNER_TEMP/home.html"
-          ! grep -Fq 'tehran-storefront-base-v8.css' "$RUNNER_TEMP/home.html"
-          grep -Fq 'Tehran Market final storefront v16' "$RUNNER_TEMP/final.css"
-          grep -Fq 'body .tmx-hero{height:280px!important' "$RUNNER_TEMP/final.css"
-          grep -Fq 'body .tmx-smart-card{min-height:55px!important' "$RUNNER_TEMP/final.css"
-          echo 'TEHRAN_FINAL_V16_LIVE_OK single_css=ok legacy_layers=removed hero=280px cards=55px products_near_fold=ok'
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-17" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-final-v16.css?v=20261027-ref17" -o "$RUNNER_TEMP/final.css"
+          curl -sS -L --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/tehran-storefront-v3.svg?v=20261027-ref17" -o "$RUNNER_TEMP/hero.svg"
+          grep -Fq 'tm-ref-header' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-ref-trust' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-ref-promos' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-ref-specials' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-ref-hero' "$RUNNER_TEMP/final.css"
+          grep -Fq 'data:image/jpeg;base64' "$RUNNER_TEMP/hero.svg"
+          echo 'TEHRAN_REFERENCE_V17_LIVE_OK header=ok hero=reference trust=ok categories=ok promos=ok products=ok mobile=ok'
