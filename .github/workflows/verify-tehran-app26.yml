@@ -1,0 +1,89 @@
+name: Verify Tehran App 2026
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/verify-tehran-app26.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  app-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wait for the versioned app assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-app.js?v=20261028-1' | grep -Fq 'tm26-app'; then
+              curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-assistant.webp?v=1' -o /tmp/assistant.webp
+              curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-storefront.webp?v=1' -o /tmp/hero.webp
+              test "$(wc -c < /tmp/hero.webp)" -gt 200000
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+      - name: Install browser driver
+        run: npm install --prefix "$RUNNER_TEMP/browser-qa" --no-audit --no-fund playwright-core@1.56.0
+      - name: Verify welcome, dock, search layout and both viewports
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
+          node <<'JS'
+          const {chromium}=require(process.env.RUNNER_TEMP+'/browser-qa/node_modules/playwright-core');
+          const fs=require('fs');
+          (async()=>{
+            const browser=await chromium.launch({executablePath:process.env.CHROME,headless:true,args:['--no-sandbox']});
+            const report=[];
+            try{
+              for(const width of [390,1440]){
+                const context=await browser.newContext({viewport:{width,height:width<800?844:1100},deviceScaleFactor:1,isMobile:width<800,hasTouch:width<800});
+                const page=await context.newPage();const errors=[];
+                page.on('pageerror',e=>errors.push(e.message));
+                await page.goto('https://websaza.ir/tehran/',{waitUntil:'networkidle',timeout:60000});
+                const dialog=page.locator('.tehran-ai-sheet');
+                await dialog.waitFor({state:'visible',timeout:10000});
+                if(!(await page.locator('.tm26-welcome').innerText()).includes('امروز چی لازم داری'))throw Error('Missing automatic welcome');
+                await page.screenshot({path:'/tmp/tm26-welcome-'+width+'.png'});
+                await page.getByRole('button',{name:'بستن دستیار',exact:true}).click();
+                await dialog.waitFor({state:'hidden'});
+                const dock=page.locator('#tehran-ai-fab-v2');
+                const box=await dock.boundingBox();
+                if(!box||Math.abs(box.x+box.width/2-width/2)>3)throw Error('Assistant is not centered');
+                const scan=await page.locator('.tm26-scan').boundingBox();
+                const search=await page.locator('.tm26-search-submit').boundingBox();
+                const input=await page.locator('.tm26-search input').boundingBox();
+                if(!(scan.x>input.x&&search.x<input.x))throw Error('Search controls are reversed');
+                const background=await page.locator('.tm-ref-hero').evaluate(el=>getComputedStyle(el).backgroundImage);
+                if(!background.includes('tm26-storefront'))throw Error('Old hero remains active');
+                const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
+                if(overflow)throw Error('Horizontal overflow at '+width);
+                await page.screenshot({path:'/tmp/tm26-storefront-'+width+'.png'});
+                await dock.click();await dialog.waitFor({state:'visible'});
+                await page.getByRole('button',{name:'بستن دستیار',exact:true}).click();
+                await page.locator('.tm26-search input').fill('کنجد');
+                await page.locator('.tm26-search input').press('Enter');
+                await page.waitForURL(u=>u.searchParams.get('q')==='کنجد');
+                await page.locator('#products').getByRole('heading',{name:'محصولات فروشگاه',exact:true}).waitFor();
+                if(await page.locator('#barcode-sheet').isVisible())throw Error('Search unexpectedly opened scanner');
+                if(await dialog.isVisible())throw Error('Assistant reopened during product navigation');
+                if(errors.length)throw Error('Browser errors: '+JSON.stringify(errors));
+                report.push({width,welcome:true,centeredDock:true,scannerRight:true,searchLeft:true,newHero:true,searchWorks:true,errors});
+                await context.close();
+              }
+            }finally{await browser.close();}
+            fs.writeFileSync('/tmp/tm26-qa.json',JSON.stringify(report,null,2));
+            console.log(JSON.stringify(report));
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tehran-app26-browser-qa
+          path: |
+            /tmp/tm26-*.png
+            /tmp/tm26-qa.json
+          retention-days: 3
