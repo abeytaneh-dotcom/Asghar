@@ -1,19 +1,25 @@
 from pathlib import Path
 import re
 
-# deploy trigger: v20 reliable mobile hero
+# deploy trigger: v20 reliable mobile hero from current HTML
 shop_path = Path('TehranSupermarket/shop.php')
 source_path = Path('.github/scripts/inline_tehran_v18.py')
 
 shop = shop_path.read_text(encoding='utf-8')
 source = source_path.read_text(encoding='utf-8')
 
-m = re.search(r"mobile_b64\s*=\s*'''(.*?)'''", source, flags=re.S)
-if not m:
-    raise SystemExit('mobile_b64 not found in inline source')
-mobile_b64 = m.group(1).strip()
+# Prefer the image already embedded in the current storefront; it is the exact approved mobile crop.
+found = re.findall(r'data:image/jpeg;base64,([A-Za-z0-9+/=]+)', shop)
+mobile_b64 = max(found, key=len) if found else ''
+
+# Fallback to the build source only if the current HTML has no embedded image.
 if len(mobile_b64) < 10000:
-    raise SystemExit('mobile_b64 unexpectedly short')
+    m = re.search(r"mobile_b64\s*=\s*'''(.*?)'''", source, flags=re.S)
+    if m:
+        mobile_b64 = re.sub(r'\s+', '', m.group(1))
+
+if len(mobile_b64) < 10000:
+    raise SystemExit('approved mobile hero image not found')
 
 shop = re.sub(r'<picture class="tm-ref-mobile-picture-v20">.*?</picture>', '', shop, flags=re.S)
 shop = re.sub(r'<a class="tm-ref-mobile-hero-click-v20".*?</a>', '', shop, flags=re.S)
