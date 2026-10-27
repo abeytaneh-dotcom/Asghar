@@ -1,0 +1,60 @@
+name: Deploy Tehran Visual V28
+on:
+  push:
+    branches: [websaza-hosting]
+permissions:
+  contents: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Build visual layer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/apply_tehran_visuals_v28.py
+          php -l TehranSupermarket/shop.php
+          php -l TehranSupermarket/tehran_visual_asset.php
+          grep -Fq 'tm-visual-v28' TehranSupermarket/shop.php
+          grep -Fq 'tm-ai-float-v28' TehranSupermarket/shop.php
+          test -f TehranSupermarket/assets/hero_s28_01.b64
+          test -f TehranSupermarket/assets/hero_s28_02.b64
+          test -f TehranSupermarket/assets/hero_s28_03.b64
+          test -f TehranSupermarket/assets/ai_s28_01.b64
+          test -f TehranSupermarket/assets/ai_s28_02.b64
+          test -f TehranSupermarket/assets/ai_s28_03.b64
+      - name: Deploy visual layer
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){ local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/${file}.json"; curl -sS --fail-with-body --connect-timeout 15 --max-time 90 -H "$AUTH" --request POST --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" "${BASE}/execute/Fileman/save_file_content" -o "$out"; test "$(jq -r '.result.status // .status // 0' "$out")" = '1'; }
+          upload TehranSupermarket/shop.php "$TARGET_DIR" shop.php
+          upload TehranSupermarket/tehran_visual_asset.php "$TARGET_DIR" tehran_visual_asset.php
+          for f in hero_s28_01.b64 hero_s28_02.b64 hero_s28_03.b64 ai_s28_01.b64 ai_s28_02.b64 ai_s28_03.b64; do upload "TehranSupermarket/assets/$f" "$TARGET_DIR/assets" "$f"; done
+      - name: Verify live visuals and AI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-28" -o "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-visual-v28' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-ai-float-v28' "$RUNNER_TEMP/home.html"
+          curl -sS -L --fail --max-time 30 "${PUBLIC_URL}/tehran_visual_asset.php?asset=hero&v=28" -o "$RUNNER_TEMP/hero.bin"
+          curl -sS -L --fail --max-time 30 "${PUBLIC_URL}/tehran_visual_asset.php?asset=ai&v=28" -o "$RUNNER_TEMP/ai.bin"
+          test "$(stat -c%s "$RUNNER_TEMP/hero.bin")" -gt 20000
+          test "$(stat -c%s "$RUNNER_TEMP/ai.bin")" -gt 10000
+          file "$RUNNER_TEMP/hero.bin" | grep -qi 'JPEG'
+          file "$RUNNER_TEMP/ai.bin" | grep -Eqi 'Web/P|WebP'
+          curl -sS -L --fail --max-time 30 --get --data-urlencode 'action=search' --data-urlencode 'q=شیر' "${PUBLIC_URL}/ai_assistant.php" -o "$RUNNER_TEMP/ai.json"
+          jq -e '.ok==true and (.items|length)>0' "$RUNNER_TEMP/ai.json" >/dev/null
+          echo "TEHRAN_VISUAL_V28_LIVE_OK hero_bytes=$(stat -c%s "$RUNNER_TEMP/hero.bin") ai_bytes=$(stat -c%s "$RUNNER_TEMP/ai.bin")"
