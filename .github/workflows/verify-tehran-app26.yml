@@ -18,6 +18,13 @@ jobs:
           for attempt in $(seq 1 30); do
             if curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-app.js?v=20261028-1' -o /tmp/tm26-app.js &&
                grep -Fq 'tm26-app' /tmp/tm26-app.js &&
+               curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm27-showcase.css?v=20261028-1' -o /tmp/tm27.css &&
+               grep -Fq 'Approved light grocery mockup' /tmp/tm27.css &&
+               curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-storefront-daylight.webp?v=1' -o /tmp/tm27-hero.webp &&
+               curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm27-cat-pantry.webp?v=1' -o /tmp/tm27-pantry.webp &&
+               curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm27-cat-snacks.webp?v=1' -o /tmp/tm27-snacks.webp &&
+               curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm27-cat-drinks.webp?v=1' -o /tmp/tm27-drinks.webp &&
+               curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm27-cat-dairy.webp?v=1' -o /tmp/tm27-dairy.webp &&
                curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/ai_assistant_v2.js?cart-regression=20261028' -o /tmp/tm26-ai.js &&
                grep -Fq "closest('.tehran-ai-product[data-pid]')" /tmp/tm26-ai.js &&
                curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-assistant.webp?v=1' -o /tmp/assistant.webp &&
@@ -42,7 +49,7 @@ jobs:
             const browser=await chromium.launch({executablePath:process.env.CHROME,headless:true,args:['--no-sandbox']});
             const report=[];
             try{
-              for(const width of [390,1440]){
+              for(const width of [360,390,1440]){
                 const context=await browser.newContext({viewport:{width,height:width<800?844:1100},deviceScaleFactor:1,isMobile:width<800,hasTouch:width<800});
                 const page=await context.newPage();const errors=[];
                 page.on('pageerror',e=>errors.push(e.message));
@@ -60,11 +67,39 @@ jobs:
                 const search=await page.locator('.tm26-search-submit').boundingBox();
                 const input=await page.locator('.tm26-search input').boundingBox();
                 if(!(scan.x>input.x&&search.x<input.x))throw Error('Search controls are reversed');
-                const background=await page.locator('.tm-ref-hero').evaluate(el=>getComputedStyle(el).backgroundImage);
+                const background=await page.locator('.tm-ref-hero').evaluate(el=>getComputedStyle(el).backgroundImage+' '+getComputedStyle(el,'::after').backgroundImage);
                 if(!background.includes('tm26-storefront'))throw Error('Old hero remains active');
                 const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
                 if(overflow)throw Error('Horizontal overflow at '+width);
+                const headline=await page.locator('.tm-ref-hero-copy h1').textContent();
+                if(headline.trim()!=='اولین فروشگاه موادغذایی آنلاین هوشمند در ایران')throw Error('Requested banner headline differs');
+                const catNames=await page.locator('.tm-ref-cat b').allTextContents();
+                if(JSON.stringify(catNames.slice(0,4))!==JSON.stringify(['مواد غذایی','تنقلات و شیرینی','نوشیدنی','لبنیات و صبحانه']))throw Error('Showcase category order differs');
+                const categoryPhotos=await page.locator('.tm-ref-cat-media img[src*="tm27-cat-"]').evaluateAll(es=>es.every(e=>e.complete&&e.naturalWidth>0)&&es.length===4);
+                if(!categoryPhotos)throw Error('Category artwork missing');
+                if(await page.locator('.tm-ref-promo.ai').isVisible()||await page.locator('.tm-ref-promo.scan').isVisible())throw Error('Duplicate feature promos returned');
+                if(await page.locator('.tm-ref-special-card:visible').count()!==4)throw Error('Expected four real grocery offers');
+                const heroBox=await page.locator('.tm-ref-hero').boundingBox(),headBox=await page.locator('.tm-ref-hero-copy h1').boundingBox(),ctaBox=await page.locator('.tm-ref-cta').boundingBox();
+                if(headBox.y+headBox.height>ctaBox.y+2||ctaBox.y+ctaBox.height>heroBox.y+heroBox.height+2)throw Error('Banner text or CTA is clipped');
+                await page.locator('.tm27-address').click();
+                await page.locator('.tehran-ai-check [data-ai-delivery-map].leaflet-container').last().waitFor();
+                await page.getByRole('button',{name:'بستن دستیار',exact:true}).click();
+                await page.locator('#categories .tm-ref-section-head a').click();
+                if(!(await page.locator('body').getAttribute('class')).includes('tm27-categories-expanded'))throw Error('All categories control failed');
+                await page.locator('#categories .tm-ref-section-head a').click();
+                await page.evaluate(()=>scrollTo(0,0));
                 await page.screenshot({path:'/tmp/tm26-storefront-'+width+'.png'});
+                const feature=page.locator('.tm-ref-special-card').first();
+                await Promise.all([page.waitForNavigation({waitUntil:'networkidle'}),feature.locator('.tm27-feature-add button').click()]);
+                if((await feature.locator('.tm27-qty > span').innerText()).trim()!=='1')throw Error('Featured add failed');
+                await Promise.all([page.waitForNavigation({waitUntil:'networkidle'}),feature.getByRole('button',{name:/افزایش تعداد/}).click()]);
+                if((await feature.locator('.tm27-qty > span').innerText()).trim()!=='2')throw Error('Featured plus failed');
+                await page.screenshot({path:'/tmp/tm26-catalog-quantity-'+width+'.png'});
+                await Promise.all([page.waitForNavigation({waitUntil:'networkidle'}),feature.getByRole('button',{name:/کاهش تعداد/}).click()]);
+                if((await feature.locator('.tm27-qty > span').innerText()).trim()!=='1')throw Error('Featured minus failed');
+                await Promise.all([page.waitForNavigation({waitUntil:'networkidle'}),feature.getByRole('button',{name:/کاهش تعداد/}).click()]);
+                if(!await feature.locator('.tm27-feature-add button').isVisible())throw Error('Featured item did not leave the cart');
+
                 await dock.click();await dialog.waitFor({state:'visible'});
                 await page.getByRole('button',{name:'بستن دستیار',exact:true}).click();
                 // A quantity card has data-pid too: its buttons must never select a product again.
