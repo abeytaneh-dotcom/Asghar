@@ -38,12 +38,11 @@ ErrorDocument 500 /tehran/error.php?s=500
  </Files>
 </IfModule>
 
-# Force current storefront assets at the HTML response layer.
+# Force the approved storefront assets while keeping the server-side visual overlay disabled.
 <IfModule mod_filter.c>
   AddOutputFilterByType SUBSTITUTE text/html
 </IfModule>
 <IfModule mod_substitute.c>
-  Substitute "s|assets/ai_entry_flow.js?v=20261026-1|assets/ai_entry_flow.js?v=20261027-101|ni"
-  Substitute "s|assets/style.css?v=20261024-shop3|assets/style.css?v=20261027-critical6|ni"
-  Substitute "s|</head>|<script id='tm-storefront-path'>(function(){var p=(location.pathname||'').replace(/\\/+$/,'');if(p==='/tehran'||p==='/tehran/index.php'){document.documentElement.classList.add('tm-storefront-server')}})();</script><link rel='stylesheet' href='assets/server_storefront_critical_v1.css?v=20261027-2'><link rel='stylesheet' href='assets/server_mobile_nav_v1.css?v=20261027-2'><script defer src='assets/server_mobile_nav_v1.js?v=20261027-2'></script><style id='ts-demo-watermark-live'>body::after{content:'تستی — جهت سفارش تماس بگیرید — websaza.ir';position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-18deg);width:120vw;text-align:center;z-index:2147483647;pointer-events:none;user-select:none;-webkit-user-select:none;color:#176b39;opacity:.13;font-family:Vazirmatn,Tahoma,Arial,sans-serif;font-weight:800;font-size:clamp(24px,5vw,56px);line-height:1.8;white-space:nowrap;text-shadow:0 1px 0 rgba(255,255,255,.5)}@media(max-width:600px){body::after{font-size:clamp(22px,6.5vw,34px);opacity:.15;width:150vw}}</style></head>|ni"
+  Substitute "s|assets/ai_entry_flow.js?v=20261026-1|assets/ai_entry_flow.js?v=20261027-102|ni"
+  Substitute "s|assets/style.css?v=20261024-shop3|assets/style.css?v=20261027-critical7|ni"
 </IfModule>
