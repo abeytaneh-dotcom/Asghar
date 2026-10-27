@@ -35,7 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' 'https://websaza.ir/tehran/?reference=20261027-22' -o "$RUNNER_TEMP/home.html"
-          grep -Fq 'tm_asset=hero_v22' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tehran-storefront-hq-v34.webp' "$RUNNER_TEMP/home.html"
           grep -Fq 'tm-ref-mobile-copy-v22' "$RUNNER_TEMP/home.html"
           grep -Fq 'tm-ref-mobile-picture-v20' "$RUNNER_TEMP/home.html"
           if grep -Fq '<picture class="tm-ref-mobile-picture-v20"' "$RUNNER_TEMP/home.html"; then
