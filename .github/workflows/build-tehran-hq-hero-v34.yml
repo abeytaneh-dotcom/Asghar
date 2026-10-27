@@ -128,7 +128,17 @@ jobs:
                   .github/scripts/fix_tehran_mobile_hero_v20.py
           if ! git diff --cached --quiet; then
             git commit -m 'Use true HQ storefront artwork on Tehran desktop and mobile'
-            git push origin HEAD:websaza-hosting
+            # Integrate concurrent commits; never force-push production history.
+            pushed=0
+            for attempt in 1 2 3; do
+              git fetch origin websaza-hosting
+              git rebase origin/websaza-hosting
+              if git push origin HEAD:websaza-hosting; then
+                pushed=1
+                break
+              fi
+            done
+            test "$pushed" = 1
           fi
 
       - name: Upload HQ binary and updated text files to cPanel
