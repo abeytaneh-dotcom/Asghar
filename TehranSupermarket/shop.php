@@ -44,7 +44,7 @@ if($q===''&&$cat===''){
     ];
     foreach($groups as [$group,$terms]){
         $clauses=[];$args=[$group];
-        foreach($terms as $term){$clauses[]='name LIKE ?';$args[]='%'.$term.'%';}
+        foreach($terms as $term){$clauses[]='name LIKE ?';$args[]=$term.'%';}
         $pick=$pdo->prepare("SELECT * FROM products WHERE active=1 AND stock>0 AND price>0 AND category=? AND image_path IS NOT NULL AND image_path<>'' AND (".implode(' OR ',$clauses).") ORDER BY (original_price IS NOT NULL AND original_price>price) DESC,id DESC LIMIT 1");
         $pick->execute($args);$item=$pick->fetch();
         if($item)$featured[(int)$item['id']]=$item;
