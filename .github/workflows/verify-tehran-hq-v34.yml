@@ -6,6 +6,8 @@ on:
     branches: [websaza-hosting]
     paths:
       - '.github/workflows/verify-tehran-hq-v34.yml'
+      - 'TehranSupermarket/shop.php'
+      - 'TehranSupermarket/assets/hero-hq-v32.css'
   workflow_dispatch:
 
 permissions:
@@ -30,7 +32,10 @@ jobs:
           print('HQ_WEBP_OK')
           PY
           curl -sS -L --fail -H 'Cache-Control: no-cache' 'https://websaza.ir/tehran/?visual=20261027-34' -o /tmp/home.html
-          grep -Fq 'tehran-storefront-hq-v34.webp' /tmp/home.html
+          grep -Fq 'assets/tehran-storefront-hq-v34.webp' /tmp/home.html
+          grep -Fq 'aria-label="جستجوی محصولات"' /tmp/home.html
+          CSRF_CODE=$(curl -sS --max-time 30 -o /tmp/csrf.html -w '%{http_code}' --data 'action=add&product_id=0' 'https://websaza.ir/tehran/shop.php')
+          test "$CSRF_CODE" = '419'
 
       - name: Capture real desktop and mobile rendering
         shell: bash
