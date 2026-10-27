@@ -1,0 +1,131 @@
+name: Build Deploy Tehran SuperRes V32
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'TehranSupermarket/assets/tehran-storefront-v3.svg'
+      - 'TehranSupermarket/assets/hero-hq-v32.css'
+      - 'TehranSupermarket/hero_hq_v32.php'
+      - 'TehranSupermarket/.htaccess'
+      - '.github/workflows/build-deploy-tehran-superres-v32.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tehran-superres-v32
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+
+      - name: Build 4x super-resolution hero
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pillow opencv-contrib-python-headless
+          curl -L --fail --retry 2 --connect-timeout 15 --max-time 120 \
+            'https://raw.githubusercontent.com/Saafke/EDSR_Tensorflow/master/models/EDSR_x4.pb' \
+            -o "$RUNNER_TEMP/EDSR_x4.pb" || true
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, re, io, os
+          from PIL import Image, ImageFilter, ImageEnhance
+
+          svg=Path('TehranSupermarket/assets/tehran-storefront-v3.svg').read_text(encoding='utf-8')
+          m=re.search(r'data:image/jpeg;base64,([^"\']+)',svg)
+          if not m:
+              raise SystemExit('embedded storefront JPEG not found')
+          raw=base64.b64decode(m.group(1))
+          src=Image.open(io.BytesIO(raw)).convert('RGB')
+          print('SOURCE',src.size,len(raw))
+          out=None
+          model=Path(os.environ['RUNNER_TEMP'])/'EDSR_x4.pb'
+          if model.is_file() and model.stat().st_size>1_000_000:
+              try:
+                  import cv2, numpy as np
+                  arr=cv2.cvtColor(np.array(src),cv2.COLOR_RGB2BGR)
+                  sr=cv2.dnn_superres.DnnSuperResImpl_create()
+                  sr.readModel(str(model))
+                  sr.setModel('edsr',4)
+                  up=sr.upsample(arr)
+                  out=Image.fromarray(cv2.cvtColor(up,cv2.COLOR_BGR2RGB))
+                  print('SUPERRES=EDSR_x4')
+              except Exception as e:
+                  print('EDSR_FALLBACK',repr(e))
+          if out is None:
+              out=src.resize((src.width*4,src.height*4),Image.Resampling.LANCZOS)
+              out=out.filter(ImageFilter.UnsharpMask(radius=1.2,percent=145,threshold=2))
+              out=ImageEnhance.Contrast(out).enhance(1.025)
+              print('SUPERRES=LANCZOS_x4')
+          if out.width < 2000:
+              raise SystemExit(f'output width too small: {out.width}')
+          webp=io.BytesIO()
+          out.save(webp,'WEBP',quality=90,method=6)
+          data=webp.getvalue()
+          if len(data)<100_000:
+              raise SystemExit(f'output unexpectedly small: {len(data)}')
+          Path('TehranSupermarket/assets/hero-hq-v32.b64').write_text(base64.b64encode(data).decode('ascii'),encoding='ascii')
+          print('OUTPUT',out.size,'webp_bytes',len(data),'b64_bytes',Path('TehranSupermarket/assets/hero-hq-v32.b64').stat().st_size)
+          PY
+
+      - name: Validate endpoints and CSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l TehranSupermarket/hero_hq_v32.php
+          grep -Fq 'hero_hq_v32.php?v=20261027-32' TehranSupermarket/assets/hero-hq-v32.css
+          grep -Fq 'tm-hq32-css' TehranSupermarket/.htaccess
+          test -s TehranSupermarket/assets/hero-hq-v32.b64
+
+      - name: Upload V32 hero only
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/$(echo "$file"|tr '/' '_').json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 90 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            if [ "$(jq -r '.result.status // .status // 0' "$out")" != '1' ]; then cat "$out"; exit 1; fi
+          }
+          upload TehranSupermarket/assets/hero-hq-v32.b64 "$TARGET_DIR/assets" hero-hq-v32.b64
+          upload TehranSupermarket/assets/hero-hq-v32.css "$TARGET_DIR/assets" hero-hq-v32.css
+          upload TehranSupermarket/hero_hq_v32.php "$TARGET_DIR" hero_hq_v32.php
+          upload TehranSupermarket/.htaccess "$TARGET_DIR" .htaccess
+
+      - name: Verify V32 is live
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?v32check=20261027-32" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/hero-hq-v32.css?v=20261027-32" -o "$RUNNER_TEMP/hero.css"
+          curl -sS -L --fail --max-time 30 -D "$RUNNER_TEMP/hero.headers" "${PUBLIC_URL}/hero_hq_v32.php?v=20261027-32" -o "$RUNNER_TEMP/hero.webp"
+          grep -Fq 'tm-hq32-css' "$RUNNER_TEMP/home.html"
+          grep -Fq 'hero_hq_v32.php?v=20261027-32' "$RUNNER_TEMP/hero.css"
+          grep -Eiq '^content-type: image/webp' "$RUNNER_TEMP/hero.headers"
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          p=Path('/home/runner/work/_temp/hero.webp')
+          im=Image.open(p)
+          assert im.width>=2000, im.size
+          assert p.stat().st_size>=100000, p.stat().st_size
+          print('TEHRAN_V32_LIVE_OK dimensions=',im.size,'bytes=',p.stat().st_size)
+          PY
