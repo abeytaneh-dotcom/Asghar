@@ -1,7 +1,6 @@
 name: Deploy Tehran Visual V28
 on:
-  push:
-    branches: [websaza-hosting]
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
