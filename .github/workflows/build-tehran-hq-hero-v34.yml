@@ -151,14 +151,15 @@ jobs:
           OUT="$RUNNER_TEMP/upload-hq.json"
           curl -sS --fail-with-body --connect-timeout 15 --max-time 120 \
             -H "$AUTH" \
-            -F "dir=${TARGET_DIR}/assets" \
+            -F "dir=${TARGET_DIR}/assets" -F "overwrite=1" \
             -F "file-1=@TehranSupermarket/assets/tehran-storefront-hq-v34.webp;type=image/webp" \
             "${BASE}/execute/Fileman/upload_files" -o "$OUT"
           cat "$OUT" | jq -c '{status:(.result.status // .status),errors:(.result.errors // .errors)}'
           test "$(jq -r '.result.status // .status // 0' "$OUT")" = '1'
 
           save(){
-            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/save-${file//\//_}.json"
+            local src="$1" dir="$2" file="$3"
+            local out="$RUNNER_TEMP/save-${file//\//_}.json"
             curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
               --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
               "${BASE}/execute/Fileman/save_file_content" -o "$out"
