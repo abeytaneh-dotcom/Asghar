@@ -1,4 +1,5 @@
 name: Verify Tehran HQ V34
+# Recheck both viewports after the repaired HQ deployment.
 
 on:
   push:
@@ -36,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
-          "$CHROME" --headless --no-sandbox --disable-gpu --hide-scrollbars \
+          "$CHROME" --virtual-time-budget=10000 --headless --no-sandbox --disable-gpu --hide-scrollbars \
             --window-size=1440,1100 --force-device-scale-factor=1 \
             --screenshot=/tmp/tehran-desktop-hq-v34.png \
             'https://websaza.ir/tehran/?visual=20261027-34&desktop=1'
