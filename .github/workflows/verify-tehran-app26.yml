@@ -16,10 +16,11 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
-            if curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-app.js?v=20261028-1' | grep -Fq 'tm26-app'; then
-              curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-assistant.webp?v=1' -o /tmp/assistant.webp
-              curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-storefront.webp?v=1' -o /tmp/hero.webp
-              test "$(wc -c < /tmp/hero.webp)" -gt 200000
+            if curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-app.js?v=20261028-1' -o /tmp/tm26-app.js &&
+               grep -Fq 'tm26-app' /tmp/tm26-app.js &&
+               curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-assistant.webp?v=1' -o /tmp/assistant.webp &&
+               curl -fsS --max-time 15 'https://websaza.ir/tehran/assets/tm26-storefront.webp?v=1' -o /tmp/hero.webp &&
+               test "$(wc -c < /tmp/hero.webp)" -gt 200000; then
               exit 0
             fi
             sleep 10
