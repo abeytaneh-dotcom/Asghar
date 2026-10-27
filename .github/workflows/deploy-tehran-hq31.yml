@@ -1,0 +1,108 @@
+name: Deploy Tehran HQ Hero 31
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - 'TehranSupermarket/hero_ref30.php'
+      - 'TehranSupermarket/assets/ref30/**'
+      - 'TehranSupermarket/.htaccess'
+      - '.github/workflows/deploy-tehran-hq31.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-tehran-hq31
+  cancel-in-progress: true
+
+jobs:
+  deploy-hq:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      TARGET_DIR: public_html/tehran
+      PUBLIC_URL: https://websaza.ir/tehran
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+
+      - name: Validate HQ source
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l TehranSupermarket/hero_ref30.php
+          test -s TehranSupermarket/assets/ref30/hero-desktop-00.b64
+          test -s TehranSupermarket/assets/ref30/hq-shell.css
+          test -s TehranSupermarket/.htaccess
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          raw=base64.b64decode(Path('TehranSupermarket/assets/ref30/hero-desktop-00.b64').read_text().strip())
+          assert raw[:4]==b'RIFF' and raw[8:12]==b'WEBP'
+          assert len(raw)>100000
+          print('HQ_SOURCE_OK bytes=',len(raw))
+          PY
+
+      - name: Ensure ref30 directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          OUT="$RUNNER_TEMP/mkdir.json"
+          curl -sS --connect-timeout 15 --max-time 60 -H "$AUTH" -H 'Content-Type: application/x-www-form-urlencoded' --request POST \
+            --data-urlencode "cpanel_jsonapi_user=${CPANEL_USER}" \
+            --data-urlencode 'cpanel_jsonapi_apiversion=2' \
+            --data-urlencode 'cpanel_jsonapi_module=Fileman' \
+            --data-urlencode 'cpanel_jsonapi_func=mkdir' \
+            --data-urlencode "path=/home/${CPANEL_USER}/public_html/tehran/assets" \
+            --data-urlencode 'name=ref30' \
+            --data-urlencode 'permissions=0755' \
+            "${BASE}/json-api/cpanel" -o "$OUT" || true
+          curl -sS --fail-with-body -H "$AUTH" --get \
+            --data-urlencode 'dir=public_html/tehran/assets/ref30' \
+            --data-urlencode 'show_hidden=1' \
+            "${BASE}/execute/Fileman/list_files" -o "$RUNNER_TEMP/list.json"
+          test "$(jq -r '.result.status // .status // 0' "$RUNNER_TEMP/list.json")" = '1'
+
+      - name: Upload HQ assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://${CPANEL_HOST}:2083"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          upload(){
+            local src="$1" dir="$2" file="$3" out="$RUNNER_TEMP/$(echo "$file"|tr '/' '_').json"
+            curl -sS --fail-with-body --connect-timeout 15 --max-time 60 -H "$AUTH" --request POST \
+              --data-urlencode "dir=${dir}" --data-urlencode "file=${file}" --data-urlencode "content@${src}" \
+              "${BASE}/execute/Fileman/save_file_content" -o "$out"
+            test "$(jq -r '.result.status // .status // 0' "$out")" = '1'
+          }
+          upload TehranSupermarket/assets/ref30/hero-desktop-00.b64 "$TARGET_DIR/assets/ref30" hero-desktop-00.b64
+          upload TehranSupermarket/assets/ref30/hq-shell.css "$TARGET_DIR/assets/ref30" hq-shell.css
+          upload TehranSupermarket/hero_ref30.php "$TARGET_DIR" hero_ref30.php
+          upload TehranSupermarket/.htaccess "$TARGET_DIR" .htaccess
+
+      - name: Verify live HQ delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?hqcheck=20261027-31" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/assets/ref30/hq-shell.css?v=20261027-hq31" -o "$RUNNER_TEMP/hq.css"
+          curl -sS -L --fail --max-time 30 -D "$RUNNER_TEMP/hero.headers" "${PUBLIC_URL}/hero_ref30.php?v=20261027-hq31" -o "$RUNNER_TEMP/hero.webp"
+          grep -Fq 'tm-hq31-css' "$RUNNER_TEMP/home.html"
+          grep -Fq 'hero_ref30.php?v=20261027-hq31' "$RUNNER_TEMP/hq.css"
+          grep -Eiq '^content-type: image/webp' "$RUNNER_TEMP/hero.headers"
+          python3 - <<'PY'
+          from pathlib import Path
+          b=Path('/home/runner/work/_temp/hero.webp').read_bytes()
+          assert b[:4]==b'RIFF' and b[8:12]==b'WEBP'
+          assert len(b)>100000
+          print('TEHRAN_HQ_LIVE_OK bytes=',len(b))
+          PY
