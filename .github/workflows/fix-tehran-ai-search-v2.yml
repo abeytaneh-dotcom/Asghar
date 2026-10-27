@@ -69,7 +69,7 @@ jobs:
           jq -e '.ok==true and (.items|length)>0' "$RUNNER_TEMP/آبمیوه.json" >/dev/null
           if jq -r '.items[].name' "$RUNNER_TEMP/شیر.json" | grep -Eq 'ماست|کشک'; then exit 1; fi
 
-      - name: Build inline Tehran reference storefront v20
+      - name: Build Tehran reference storefront
         shell: bash
         run: |
           set -euo pipefail
@@ -79,8 +79,21 @@ jobs:
           grep -Fq 'tm-ref-inline-v18' TehranSupermarket/shop.php
           grep -Fq 'tm-ref-mobile-v20' TehranSupermarket/shop.php
           grep -Fq 'tm-ref-mobile-picture-v20' TehranSupermarket/shop.php
+          grep -Fq 'id="categories"' TehranSupermarket/shop.php
+          grep -Fq 'id="products"' TehranSupermarket/shop.php
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('TehranSupermarket/shop.php').read_text(encoding='utf-8')
+          hero=s.index('<section class="tm-ref-hero"')
+          hero_close=s.index('</section>', hero)
+          products=s.index('<section id="products">')
+          search=s.index('<form class="search">', products)
+          assert hero < hero_close < products < search
+          assert '<main>' in s[hero_close:products]
+          print('STRUCTURE_OK hero_closed_before_catalog=1 products_outside_hero=1')
+          PY
 
-      - name: Persist inline Tehran storefront
+      - name: Persist Tehran storefront
         shell: bash
         run: |
           set -euo pipefail
@@ -88,11 +101,11 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add TehranSupermarket/shop.php
           if ! git diff --cached --quiet; then
-            git commit -m 'Generate reliable Tehran mobile hero v20'
+            git commit -m 'Generate stable Tehran storefront layout'
             git push origin HEAD:websaza-hosting
           fi
 
-      - name: Deploy inline Tehran storefront
+      - name: Deploy Tehran storefront
         shell: bash
         run: |
           set -euo pipefail
@@ -101,14 +114,26 @@ jobs:
           upload TehranSupermarket/shop.php "$TARGET_DIR" shop.php
           upload TehranSupermarket/assets/tehran-storefront-v3.svg "$TARGET_DIR/assets" tehran-storefront-v3.svg
 
-      - name: Verify live inline Tehran storefront
+      - name: Verify live Tehran storefront
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-20" -o "$RUNNER_TEMP/home.html"
+          curl -sS -L --fail --max-time 30 -H 'Cache-Control: no-cache' "${PUBLIC_URL}/?reference=20261027-26" -o "$RUNNER_TEMP/home.html"
           grep -Fq 'tm-ref-inline-v18' "$RUNNER_TEMP/home.html"
           grep -Fq 'tm-ref-mobile-v20' "$RUNNER_TEMP/home.html"
           grep -Fq 'tm-ref-mobile-picture-v20' "$RUNNER_TEMP/home.html"
-          grep -Fq 'data:image/jpeg;base64,' "$RUNNER_TEMP/home.html"
+          grep -Fq 'id="categories"' "$RUNNER_TEMP/home.html"
+          grep -Fq 'id="products"' "$RUNNER_TEMP/home.html"
+          grep -Fq 'محصولات فروشگاه' "$RUNNER_TEMP/home.html"
           grep -Fq '#barcode-scan-fab,#tehran-ai-fab-v2' "$RUNNER_TEMP/home.html"
-          echo 'TEHRAN_REFERENCE_V20_LIVE_OK inline_css=ok mobile_real_img=ok header=ok legacy_fabs_hidden=ok'
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('/home/runner/work/_temp/home.html').read_text(encoding='utf-8')
+          hero=s.index('<section class="tm-ref-hero"')
+          hero_close=s.index('</section>', hero)
+          products=s.index('<section id="products">')
+          assert hero_close < products
+          assert s.count('class="card"') >= 2
+          print('LIVE_STRUCTURE_OK product_cards=', s.count('class="card"'))
+          PY
+          echo 'TEHRAN_STOREFRONT_LIVE_OK hero=ok header=ok categories=ok products=ok'
