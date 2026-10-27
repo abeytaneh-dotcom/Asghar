@@ -1,6 +1,7 @@
 from pathlib import Path
 import re
 
+# deploy trigger: v20 reliable mobile hero
 shop_path = Path('TehranSupermarket/shop.php')
 source_path = Path('.github/scripts/inline_tehran_v18.py')
 
@@ -14,12 +15,10 @@ mobile_b64 = m.group(1).strip()
 if len(mobile_b64) < 10000:
     raise SystemExit('mobile_b64 unexpectedly short')
 
-# Remove any prior v20 picture/style before rebuilding.
 shop = re.sub(r'<picture class="tm-ref-mobile-picture-v20">.*?</picture>', '', shop, flags=re.S)
 shop = re.sub(r'<a class="tm-ref-mobile-hero-click-v20".*?</a>', '', shop, flags=re.S)
 shop = re.sub(r'<style id="tm-ref-mobile-v20">.*?</style>', '', shop, flags=re.S)
 
-# Put the approved reference crop in the DOM as a real image, not CSS background.
 hero_open = re.search(r'(<section class="tm-ref-hero"[^>]*>)', shop)
 if not hero_open:
     raise SystemExit('tm-ref-hero section not found')
@@ -60,5 +59,4 @@ style = r'''<style id="tm-ref-mobile-v20">
 if '</head>' not in shop:
     raise SystemExit('head marker not found')
 shop = shop.replace('</head>', style + '</head>', 1)
-
 shop_path.write_text(shop, encoding='utf-8')
