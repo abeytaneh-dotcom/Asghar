@@ -6,6 +6,9 @@ DirectoryIndex index.php
  # Preserve Bearer authentication for PHP-FPM/CGI so Websaz Store desktop sync can authenticate.
  RewriteCond %{HTTP:Authorization} ^(.+)$
  RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+ # Serve the repaired mobile hero without changing the public URL used by the storefront.
+ RewriteCond %{QUERY_STRING} (^|&)tm_asset=hero_v22(&|$)
+ RewriteRule ^shop\.php$ hero_v22.php [END]
  RewriteRule ^install\.php$ error.php?s=403 [END,QSA]
 </IfModule>
 ErrorDocument 403 /tehran/error.php?s=403
