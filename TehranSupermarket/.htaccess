@@ -48,7 +48,7 @@ ErrorDocument 500 /tehran/error.php?s=500
 <IfModule mod_substitute.c>
   Substitute "s|assets/ai_entry_flow.js?v=20261026-1|assets/ai_entry_flow.js?v=20261027-102|ni"
   Substitute "s|assets/style.css?v=20261024-shop3|assets/style.css?v=20261027-critical7|ni"
-  # Cache-bust the desktop hero and replace the low-resolution mobile JPEG with the same true-vector hero.
-  Substitute "s|assets/tehran-storefront-v3.svg?v=20261027-ref18|assets/tehran-storefront-v3.svg?v=20261027-hq1|ni"
-  Substitute "s|shop.php?tm_asset=hero_v22&v=20261027-27|assets/tehran-storefront-v3.svg?v=20261027-hq1|ni"
+  # Cache-bust the desktop hero and replace any legacy mobile JPEG hero URL with the same true-vector hero.
+  Substitute "s|assets/tehran-storefront-v3\.svg\?v=[0-9A-Za-z._-]+|assets/tehran-storefront-v3.svg?v=20261027-hq1|ni"
+  Substitute "s|shop\.php\?tm_asset=hero_v22&v=[0-9A-Za-z._-]+|assets/tehran-storefront-v3.svg?v=20261027-hq1|ni"
 </IfModule>
