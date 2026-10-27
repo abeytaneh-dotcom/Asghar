@@ -121,7 +121,7 @@ jobs:
           test "$HCODE" = '200'; test "$ACODE" = '200'; test "$TCODE" = '200'; test "$UCODE" = '200'; test "$MCODE" = '200'; test "$SWCODE" = '200'; test "$LJCODE" = '200'; test "$LCCODE" = '200'; test "$PCODE" = '200'; test "$AICODE" = '200'; test "$MAPCODE" = '200'
           test "$ICODE" = '403'; test "$NFCode" = '404'; { test "$SYNCCODE" = '401' || test "$SYNCCODE" = '503'; }; test "$PAYCODE" = '404'
           grep -Fq 'طهران مارکت' "$RUNNER_TEMP/home.html"
-          grep -Fq 'پیگیری سفارش' "$RUNNER_TEMP/home.html"
+          grep -Fq 'tm-ref-header' "$RUNNER_TEMP/home.html"
           grep -Fq 'assets/leaflet/leaflet.js' "$RUNNER_TEMP/home.html"
           grep -Fq 'Tehran Market premium storefront' "$RUNNER_TEMP/premium.css"
           grep -Fq 'premium-reference-shell-v1' "$RUNNER_TEMP/ai-entry.js"
