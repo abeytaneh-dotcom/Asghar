@@ -47,7 +47,7 @@ body main{max-width:1420px!important;margin:0 auto!important;padding:0 28px 90px
 @media(min-width:801px){.tm-ref-menu-mobile{display:none!important}}
 
 
-/* v18 hard cleanup: hide legacy floating launchers; reference controls remain */
+/* v18 hard cleanup */
 #barcode-scan-fab,#tehran-ai-fab-v2,.tehran-ai-ping{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important}
 body{visibility:visible!important;opacity:1!important}
 .tm-ref-header,.tm-ref-hero,.tm-ref-trust-wrap,.tm-ref-section,.tm-ref-promos,.tm-ref-specials{visibility:visible!important;opacity:1!important}
