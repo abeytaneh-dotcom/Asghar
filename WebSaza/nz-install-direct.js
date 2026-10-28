@@ -52,6 +52,14 @@
     modal.addEventListener('click',e=>{if(e.target===modal)hide();});
   };
 
+  window.nzInstallApp=async()=>{
+    if(isStandalone())return;
+    if(installPrompt&&!isIos){
+      const prompt=installPrompt;installPrompt=null;
+      try{await prompt.prompt();const choice=await prompt.userChoice;if(choice?.outcome==='accepted')return;}catch(_){}
+    }
+    showGuide();
+  };
   const bind=()=>{
     const btn=document.getElementById('installMini');
     if(!btn) return;
@@ -61,11 +69,7 @@
     btn.addEventListener('click',async e=>{
       e.preventDefault();e.stopImmediatePropagation();
       if(isStandalone()){btn.style.display='none';return;}
-      if(installPrompt&&!isIos){
-        const prompt=installPrompt;installPrompt=null;
-        try{await prompt.prompt();const choice=await prompt.userChoice;if(choice&&choice.outcome==='accepted'){btn.style.display='none';return;}}catch(_){ }
-      }
-      showGuide();
+      await window.nzInstallApp();
     },true);
   };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind,{once:true});else bind();

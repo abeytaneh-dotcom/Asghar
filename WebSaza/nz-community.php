@@ -17,7 +17,16 @@ function nzc_default_db(): array {
     ];
 }
 function nzc_db_read(): array { return nzstore_read(nzc_default_db()); }
-function nzc_db_write(callable $mutator): mixed { return nzstore_write(nzc_default_db(),$mutator); }
+function nzc_db_write(callable $mutator): mixed {
+    $recipients=[];
+    $result=nzstore_write(nzc_default_db(),function(&$db)use($mutator,&$recipients){
+        $before=count($db['notifications']??[]);$result=$mutator($db);
+        foreach(array_slice($db['notifications']??[],$before) as $n)$recipients[]=(string)($n['user_id']??'');
+        return $result;
+    });
+    if($recipients){require_once __DIR__.'/nz-push.php';nzpush_dispatch(array_values(array_unique($recipients)));}
+    return $result;
+}
 
 function nzc_session_open(): void {
     if(session_status()===PHP_SESSION_ACTIVE) return;
