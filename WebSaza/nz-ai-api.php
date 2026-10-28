@@ -18,14 +18,15 @@ try {
     if(($_POST['action']??'')==='contact'){
         if(!$user){http_response_code(401);throw new RuntimeException('برای مشاهده اطلاعات تماس وارد حساب شوید.');}
         if(!in_array((string)($_POST['id']??''),$_SESSION['nzai_results']??[],true)){http_response_code(403);throw new RuntimeException('ابتدا آگهی را جستجو کنید.');}
+        foreach(nzab_posts($db,$user,true) as $post)if((string)$post['id']===(string)$_POST['id']&&nzab_demo($post)){http_response_code(409);throw new RuntimeException('این آگهی نمایشی است و فروشنده یا اطلاعات تماس واقعی ندارد.');}
         $out=nzai_contact($db,(string)$_POST['id'],$user);
         if(nzaiexp_enabled($db,(string)$user['id']))try{nzc_db_write(fn(&$db)=>nzaiexp_react($db,(string)$user['id'],(string)$_POST['id'],'contact'));}catch(Throwable $e){error_log('Niazestan interaction history unavailable');}
     }elseif(($_POST['action']??'')==='reset'){unset($_SESSION['nzai_'.$mode],$_SESSION['nzai_results']);$out=[];
     }elseif(($_POST['action']??'')==='resume'){
         $s=$_SESSION['nzai_'.$mode]??[];$out=[];
         if(($s['uid']??null)===($user['id']??'anonymous')&&(int)($s['expires']??0)>time()){
-            $plan=$s['draft'];if($mode==='search')$plan=nzab_plan(nzab_posts($db,$user),'',$plan,$db['ai_examples']??[]);elseif(($plan['engine']??'')==='native')$plan=nznative_guidance($plan,$mode);$out=['plan'=>$plan,'history'=>[]];foreach($s['history']??[] as $h){$value=$h['content'];if($h['role']==='assistant')$value=json_decode($value,true)['reply']??'';$out['history'][]=['role'=>$h['role'],'text'=>$value];}
-            if($mode==='search'){$out['browse']=nzab_view(nzab_posts($db,$user),$plan);$out['results']=$out['browse']['results'];$_SESSION['nzai_results']=array_column($out['results'],'id');$_SESSION['nzai_search']['draft']=$plan;$out['history']=array_values(array_filter($out['history'],fn($h)=>$h['role']==='user'||!preg_match('/کدام دسته|کدام نوع از این دسته|کدام شهر جستجو|بازه.*بودجه/u',$h['text'])));}
+            $plan=$s['draft'];if($mode==='search')$plan=nzab_plan(nzab_posts($db,$user,true),'',$plan,$db['ai_examples']??[]);elseif(($plan['engine']??'')==='native')$plan=nznative_guidance($plan,$mode);$out=['plan'=>$plan,'history'=>[]];foreach($s['history']??[] as $h){$value=$h['content'];if($h['role']==='assistant')$value=json_decode($value,true)['reply']??'';$out['history'][]=['role'=>$h['role'],'text'=>$value];}
+            if($mode==='search'){$out['browse']=nzab_view(nzab_posts($db,$user,true),$plan);$out['results']=$out['browse']['results'];$_SESSION['nzai_results']=array_column($out['results'],'id');$_SESSION['nzai_search']['draft']=$plan;$out['history']=array_values(array_filter($out['history'],fn($h)=>$h['role']==='user'||!preg_match('/کدام دسته|کدام نوع از این دسته|کدام شهر جستجو|بازه.*بودجه/u',$h['text'])));}
         }
     }else{
         if($mode==='create'&&!$user){http_response_code(401);throw new RuntimeException('برای ثبت آگهی ابتدا وارد حساب شوید.');}
@@ -36,14 +37,14 @@ try {
         $s=$_SESSION['nzai_'.$mode]??['history'=>[],'draft'=>[]];if(($s['expires']??0)<time()||($s['uid']??null)!==($user['id']??'anonymous'))$s=['history'=>[],'draft'=>$user?nzailearn_seed($db,(string)$user['id']):[]];
         $history=array_slice($s['history'],-18);$history[]=['role'=>'user','content'=>$message];
         if($mode==='search'){
-            $posts=nzab_posts($db,$user);$draft=$recalled?nzaiexp_plan($recalled):$s['draft'];
+            $posts=nzab_posts($db,$user,true);$draft=$recalled?nzaiexp_plan($recalled):$s['draft'];
             if(($draft['engine']??'')!=='browse'&&$recall)$draft=nzab_base($draft);
             if(($_POST['action']??'')==='more'){$plan=nzab_plan($posts,'',$draft,$db['ai_examples']??[]);$plan['_browse']['offset']=min(49992,(int)($draft['_browse']['offset']??0)+12);}
             else $plan=nzab_plan($posts,$recall||$facetAction?'':$message,$draft,$db['ai_examples']??[],($_POST['action']??'')==='refine'?['key'=>(string)($_POST['facet']??''),'value'=>(string)($_POST['value']??'')]:null);
         }else $plan=nzai_plan($history,$mode,$s['draft'],$db['ai_examples']??[]);$history[]=['role'=>'assistant','content'=>json_encode($plan,JSON_UNESCAPED_UNICODE)];
         $_SESSION['nzai_'.$mode]=['history'=>$history,'draft'=>$plan,'expires'=>time()+3600,'uid'=>$user['id']??'anonymous'];
         $token=bin2hex(random_bytes(16));$_SESSION['nzai_turns']=array_filter($_SESSION['nzai_turns']??[],fn($t)=>(int)($t['expires']??0)>time());$_SESSION['nzai_turns']=array_slice($_SESSION['nzai_turns'],-19,null,true);$_SESSION['nzai_turns'][$token]=['uid'=>$user['id']??'','expires'=>time()+1800];
-        $out=['plan'=>$plan,'turn'=>$token];if($mode==='search'){$out['browse']=nzab_view(nzab_posts($db,$user),$plan);$out['results']=$out['browse']['results'];$ids=array_column($out['results'],'id');$_SESSION['nzai_results']=($_POST['action']??'')==='more'?array_slice(array_values(array_unique(array_merge($_SESSION['nzai_results']??[],$ids))),-120):$ids;if($user&&nzailearn_profile($db,(string)$user['id']))nzc_db_write(fn(&$db)=>nzailearn_save_memory($db,(string)$user['id'],$plan));if($user&&nzaiexp_enabled($db,(string)$user['id']))try{nzc_db_write(fn(&$db)=>nzaiexp_record_search($db,(string)$user['id'],$plan));}catch(Throwable $e){error_log('Niazestan personal history unavailable');}}
+        $out=['plan'=>$plan,'turn'=>$token];if($mode==='search'){$out['browse']=nzab_view(nzab_posts($db,$user,true),$plan);$out['results']=$out['browse']['results'];$ids=array_column($out['results'],'id');$_SESSION['nzai_results']=($_POST['action']??'')==='more'?array_slice(array_values(array_unique(array_merge($_SESSION['nzai_results']??[],$ids))),-120):$ids;if($user&&nzailearn_profile($db,(string)$user['id']))nzc_db_write(fn(&$db)=>nzailearn_save_memory($db,(string)$user['id'],$plan));if($user&&nzaiexp_enabled($db,(string)$user['id']))try{nzc_db_write(fn(&$db)=>nzaiexp_record_search($db,(string)$user['id'],$plan));}catch(Throwable $e){error_log('Niazestan personal history unavailable');}}
     }
     echo json_encode(['ok'=>true]+$out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 }catch(Throwable $e){if(http_response_code()<400)http_response_code(503);echo json_encode(['ok'=>false,'error'=>$e->getMessage()],JSON_UNESCAPED_UNICODE);}
