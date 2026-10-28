@@ -359,6 +359,20 @@
     form.addEventListener('submit',e=>{if(!validateStep(0)){e.preventDefault();showStep(0);return}if(!validateStep(1)){e.preventDefault();showStep(1);return}if(submitBtn){submitBtn.disabled=true;submitBtn.textContent='در حال ارسال برای بررسی…';setTimeout(()=>{submitBtn.disabled=false;submitBtn.textContent='ارسال آگهی برای بررسی'},20000)}});
 
     if(images)images.addEventListener('change',()=>{if(images.files.length>5){alert('حداکثر ۵ عکس مجاز است.');images.value=''}});
+    // Import an explicitly accepted AI draft through the same manual controls.
+    form.addEventListener('nz:ai-draft',event=>{
+      const p=event.detail;if(!p||!TAXONOMY[p.category]?.includes(p.subcategory))return;
+      event.preventDefault();
+      title.value=p.title||'';desc.value=p.description||'';
+      setSelectValue(cat,p.category);setSelectValue(sub,p.subcategory);renderSpecs(p.category);
+      if(p.city&&PROVINCES[p.province]?.includes(p.city)){provinceI.value=p.province;setSelectValue(city,p.city);}
+      district.value=p.district||'';streetI.value=p.street||'';
+      // A language model must never fabricate a map point or grant contact permission.
+      latI.value='';lngI.value='';modeI.value='approx';
+      if(p.price!==null)price.value=String(p.price);
+      form.querySelectorAll('[name^="attributes["]').forEach(field=>{const label=field.name.slice(11,-1);if(Object.hasOwn(p.attributes||{},label))field.value=p.attributes[label];});
+      refreshCategorySummary();refreshLocationSummary();showStep(0);
+    });
     refreshCategorySummary();refreshLocationSummary();showStep(0);
   }
 

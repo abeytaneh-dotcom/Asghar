@@ -1,0 +1,65 @@
+import {mkdtemp,cp,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join,resolve} from 'node:path';
+import {spawn} from 'node:child_process';
+import assert from 'node:assert/strict';
+const temp=await mkdtemp(join(tmpdir(),'niazestan-http-')),site=join(temp,'site');
+await cp(resolve('WebSaza'),site,{recursive:true,filter:p=>!p.includes('.marketplace-data')&&!p.includes('marketplace-uploads')});
+await writeFile(join(temp,'router.php'),`<?php
+$path=parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH);
+if($path==='/__fixture'){
+ require __DIR__.'/site/nz-session-bootstrap.php';require __DIR__.'/site/nz-community.php';
+ $db=nzc_db_read();if(!$db['users'])nzc_db_write(function(&$db){$db['users']=[['id'=>'one'],['id'=>'two'],['id'=>'admin','role'=>'admin']];$db['notifications']=[['id'=>'private-one','user_id'=>'one','text'=>'private text','read'=>false,'created_at'=>date('c')]];});
+ if(in_array($_GET['uid']??'',['one','two','admin'],true))$_SESSION['uid']=$_GET['uid'];else unset($_SESSION['uid']);
+ if(($_GET['uid']??'')==='admin'&&($_GET['elevated']??'')==='1'){require __DIR__.'/site/nz-admin-stepup.php';$_SESSION['nz_admin_stepup']=['uid'=>'admin','until'=>time()+600,'fp'=>nzauth_fp()];}else unset($_SESSION['nz_admin_stepup']);
+ $_SESSION['csrf']='fixture-csrf';echo json_encode(['ok'=>true,'subscriptions'=>nzc_db_read()['push_subscriptions']??[]]);return;
+}
+return false;`);
+const port=18000+Math.floor(Math.random()*8000),base=`http://127.0.0.1:${port}`;
+const flags=JSON.parse(process.env.PHP_ARGS_JSON||'[]');
+const server=spawn(process.env.PHP_BIN||'php',[...flags,'-d',`session.save_path=${temp}`,'-S',`127.0.0.1:${port}`,'-t',site,join(temp,'router.php')],{stdio:['ignore','pipe','pipe']});
+let logs='';server.stderr.on('data',x=>{logs+=x});let cookie='';
+async function request(path,data){const r=await fetch(base+path,{headers:{Cookie:cookie,...(data?{'Content-Type':'application/x-www-form-urlencoded'}:{})},...(data?{method:'POST',body:new URLSearchParams(data)}:{})});const set=r.headers.get('set-cookie');if(set)cookie=set.split(';')[0];return {status:r.status,body:await r.json()};}
+try{
+ let ready=false;for(let i=0;i<50;i++){try{await request('/__fixture');ready=true;break;}catch{await new Promise(r=>setTimeout(r,100));}}
+ assert(ready,logs);
+ assert.equal((await request('/nz-ai-api.php')).status,405);
+ assert.equal((await request('/nz-ai-api.php',{message:'سلام'})).status,403);
+ assert.equal((await request('/nz-ai-api.php',{csrf:'fixture-csrf',action:'contact',id:'p'})).status,401);
+ assert.equal((await request('/nz-notification-api.php')).status,401);
+ console.log('PASS HTTP method, CSRF and anonymous access guards');
+ const native=await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'سلام',mode:'search'});assert.equal(native.status,200);assert.equal(native.body.plan.engine,'native');assert.equal(native.body.plan.ready,false);assert.deepEqual(native.body.results,[]);
+ console.log('PASS native assistant works without a provider and asks before searching');
+ await request('/__fixture?uid=one');let n=await request('/nz-notification-api.php');assert.equal(n.status,200);assert.equal(n.body.items[0].id,'private-one');assert(n.body.public_key);assert(!JSON.stringify(n.body).includes('PRIVATE KEY'));
+ assert.equal((await request('/nz-notification-api.php',{endpoint:'https://fcm.googleapis.com/test'})).status,403);
+ assert.equal((await request('/nz-notification-api.php',{csrf:'fixture-csrf',endpoint:'https://localhost/test'})).status,400);
+ assert.equal((await request('/nz-notification-api.php',{csrf:'fixture-csrf',endpoint:'https://fcm.googleapis.com/test'})).status,200);
+ await request('/__fixture?uid=two');n=await request('/nz-notification-api.php');assert.equal(n.body.count,0);assert.deepEqual(n.body.items,[]);
+ await request('/nz-notification-api.php',{csrf:'fixture-csrf',action:'unsubscribe',endpoint:'https://fcm.googleapis.com/test'});
+ const state=await request('/__fixture?uid=two');assert.equal(state.body.subscriptions[0].user_id,'one');
+ console.log('PASS notification isolation, public-only key, SSRF rejection, registration and unsubscribe ownership');
+ const learning='/nz-ai-learning-api.php',ai='/nz-ai-api.php';const reset=()=>request(ai,{csrf:'fixture-csrf',action:'reset'});
+ await request('/__fixture');assert.equal((await request(learning)).status,401);
+ await request('/__fixture?uid=one');assert.equal((await request(learning,{action:'remember',enabled:'1'})).status,403);
+ const unknown=await request(ai,{csrf:'fixture-csrf',message:'آرمینو در شیراز تا ۲۰ میلیون تومان',mode:'search'});assert.equal(unknown.body.plan.category,'');
+ const resumed=await request(ai,{csrf:'fixture-csrf',action:'resume'});assert.equal(resumed.body.plan.title,unknown.body.plan.title);assert(resumed.body.history.length>0);
+ const feedback={csrf:'fixture-csrf',action:'feedback',turn:unknown.body.turn,phrase:'آرمینو',category:'خانه و آشپزخانه',subcategory:'مبلمان',consent:'1'};
+ assert.equal((await request(learning,{...feedback,consent:'0'})).status,400);
+ assert.equal((await request(learning,{...feedback,phrase:'خیابان آزمایشی پلاک ۱۲'})).status,400);
+ const submitted=await request(learning,feedback);assert.equal(submitted.status,200);const sampleId=submitted.body.id;
+ await reset();let inference=await request(ai,{csrf:'fixture-csrf',message:'آرمینو در شیراز تا ۲۰ میلیون تومان',mode:'search'});assert.equal(inference.body.plan.category,'');
+ await request('/__fixture?uid=two');assert.equal((await request(ai,{csrf:'fixture-csrf',action:'resume'})).body.plan,undefined);assert.equal((await request(learning,{...feedback,turn:unknown.body.turn})).status,403);
+ assert.equal((await request(learning,{csrf:'fixture-csrf',action:'review',id:sampleId,decision:'approve'})).status,403);
+ await request('/__fixture?uid=admin');assert.equal((await request(learning,{csrf:'fixture-csrf',action:'review',id:sampleId,decision:'approve'})).status,403);
+ await request('/__fixture?uid=admin&elevated=1');assert.equal((await request(learning,{csrf:'fixture-csrf',action:'review',id:sampleId,decision:'approve'})).status,200);
+ await request('/__fixture?uid=two');await reset();inference=await request(ai,{csrf:'fixture-csrf',message:'آرمینو در شیراز تا ۲۰ میلیون تومان',mode:'search'});assert.equal(inference.body.plan.subcategory,'مبلمان');assert.equal(inference.body.plan.ready,true);
+ console.log('PASS consent, PII rejection, turn ownership, elevated admin review and real learned inference');
+ assert.equal((await request(learning)).body.remember,false);await request(learning,{csrf:'fixture-csrf',action:'remember',enabled:'1'});
+ await reset();inference=await request(ai,{csrf:'fixture-csrf',message:'مبل',mode:'search'});assert.equal(inference.body.plan.city,'شیراز');assert.equal(inference.body.plan.max_price,20000000);
+ await request('/__fixture?uid=one');assert.equal((await request(learning)).body.remember,false);
+ await request(learning,{csrf:'fixture-csrf',action:'forget'});await reset();inference=await request(ai,{csrf:'fixture-csrf',message:'آرمینو',mode:'search'});assert.equal(inference.body.plan.category,'');
+ await request('/__fixture?uid=two');await request(learning,{csrf:'fixture-csrf',action:'forget'});assert.equal((await request(learning)).body.remember,false);
+ await reset();inference=await request(ai,{csrf:'fixture-csrf',message:'مبل',mode:'search'});assert.equal(inference.body.plan.city,'');
+ console.log('PASS opt-in memory, cross-account isolation, deletion and unlearning');
+ assert(!logs.includes('Fatal error'),logs);
+}finally{server.kill();await rm(temp,{recursive:true,force:true});}

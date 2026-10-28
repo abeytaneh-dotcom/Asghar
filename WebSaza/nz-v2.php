@@ -20,6 +20,8 @@ require_once __DIR__ . '/nz-legal.php';
 require_once __DIR__ . '/nz-privacy-actions.php';
 require_once __DIR__ . '/nz-create-pending.php';
 require_once __DIR__ . '/nz-submit-server.php';
+require_once __DIR__ . '/nz-ai-ui.php';
+require_once __DIR__ . '/nz-ai-learning.php';
 
 nzh_headers();
 try {
@@ -73,6 +75,7 @@ try {
 
         $html = nzd_enhance($html);$html = nzs_enhance($html);$html = nzu_enhance($html);$html = nzl_enhance($html);$html = nzpm_enhance($html);$html = nzasec_enhance($html);$html = nzn_enhance($html);$html = nzlegal_enhance($html);$html = nzauth_enhance($html);$html = nzh_seo($html);$html = nzchat_enhance_html($html);$html = nzsupport_enhance($html);
 
+        $html = nzai_enhance($html);
         $installTag = '<script src="/nz-install-direct.js?v=0"></script>';
         $mediaTag = '<script src="/nz-media-client.js?v=0" defer></script>';
         $geoTag = '<script src="/nz-geocode-proxy.js?v=0"></script>';

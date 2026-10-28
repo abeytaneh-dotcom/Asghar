@@ -1,0 +1,25 @@
+name: Niazestan AI and notifications checks
+on:
+  pull_request:
+    branches: [websaza-hosting]
+    paths: ['WebSaza/nz-*', 'tests/niazestan-ai-*', '.github/workflows/niazestan-ai-checks.yml']
+  push:
+    branches: ['feature/niazestan-ai-concierge']
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PHP and JavaScript syntax
+        run: |
+          find WebSaza -maxdepth 1 -name 'nz-*.php' -print0 | xargs -0 -n1 php -l
+          for file in WebSaza/nz-*.js; do node --check "$file"; done
+      - name: Verify AI domain, contact privacy and VAPID
+        run: php tests/niazestan-ai-test.php
+      - name: Verify native Persian assistant and supervised learning
+        run: php tests/niazestan-native-test.php
+      - name: Verify HTTP authorization and subscription ownership
+        env:
+          NZ_AI_API_KEY: ''
+          NZ_AI_ENGINE: native
+        run: node tests/niazestan-ai-http.mjs
