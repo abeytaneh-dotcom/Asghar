@@ -25,4 +25,5 @@ $many=[];for($i=0;$i<15;$i++)$many[]=$phone('many'.$i,$i===14?'Rare':'Samsung','
 $manyPlan['_browse']['offset']=12;test(count(nzab_view($many,$manyPlan)['results'])===3,'pagination continues existing filtered results');
 $pending=['phrase'=>'آرمینو','category'=>'خانه و آشپزخانه','subcategory'=>'مبلمان','status'=>'pending'];test(nzab_plan([$chair],'آرمینو',[],[$pending])['category']==='','unapproved examples cannot influence browsing');
 $hyphen=$phone('hyphen','Other','X-200');test(count(nzab_view([$hyphen],nzab_plan([$hyphen],'X-200'))['results'])===1,'hyphenated model names are not mistaken for negative prices');
+$fridge=$base;$fridge['id']='fridge';$fridge['category']='خانه و آشپزخانه';$fridge['subcategory']='لوازم خانگی';$fridge['title']='یخچال سامسونگ';$fridge['attributes']=['برند'=>'Samsung'];$washer=array_replace($fridge,['id'=>'washer','title'=>'لباسشویی سامسونگ']);$fv=nzab_view([$fridge,$washer],nzab_plan([$fridge,$washer],'یخچال می خوام'));test(array_column($fv['results'],'id')===['fridge'],'specific products within a broad subcategory do not show unrelated inventory');
 echo "All progressive browsing checks passed.\n";

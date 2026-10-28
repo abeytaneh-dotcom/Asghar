@@ -79,7 +79,10 @@ function nzab_plan(array $posts,string $message,array $draft=[],array $examples=
                 $p['category']=$classification['category'];$p['subcategory']=$classification['subcategory'];
                 $entityScope=$p;$entityScope['attributes']=[];$entityScope['query']='';$groups=nzab_groups($posts,$entityScope);$hits=[];$removed=[];
                 foreach($groups as $key=>$options){if(in_array($key,['__type','شهر'],true))continue;if(($v=nzab_match($s,$key,$options))!==null){$hits[$key]=$v;$removed=array_merge($removed,nznative_tokens($v));}}
-                foreach(array_merge(nznative_seeds(),array_filter($examples,fn($e)=>($e['status']??'')==='approved')) as $seed)if(($seed['category']??'')===$p['category']&&($seed['subcategory']??'')===$p['subcategory']&&nznative_has($subject,(string)($seed['phrase']??'')))$removed=array_merge($removed,nznative_tokens($seed['phrase']));
+                $removed=array_merge($removed,nznative_tokens($p['subcategory']));
+                $broadAliases=['موبایل'=>['گوشی','گوشیم'],'خودرو'=>['ماشین'],'آپارتمان'=>['اپارتمان'],'خانه و ویلا'=>['ویلا','خانه ویلایی'],'لپ‌تاپ'=>['لپ تاپ','لپتاپ']];
+                foreach($broadAliases[$p['subcategory']]??[] as $alias)if(nznative_has($subject,$alias))$removed=array_merge($removed,nznative_tokens($alias));
+                foreach(array_filter($examples,fn($e)=>($e['status']??'')==='approved') as $seed)if(($seed['category']??'')===$p['category']&&($seed['subcategory']??'')===$p['subcategory']&&nznative_has($subject,(string)($seed['phrase']??'')))$removed=array_merge($removed,nznative_tokens($seed['phrase']));
                 $p['query']=implode(' ',array_values(array_diff($terms,$removed,['نو','کارکرده','سالم'])));$p['title']=$subject;$p['_browse']['subject']=$subject;
             }elseif($remainder){
                 $p['category']='';$p['subcategory']='';$p['attributes']=[];$p['query']=implode(' ',$remainder);$p['title']=$subject;$p['_browse']['subject']=$subject;
