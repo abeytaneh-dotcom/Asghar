@@ -13,7 +13,7 @@ function nzc_default_db(): array {
     return [
         'users'=>[],'posts'=>[],'favorites'=>[],'conversations'=>[],'messages'=>[],
         'reports'=>[],'saved_searches'=>[],'notifications'=>[],'payments'=>[],
-        'blocks'=>[],'drafts'=>[]
+        'blocks'=>[],'drafts'=>[],'ai_profiles'=>[],'ai_examples'=>[]
     ];
 }
 function nzc_db_read(): array { return nzstore_read(nzc_default_db()); }

@@ -1,27 +1,44 @@
-# Niazestan AI concierge and chat notifications
+# Niazestan's dedicated assistant
 
-The existing `/nz` application gains separate AI/manual tabs for creation and search. AI collects Persian conversational input, maps it to the site's controlled taxonomy and locations, and drafts a title, description, price and category attributes. Accepting a draft fills the existing manual wizard. The user adds photos, confirms the map point, reviews contact permissions, and explicitly submits through the unchanged server validation and moderation path. No model can publish, set coordinates, or bypass approval.
+The default engine is a Persian domain assistant implemented in PHP, requiring no AI key or model server. It combines a finite-state dialogue, deterministic entity and price extraction, controlled taxonomy validation and a TF-IDF nearest-prototype item classifier. It is designed for classifieds and does not offer unrestricted general conversation or train a large language model from scratch.
 
-Search runs over actual published, unexpired, unsold, non-demo listings. Category, city, district, budget, keywords and supplied attributes are applied by PHP. Unknown prices are excluded when a numeric budget is set. Contacts require login, a returned result ID, a still-available listing, an unblocked relationship and the seller's phone visibility permission. Rendering uses text nodes; model strings never become HTML.
+## User behavior
 
-## Enable the provider
+Creation asks one question at a time about the item, category-specific attributes, price, city, district, address and extra details. Suggested responses use the site's controlled values. A complete draft can be explicitly accepted and transferred to the existing wizard, where photos, map coordinates, contact consent and final submission are confirmed. The native engine never fabricates coordinates, grants contact visibility, bypasses validation or publishes an ad.
 
-Add `NIAZESTAN_AI_API_KEY` to the repository's GitHub Actions secrets. After approval/merge into `websaza-hosting`, the existing cPanel deployment writes the key only to `public_html/.marketplace-data/ai-config.php`. The protected file is PHP with no direct output and is not committed, cached or sent to browsers. If the secret is absent, deployment leaves an existing server configuration alone. The model defaults to `gpt-4.1-mini`; a server `NZ_AI_MODEL` environment variable can select another Responses API model supporting strict JSON schema. Alternatively configure server `NZ_AI_API_KEY` directly.
+Search extracts item/category, city and budget from Persian input, including Persian/Arabic digits, million/billion units, explicit rial conversion and corrections across turns. It asks for missing location/budget rather than displaying broad unrelated results. Only actual published, non-demo, unexpired and unsold listings are returned by server-side filtering. Contacts require login, a returned listing ID, current availability, an unblocked relationship and the seller's visibility settings.
 
-The provider uses the OpenAI Responses API with `store: false`. Recent conversation and the current draft are held in the user's PHP session, with a one-hour conversation expiry and a bounded history. Users can reset the conversation. The interface discloses external AI processing. IP limits and CSRF validation protect provider calls. A missing key or provider error is shown explicitly; manual operation remains available.
+The parser has deliberately bounded language coverage. It asks for clarification when item classification is ambiguous, a requested city is outside the catalog, or a required controlled value is missing. It does not claim to understand every free-form Persian sentence. Numeric amounts and selectable options are the reliable supported input. Full mobile visual QA and production push delivery remain unverified.
 
-## Install and notifications
+## What learns
 
-The install button opens the browser's PWA installation prompt when supported and otherwise opens the existing platform guide. Installation always requires the user's browser confirmation. On iOS, users add the app to their home screen.
+1. Personal memory is off by default. A signed-in user can explicitly opt in to retaining city and search budget for reuse for 30 days. New instructions override remembered values. No address, phone, coordinates or chat body is copied into personal memory. Turning the option off removes stored preferences. Expired memory is not used.
+2. Users may separately submit a short item phrase and corrected category, with an unchecked consent box. The feedback is bound to an actual recent conversation turn and user account. Contact/address patterns are rejected, input is bounded and submissions are rate-limited. Raw conversations are not used as shared training data.
+3. Samples begin as `pending`, which has no effect on inference. An admin with the existing SMS-elevated session can approve, reject or disable a sample from the admin page. Only approved examples are included in the classifier. Conflicting active mappings require resolving the previous example first. The next request immediately uses the changed prototype set; no GPU, batch training, external model or worker is required. The model admits up to 500 active examples.
+4. Users can delete their own preferences and all submitted examples, including approved ones. Deleted/disabled examples no longer influence future predictions. Account export includes the user's AI data, and account deletion removes it in the same storage transaction. Data is kept in the existing protected SQLite/JSON storage, separate from public source code.
 
-Signed-in users can enable/disable background notifications for their device. Native Web Push uses a persisted P-256 VAPID key pair generated on the server (requires PHP OpenSSL and cURL), with a maximum of six devices per account. Push subscriptions are stored in the existing database. Sends happen after successful notification commits. Empty push payloads carry no message text or phone number; the worker displays a generic notification linked to the authenticated notification page. FCM, Mozilla and Apple push hosts are allowed; redirects, nonstandard ports, credentials, private IPs and arbitrary URLs are rejected. Delivery is best effort; transient push errors are logged without blocking database commits. There is no durable retry queue in this version.
+This is supervised incremental learning of item classification plus optional personal memory, not autonomous modification of prompts, security rules or model weights. Automatic publication and access-control rules never learn from user text.
 
-While a page is visible, a 15-second poll updates unread counts and shows an in-app toast. Chat messages continue using the existing live polling. Real background delivery depends on device/browser permission, browser support, HTTPS and hosting access to push providers. A real Android and installed iPhone delivery check remains required before production sign-off. Device subscription transfer follows the active login when the app is reopened; notifications contain generic text only.
+## Optional cloud model
 
-## Verification
+Set server `NZ_AI_ENGINE=cloud` to use the existing OpenAI Responses API adapter, which supports strict JSON-schema output and uses `store: false`. Set `NZ_AI_API_KEY` on the server, or add the GitHub Actions secret `NIAZESTAN_AI_API_KEY` before deployment. The cPanel workflow writes that secret only to protected `public_html/.marketplace-data/ai-config.php`; it is never committed or sent to browsers. `NZ_AI_MODEL` can override the default `gpt-4.1-mini` with a compatible Responses model. The interface discloses external processing when cloud mode is selected. Cloud failures are explicit. Native mode remains the default even if a provider secret exists.
 
-Run `php tests/niazestan-ai-test.php` and `node tests/niazestan-ai-http.mjs` from the repository root, with PHP 8.1+ and extensions mbstring, cURL and OpenSSL. HTTP tests copy the application to a temporary directory and use isolated sessions/data. Their fixture endpoint is never deployed. Optional `PHP_BIN` and JSON-array `PHP_ARGS_JSON` environment variables support an isolated PHP runtime.
+No live provider request was made in this change. The dedicated native engine and its learning loop are tested without provider credentials.
 
-Local verification also exercised AI/manual mode switching, accepted draft transfer, preservation of values, blank/unconfirmed map coordinates, unchanged contact checkboxes, and HTML injection resistance in a DOM environment with a mocked provider response. No live provider call was made. Full visual mobile-browser testing and actual push delivery have not been verified locally.
+## Install and chat notifications
 
-Before release: configure the provider key, run a real multi-turn creation/search conversation, inspect phone privacy with two accounts, install on Android/iOS, and send a real chat message while the recipient's app is closed. Existing accounts, ads, OTP, moderation and SEO routes remain on the current hosting and storage system.
+The existing app installation, separate manual flow, unread polling and chat controls remain. The install action uses the browser's supported PWA prompt or platform guide; the browser/user must confirm installation. Signed-in users can opt into native Web Push; P-256 VAPID keys are generated and persisted on the server. Generic empty-payload notifications contain no message text or phone number. Subscription ownership, allowed push-provider hosts, redirect rejection and private-IP checks remain enforced. Push sends occur after successful storage commits and are best effort without a durable retry queue. Actual Android and installed iOS background-delivery tests are still required on the production origin.
+
+## Verification and release
+
+From the repository root, with PHP 8.1+, mbstring, OpenSSL, cURL and Node:
+
+```
+php tests/niazestan-ai-test.php
+php tests/niazestan-native-test.php
+node tests/niazestan-ai-http.mjs
+```
+
+HTTP tests copy the app to a temporary directory and use isolated data and sessions. Their fixture endpoints are never deployed. `PHP_BIN` and JSON-array `PHP_ARGS_JSON` can select an isolated PHP runtime. Tests cover provider-independent dialogue, all twelve top-level categories, numeric extraction, corrections, pending/approved/disabled learning, privacy, authorization, memory consent, cross-account isolation and deletion. HTTP integration tests run with SQLite and JSON fallback. Local DOM checks exercise suggested answers, incomplete-draft gating, manual handoff, unchanged consent/map fields and opt-in learning UI. Full visual browser/device testing has not been completed.
+
+Before production sign-off, run complete creation and search journeys with representative real listings, verify admin review with the existing SMS flow, inspect the mobile layout, and test installation/background notifications on real devices. The existing hosting, OTP, moderation, data and SEO routes remain in use.

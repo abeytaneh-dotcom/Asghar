@@ -16,7 +16,10 @@ jobs:
           for file in WebSaza/nz-*.js; do node --check "$file"; done
       - name: Verify AI domain, contact privacy and VAPID
         run: php tests/niazestan-ai-test.php
+      - name: Verify native Persian assistant and supervised learning
+        run: php tests/niazestan-native-test.php
       - name: Verify HTTP authorization and subscription ownership
         env:
           NZ_AI_API_KEY: ''
+          NZ_AI_ENGINE: native
         run: node tests/niazestan-ai-http.mjs

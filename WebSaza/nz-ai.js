@@ -22,7 +22,7 @@
         const event=new CustomEvent('nz:ai-draft',{detail:plan,cancelable:true});f.dispatchEvent(event);
         if(!event.defaultPrevented){status.textContent='فرم هنوز آماده نیست؛ مسیر دستی را باز کنید.';return;}
         toggle(false);status.textContent='اطلاعات منتقل شد. عکس، نقطه روی نقشه، ویژگی‌ها و اجازهٔ نمایش شماره را بررسی کنید؛ سپس برای بررسی ارسال کنید.';f.scrollIntoView({behavior:'smooth',block:'start'});
-      };preview.append(apply);output.append(preview);
+      };if(p.ready!==false)preview.append(apply);output.append(preview);
     }
     function showResults(results){
       output.replaceChildren();if(!results.length){output.append(node('p','آگهی مطابق این شرایط پیدا نشد. می‌توانی شهر، بودجه یا مشخصات را تغییر بدهی.'));return;}
@@ -34,13 +34,20 @@
       });output.append(grid);
     }
     async function submit(text){if(busy)return;busy=true;send.disabled=true;document.getElementById('nzai-reset').disabled=true;input.disabled=true;status.textContent='دارم بررسی می‌کنم…';bubble(text,true);
-      try{const j=await request({message:text});plan=j.plan;bubble(plan.reply||'اطلاعات دریافت شد.');status.textContent='';input.value='';if(mode==='create')showDraft(plan);else showResults(j.results||[]);}
+      try{const j=await request({message:text});plan=j.plan;bubble(plan.reply||'اطلاعات دریافت شد.');status.textContent='';input.value='';if(mode==='create')showDraft(plan);else if(plan.ready!==false)showResults(j.results||[]);else output.replaceChildren();
+        root.querySelector('.nzai-choices')?.remove();if(plan.choices?.length){const options=node('div',undefined,'nzai-choices');const select=node('select');select.setAttribute('aria-label','پاسخ‌های پیشنهادی');const empty=node('option','انتخاب پاسخ پیشنهادی');empty.value='';select.append(empty);plan.choices.forEach(value=>{const o=node('option',value);o.value=value;select.append(o);});select.onchange=()=>{if(select.value)submit(select.value);};options.append(select);compose.before(options);}
+        document.dispatchEvent(new CustomEvent('nzai:turn',{detail:{turn:j.turn,plan}}));
+      }
       catch(e){status.textContent=e.name==='TimeoutError'?'پاسخ دیر شد. دوباره تلاش کنید.':e.message;}
       finally{busy=false;send.disabled=false;input.disabled=false;document.getElementById('nzai-reset').disabled=false;input.focus();}
     }
     compose.addEventListener('submit',e=>{e.preventDefault();const text=input.value.trim();if(text)submit(text);});
     root.querySelectorAll('[data-example]').forEach(b=>{b.onclick=()=>{input.value=b.dataset.example;input.focus();};});
-    document.getElementById('nzai-reset').onclick=async()=>{if(busy)return;try{await request({action:'reset'});log.replaceChildren();output.replaceChildren();plan=null;status.textContent='گفتگوی تازه آماده است.';input.value='';input.focus();}catch(e){status.textContent=e.message;}};
+    const clear=()=>{log.replaceChildren();output.replaceChildren();root.querySelector('.nzai-choices')?.remove();plan=null;input.value='';document.dispatchEvent(new CustomEvent('nzai:turn',{detail:{turn:null,plan:null}}));};
+    document.getElementById('nzai-reset').onclick=async()=>{if(busy)return;try{await request({action:'reset'});clear();status.textContent='گفتگوی تازه آماده است.';input.focus();}catch(e){status.textContent=e.message;}};
+    document.addEventListener('nzai:forgotten',()=>{clear();status.textContent='حافظه و نمونه‌های آموزشی شما حذف شدند.';});
+    busy=true;send.disabled=true;input.disabled=true;
+    request({action:'resume'}).then(j=>{if(!j.plan)return;plan=j.plan;(j.history||[]).forEach(h=>bubble(h.text,h.role==='user'));if(mode==='create')showDraft(plan);else if(plan.ready!==false)showResults(j.results||[]);}).catch(e=>{status.textContent=e.message;}).finally(()=>{busy=false;send.disabled=false;input.disabled=false;});
     toggle(true);
     if(mode==='create'&&!cfg.logged_in){status.textContent='برای ثبت آگهی ابتدا وارد حساب شوید.';toggle(false);}
   }

@@ -23,7 +23,7 @@ rejects(fn()=>nzai_clean(['category'=>'invented']),'invalid taxonomy fails close
 rejects(fn()=>nzai_clean(['city'=>'invented']),'invalid city fails closed');
 rejects(fn()=>nzai_clean(['min_price'=>200,'max_price'=>100]),'inverted budget rejected');
 $c=nzai_clean(['city'=>'شیراز','title'=>'<script>test</script>','attributes'=>[['label'=>'رنگ','value'=>'سفید']]]);check($c['province']==='فارس'&&$c['attributes']['رنگ']==='سفید','known city resolved and structured attributes accepted');
-putenv('NZ_AI_API_KEY');rejects(fn()=>nzai_plan([],'search',[]),'missing provider does not simulate AI');
+putenv('NZ_AI_API_KEY');putenv('NZ_AI_ENGINE=cloud');rejects(fn()=>nzai_plan([],'search',[]),'explicit cloud mode requires provider');putenv('NZ_AI_ENGINE');
 foreach(['http://fcm.googleapis.com/a','https://127.0.0.1/x','https://fcm.googleapis.com.evil.test/x','https://fcm.googleapis.com:444/x','https://user@fcm.googleapis.com/x'] as $url)rejects(fn()=>nzpush_host($url),'reject unsafe push endpoint '.$url);
 check(nzpush_host('https://fcm.googleapis.com/abc')==='fcm.googleapis.com','FCM allowed');
 check(nzpush_host('https://web.push.apple.com/abc')==='web.push.apple.com','Apple push allowed');

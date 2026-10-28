@@ -21,6 +21,7 @@ require_once __DIR__ . '/nz-privacy-actions.php';
 require_once __DIR__ . '/nz-create-pending.php';
 require_once __DIR__ . '/nz-submit-server.php';
 require_once __DIR__ . '/nz-ai-ui.php';
+require_once __DIR__ . '/nz-ai-learning.php';
 
 nzh_headers();
 try {
