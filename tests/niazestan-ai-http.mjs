@@ -12,6 +12,7 @@ if($path==='/__fixture'){
  $db=nzc_db_read();if(!$db['users'])nzc_db_write(function(&$db){$db['users']=[['id'=>'one'],['id'=>'two'],['id'=>'admin','role'=>'admin'],['id'=>'seller']];$p=['user_id'=>'seller','status'=>'published','title'=>'مبل راحتی سالم','description'=>'مبل سه نفره سالم','category'=>'خانه و آشپزخانه','subcategory'=>'مبلمان','province'=>'فارس','city'=>'شیراز','price'=>15000000,'created_at'=>date('c'),'phone_visible'=>false,'chat_enabled'=>true];$db['posts']=[$p+['id'=>'a'],$p+['id'=>'b']];$db['notifications']=[['id'=>'private-one','user_id'=>'one','text'=>'private text','read'=>false,'created_at'=>date('c')]];});
  if(in_array($_GET['uid']??'',['one','two','admin'],true))$_SESSION['uid']=$_GET['uid'];else unset($_SESSION['uid']);
  if(($_GET['uid']??'')==='admin'&&($_GET['elevated']??'')==='1'){require __DIR__.'/site/nz-admin-stepup.php';$_SESSION['nz_admin_stepup']=['uid'=>'admin','until'=>time()+600,'fp'=>nzauth_fp()];}else unset($_SESSION['nz_admin_stepup']);
+ if(($_GET['inventory']??'')==='phones')nzc_db_write(function(&$db){foreach([['f55','Samsung','Galaxy A55'],['f56','Samsung','Galaxy A56'],['fa','Apple','iPhone 13']] as [$id,$brand,$model])$db['posts'][]=['id'=>$id,'user_id'=>'seller','status'=>'published','title'=>'گوشی '.$brand.' '.$model,'category'=>'کالای دیجیتال','subcategory'=>'موبایل','province'=>'فارس','city'=>'شیراز','price'=>5000000,'created_at'=>date('c'),'attributes'=>['برند'=>$brand,'مدل'=>$model,'وضعیت'=>'نو']];});
  $_SESSION['csrf']='fixture-csrf';echo json_encode(['ok'=>true,'subscriptions'=>nzc_db_read()['push_subscriptions']??[]]);return;
 }
 return false;`);
@@ -28,14 +29,14 @@ try{
  assert.equal((await request('/nz-ai-api.php',{csrf:'fixture-csrf',action:'contact',id:'p'})).status,401);
  assert.equal((await request('/nz-notification-api.php')).status,401);
  console.log('PASS HTTP method, CSRF and anonymous access guards');
- const native=await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'سلام',mode:'search'});assert.equal(native.status,200);assert.equal(native.body.plan.engine,'native');assert.equal(native.body.plan.ready,false);assert.deepEqual(native.body.results,[]);
- console.log('PASS native assistant works without a provider and asks before searching');
+ const native=await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'سلام',mode:'search'});assert.equal(native.status,200);assert.equal(native.body.plan.engine,'browse');assert.equal(native.body.plan.ready,false);assert.deepEqual(native.body.results,[]);
+ console.log('PASS native assistant works without a provider and waits only for an item name');
  await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'یه چیزی لازم دارم',mode:'search'});
- let phone=await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'گوشی چی داری',mode:'search'});assert.equal(phone.body.plan.subcategory,'موبایل');assert.equal(phone.body.plan.stage,'city');assert.equal(phone.body.plan.query,'');
+ let phone=await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'گوشی چی داری',mode:'search'});assert.equal(phone.body.plan.subcategory,'موبایل');assert.equal(phone.body.plan.stage,'results');assert.equal(phone.body.plan.query,'');
  await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'همه شهرها',mode:'search'});
  phone=await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'بودجه مهم نیست',mode:'search'});assert.equal(phone.body.plan.ready,true);assert.equal(phone.body.plan.query,'');assert.deepEqual(phone.body.results,[]);
  await request('/nz-ai-api.php',{csrf:'fixture-csrf',action:'reset'});
- console.log('PASS anonymous colloquial phone search recovers from clarification and completes without spurious filters');
+ console.log('PASS anonymous colloquial phone search returns immediately without category, city or budget gates');
  await request('/__fixture?uid=one');let n=await request('/nz-notification-api.php');assert.equal(n.status,200);assert.equal(n.body.items[0].id,'private-one');assert(n.body.public_key);assert(!JSON.stringify(n.body).includes('PRIVATE KEY'));
  const createAnswer=message=>request('/nz-ai-api.php',{csrf:'fixture-csrf',mode:'create',message});
  await createAnswer('گوشی سامسونگ برای فروش دارم');
@@ -108,5 +109,16 @@ try{
  assert.equal((await request(submitEndpoint,{...finalFields,media:JSON.stringify([uploadId]),latitude:''})).status,400);
  const posted=await request(submitEndpoint,{...finalFields,media:JSON.stringify([uploadId])});assert.equal(posted.status,200,JSON.stringify(posted));assert(posted.body.id);const repeated=await request(submitEndpoint,{...finalFields,media:JSON.stringify([uploadId])});assert.equal(repeated.body.id,posted.body.id);
  console.log('PASS mandatory photo, chunk ordering, upload ownership, explicit map, real pending creation without video and idempotent retry');
+ await request('/__fixture?uid=one&inventory=phones');await reset();
+ const browseCall=data=>request(ai,{csrf:'fixture-csrf',mode:'search',...data});
+ let browsed=await browseCall({message:'گوشی می خوام'});assert.equal(browsed.body.plan.ready,true);assert.equal(browsed.body.browse.total,3);assert.equal(browsed.body.browse.facet.key,'برند');assert.deepEqual(browsed.body.browse.facet.options.map(o=>o.value),['Samsung','Apple']);
+ browsed=await browseCall({action:'refine',facet:'برند',value:'Samsung'});assert.equal(browsed.body.browse.total,2);assert.equal(browsed.body.browse.facet.key,'مدل');
+ browsed=await browseCall({message:'A55'});assert.deepEqual(browsed.body.results.map(r=>r.id),['f55']);assert.equal(browsed.body.plan.attributes['مدل'],'Galaxy A55');
+ assert.equal((await browseCall({action:'contact',id:'fa'})).status,403);
+ browsed=await browseCall({action:'refine',facet:'برند',value:''});assert.equal(browsed.body.browse.total,3);
+ assert.equal((await browseCall({action:'refine',facet:'برند',value:'Invented'})).body.ok,false);
+ const restoredBrowse=await browseCall({action:'resume'});assert.equal(restoredBrowse.body.browse.total,3);assert(!JSON.stringify(restoredBrowse.body).includes('کدام دسته است'));
+ await request('/__fixture?uid=two');assert.equal((await browseCall({action:'resume'})).body.plan,undefined);
+ console.log('PASS actual brand/model facets, chip and text refinement, rejected forged option, current-result contact authorization and isolated resume');
  assert(!logs.includes('Fatal error'),logs);
 }finally{server.kill();await rm(temp,{recursive:true,force:true});}
