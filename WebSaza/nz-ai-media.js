@@ -7,21 +7,22 @@
       return new File([blob],blob.type==='image/webp'?'photo.webp':'photo.png',{type:blob.type});
     }finally{bitmap.close();}
   }
+  const timed=(promise,ms)=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('مهلت پردازش تمام شد.')),ms);promise.then(v=>{clearTimeout(timer);resolve(v);},e=>{clearTimeout(timer);reject(e);});});
   async function video(file,progress){
     if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream||!window.AudioContext)return file;
     const mime=['video/webm;codecs=vp8,opus','video/webm','video/mp4'].find(v=>MediaRecorder.isTypeSupported(v));if(!mime)return file;
     const el=document.createElement('video'),url=URL.createObjectURL(file);let stream,audio,recorder,timer;
     el.muted=true;el.playsInline=true;el.preload='auto';el.src=url;
     try{
-      await new Promise((resolve,reject)=>{el.onloadedmetadata=resolve;el.onerror=()=>reject(Error('ویدیو قابل خواندن نیست.'));});
+      await timed(new Promise((resolve,reject)=>{el.onloadedmetadata=resolve;el.onerror=()=>reject(Error('ویدیو قابل خواندن نیست.'));}),20000);
       if(!Number.isFinite(el.duration)||el.duration<=0)return file;
       const ratio=Math.min(1,1280/Math.max(el.videoWidth,el.videoHeight)),canvas=document.createElement('canvas');canvas.width=Math.max(2,Math.floor(el.videoWidth*ratio/2)*2);canvas.height=Math.max(2,Math.floor(el.videoHeight*ratio/2)*2);const ctx=canvas.getContext('2d');
-      stream=canvas.captureStream(24);audio=new AudioContext();await audio.resume();const source=audio.createMediaElementSource(el),dest=audio.createMediaStreamDestination();source.connect(dest);dest.stream.getAudioTracks().forEach(t=>stream.addTrack(t));
+      stream=canvas.captureStream(24);audio=new AudioContext();await timed(audio.resume(),2000);const source=audio.createMediaElementSource(el),dest=audio.createMediaStreamDestination();source.connect(dest);dest.stream.getAudioTracks().forEach(t=>stream.addTrack(t));
       recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:1400000,audioBitsPerSecond:96000});const parts=[];
       const done=new Promise((resolve,reject)=>{recorder.ondataavailable=e=>{if(e.data.size)parts.push(e.data);};recorder.onstop=()=>resolve(new Blob(parts,{type:recorder.mimeType}));recorder.onerror=()=>reject(Error('بهینه‌سازی ویدیو کامل نشد.'));});
-      const ended=new Promise((resolve,reject)=>{el.onended=resolve;el.onerror=reject;});recorder.start(1000);await el.play();
+      done.catch(()=>{});const ended=new Promise((resolve,reject)=>{el.onended=resolve;el.onerror=reject;});recorder.start(1000);await timed(el.play(),10000);
       timer=setInterval(()=>{ctx.drawImage(el,0,0,canvas.width,canvas.height);progress(Math.min(99,Math.round(el.currentTime/el.duration*100)));},1000/24);
-      await ended;recorder.stop();const blob=await done;progress(100);if(!blob.size||blob.size>=file.size)return file;
+      await timed(ended,el.duration*1500+30000);recorder.stop();const blob=await timed(done,5000);progress(100);if(!blob.size||blob.size>=file.size)return file;
       return new File([blob],blob.type.includes('mp4')?'video.mp4':'video.webm',{type:blob.type});
     }catch(_){return file;}finally{clearInterval(timer);el.pause();if(recorder?.state==='recording')recorder.stop();stream?.getTracks().forEach(t=>t.stop());await audio?.close().catch(()=>{});URL.revokeObjectURL(url);el.remove();}
   }
