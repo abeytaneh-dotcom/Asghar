@@ -19,6 +19,13 @@ $s=turn('مبل در شیراز از ۱۰ تا ۲۰ میلیون تومان','se
 $s=turn('مبل تا ۲۰۰۰۰۰۰۰۰ ریال در شیراز','search');test($s['max_price']===20000000,'explicit rial conversion');
 $s=turn('مبل در شیراز تا ۱٫۵ میلیارد تومان','search');test($s['max_price']===1500000000,'Persian decimal conversion');
 $before=turn('آرمینو','search');test($before['category']==='','unknown word asks clarification');
+$clarified=turn('گوشی چی داری','search',$before);test($clarified['subcategory']==='موبایل'&&$clarified['stage']==='city','recognizes colloquial phone request after an unknown subject');
+test($clarified['query']==='','conversational phone question does not become a literal listing filter');
+$clarified=turn('تهران','search',$clarified);$clarified=turn('بودجه مهم نیست','search',$clarified);test($clarified['ready']&&$clarified['subcategory']==='موبایل'&&$clarified['query']==='','clarified phone search completes normally');
+$retry=turn('باز هم نامشخص','search',$before);test($retry['stage']==='category'&&$retry['choices']&&$retry['reply']!==$before['reply'],'failed clarification explains how to continue instead of repeating the same question');
+$createRetry=turn('گوشی دارم برای فروش','create',turn('وسیله خودم','create'));test($createRetry['subcategory']==='موبایل'&&$createRetry['stage']==='attribute','creation also recovers from unknown item');
+$subRetry=turn('موبایل میخوام','search',turn('کالای دیجیتال','search',$before));test($subRetry['subcategory']==='موبایل','subcategory clarification accepts conversational item name');
+foreach(['گوشی چی داری؟','چه گوشی هایی دارید؟','یه گوشی بهم نشون بده','موبایل موجود دارید؟'] as $phrase){$phone=turn($phrase,'search');test($phone['subcategory']==='موبایل'&&$phone['query']==='','understands conversational request: '.$phrase);}
 $sample=['id'=>'t1','phrase'=>'آرمینو','category'=>'خانه و آشپزخانه','subcategory'=>'مبلمان','status'=>'pending'];
 $pending=turn('آرمینو','search',[],[$sample]);test($pending['category']==='','pending example cannot influence inference');
 $sample['status']='approved';$after=turn('آرمینو در شیراز تا ۲۰ میلیون تومان','search',[],[$sample]);test($after['subcategory']==='مبلمان'&&$after['ready'],'approved correction changes future inference');

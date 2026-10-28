@@ -11,6 +11,7 @@ function nznative_norm(string $s): string {
 function nznative_tokens(string $s): array {
     $stop=['می','خواهم','میخواهم','میخوام','میخام','یک','یه','را','رو','من','برای','در','با','از','به','و','که','هستم','است','دارم','دنبال','بفروشم','بخرم','بدم','بدهم','آگهی','ثبت','کنم','کن','لطفا','لطفاً','قیمت','تومان','تومن','میلیون','میلیارد','تا','حداکثر','حداقل','بودجه','نیاز','دارم','باشد','باشه','نه','شهر','استان'];
     $stop=array_merge($stop,['پیدا','نشون','بده','نمایش','بگرد','میگردم','جستجو','جستوجو','قصد','فروش','خرید','کردن','کردم','شده','بخواهم','میخواستم']);
+    $stop=array_merge($stop,['چی','چه','داری','دارید','دارین','دارینش','هست','هستش','هستند','موجود','موجوده','بهم','بدهید','بفرست','میخواد','میخوامش','هایی','های','ها']);
     return array_values(array_filter(preg_split('/[^\p{L}\p{N}]+/u',nznative_norm($s),-1,PREG_SPLIT_NO_EMPTY)?:[],fn($x)=>mb_strlen($x)>1&&!in_array($x,$stop,true)));
 }
 function nznative_has(string $text,string $phrase): bool {
@@ -110,7 +111,8 @@ function nznative_plan(array $history,string $mode,array $draft,array $examples=
         if($p['min_price']!==null&&$p['max_price']!==null&&$p['min_price']>$p['max_price'])throw new RuntimeException('حداقل بودجه از حداکثر بیشتر است؛ بازه را دوباره مشخص کنید.');
     }
     $subject=nznative_subject($text);$classification=null;
-    if(!$greeting&&!$skip&&($stage==='subject'||$p['title']==='')){
+    // A clarification is still an item description, not only an exact taxonomy choice.
+    if(!$greeting&&!$skip&&($stage==='subject'||$p['title']===''||in_array($stage,['category','subcategory'],true))){
         if($subject!==''){$p['title']=$subject;$state['subject']=$subject;$classification=nznative_classify($subject,$examples);}
     }elseif(preg_match('/^(?:نه[،, ]+)?(?:دنبال|آگهی جدید|به جاش)/u',$s)&&$subject!==''){
         $classification=nznative_classify($subject,$examples);if($classification&&$classification['subcategory']!==$p['subcategory']){$p['attributes']=[];$state['subject']=$subject;$p['title']=$subject;unset($state['district_done'],$state['street_done'],$state['description_done']);}
@@ -131,7 +133,7 @@ function nznative_plan(array $history,string $mode,array $draft,array $examples=
     if($catalog){$brand=$p['attributes']['برند']??'';if($brand!==''&&!isset($catalog[$brand]))unset($p['attributes']['برند']);if(isset($catalog[$brand]))foreach($catalog[$brand] as $model)if(nznative_has($s,$model)){$p['attributes']['مدل']=$model;break;}}
     $p['ready']=false;$p['next_attribute']='';$stage='subject';$reply='چه کالا یا خدمتی می‌خواهی '.($mode==='create'?'آگهی کنی؟':'پیدا کنی؟');
     if(!empty($state['subject'])){
-        if($p['category']===''){$stage='category';$reply='این کالا یا خدمت در کدام دسته است؟';$choices=array_keys(nzt_categories());}
+        if($p['category']===''){$retry=($p['stage']??'')==='category';$stage='category';$reply=$retry?'هنوز نوع کالا یا خدمت را تشخیص ندادم. نامش را ساده بنویس، مثلاً «گوشی»، «مبل» یا «آپارتمان»؛ یا یک دسته را انتخاب کن.':'این کالا یا خدمت در کدام دسته است؟';$choices=array_keys(nzt_categories());}
         elseif($p['subcategory']===''){$stage='subcategory';$reply='کدام نوع از این دسته مدنظرت است؟';$choices=nzt_categories()[$p['category']]??[];}
         elseif($mode==='create'){
             $stage='review';foreach($fields as $label=>$allowed)if(!isset($p['attributes'][$label])||$p['attributes'][$label]===''){$stage='attribute';$p['next_attribute']=$label;$reply='«'.$label.'» را مشخص کن.';if($label==='مدل'&&$catalog)$allowed=$catalog[$p['attributes']['برند']??'']??[];$choices=is_array($allowed)?array_slice($allowed,0,80):[];break;}
