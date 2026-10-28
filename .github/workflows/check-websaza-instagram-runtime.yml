@@ -1,0 +1,31 @@
+name: Check WebSaza Instagram Browser Runtime
+
+on:
+  push:
+    branches: [websaza-hosting]
+    paths:
+      - '.github/workflows/check-websaza-instagram-runtime.yml'
+  workflow_dispatch:
+
+jobs:
+  check-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Read live WebSaza runtime capabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://websaza.ir/instagram-host-check.php'
+          for i in {1..24}; do
+            body=$(curl -fsS --max-time 20 "$url" || true)
+            if echo "$body" | jq -e '.ok == true' >/dev/null 2>&1; then
+              echo '=== WEBSAZA_RUNTIME_RESULT ==='
+              echo "$body" | jq .
+              echo '=== END_RESULT ==='
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Runtime diagnostic endpoint did not become available.' >&2
+          exit 1
