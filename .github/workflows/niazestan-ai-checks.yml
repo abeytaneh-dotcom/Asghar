@@ -12,6 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check PHP and JavaScript syntax
         run: |
+          php -l WebSaza/marketplace.php
           find WebSaza -maxdepth 1 -name 'nz-*.php' -print0 | xargs -0 -n1 php -l
           for file in WebSaza/nz-*.js; do node --check "$file"; done
       - name: Verify AI domain, contact privacy and VAPID

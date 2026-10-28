@@ -47,18 +47,7 @@ function nzmap_approx_coords(array $post): ?array {
     $radius = 0.003 + (($seed % 1000) / 1000) * 0.009;
     return [$center[0] + sin($angle) * $radius, $center[1] + cos($angle) * $radius * 1.15];
 }
-function nzmap_demo_posts(): array {
-    return [
-        ['id'=>'demo_iphone','status'=>'published','demo'=>true,'title'=>'آیفون ۱۵ پرو ۲۵۶ گیگ، تمیز','category'=>'کالای دیجیتال','city'=>'تهران','district'=>'سعادت‌آباد','price'=>72500000,'featured'=>true,'created_at'=>date('c',time()-1200),'demo_image'=>'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=82'],
-        ['id'=>'demo_home','status'=>'published','demo'=>true,'title'=>'آپارتمان ۱۲۵ متر، نورگیر و خوش‌نقشه','category'=>'املاک','city'=>'تهران','district'=>'پونک','price'=>7800000000,'featured'=>true,'created_at'=>date('c',time()-3900),'demo_image'=>'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=82'],
-        ['id'=>'demo_207','status'=>'published','demo'=>true,'title'=>'پژو ۲۰۷ اتومات مدل ۱۴۰۳','category'=>'وسایل نقلیه','city'=>'شیراز','district'=>'معالی‌آباد','price'=>1360000000,'featured'=>false,'created_at'=>date('c',time()-2500),'demo_image'=>'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?auto=format&fit=crop&w=900&q=82'],
-        ['id'=>'demo_tv','status'=>'published','demo'=>true,'title'=>'تلویزیون سونی ۶۵ اینچ 4K','category'=>'خانه و آشپزخانه','city'=>'اصفهان','district'=>'مرداویج','price'=>48900000,'featured'=>false,'created_at'=>date('c',time()-5400),'demo_image'=>'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?auto=format&fit=crop&w=900&q=82'],
-        ['id'=>'demo_mac','status'=>'published','demo'=>true,'title'=>'مک‌بوک ایر M2، رم ۸، حافظه ۲۵۶','category'=>'کالای دیجیتال','city'=>'مشهد','district'=>'سجاد','price'=>79000000,'featured'=>false,'created_at'=>date('c',time()-7200),'demo_image'=>'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=900&q=82'],
-        ['id'=>'demo_sofa','status'=>'published','demo'=>true,'title'=>'مبل راحتی ۷ نفره، بسیار تمیز','category'=>'خانه و آشپزخانه','city'=>'شیراز','district'=>'قصرالدشت','price'=>35000000,'featured'=>false,'created_at'=>date('c',time()-9100),'demo_image'=>'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=82'],
-        ['id'=>'demo_service','status'=>'published','demo'=>true,'title'=>'سرویس و تعمیر کولر گازی در محل','category'=>'خدمات','city'=>'تهران','district'=>'غرب تهران','price'=>750000,'featured'=>false,'created_at'=>date('c',time()-12000),'demo_image'=>'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=900&q=82'],
-        ['id'=>'demo_bike','status'=>'published','demo'=>true,'title'=>'موتورسیکلت یاماها، کم‌کار و سالم','category'=>'وسایل نقلیه','city'=>'کرج','district'=>'جهانشهر','price'=>285000000,'featured'=>false,'created_at'=>date('c',time()-15000),'demo_image'=>'https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=900&q=82'],
-    ];
-}
+function nzmap_demo_posts(): array {require_once __DIR__.'/nz-demo-posts.php';return nzdemo_posts();}
 function nzmap_images(array $post): array {
     $result = [];
     if (!empty($post['demo_image']) && is_string($post['demo_image']) && str_starts_with($post['demo_image'], 'https://')) $result[] = $post['demo_image'];

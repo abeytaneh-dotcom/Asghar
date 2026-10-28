@@ -34,7 +34,7 @@ try{
  await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'یه چیزی لازم دارم',mode:'search'});
  let phone=await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'گوشی چی داری',mode:'search'});assert.equal(phone.body.plan.subcategory,'موبایل');assert.equal(phone.body.plan.stage,'results');assert.equal(phone.body.plan.query,'');
  await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'همه شهرها',mode:'search'});
- phone=await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'بودجه مهم نیست',mode:'search'});assert.equal(phone.body.plan.ready,true);assert.equal(phone.body.plan.query,'');assert.deepEqual(phone.body.results,[]);
+ phone=await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'بودجه مهم نیست',mode:'search'});assert.equal(phone.body.plan.ready,true);assert.equal(phone.body.plan.query,'');assert.equal(phone.body.results.length,1);assert.equal(phone.body.results[0].id,'demo_iphone');assert.equal(phone.body.results[0].demo,true);
  await request('/nz-ai-api.php',{csrf:'fixture-csrf',action:'reset'});
  console.log('PASS anonymous colloquial phone search returns immediately without category, city or budget gates');
  await request('/__fixture?uid=one');let n=await request('/nz-notification-api.php');assert.equal(n.status,200);assert.equal(n.body.items[0].id,'private-one');assert(n.body.public_key);assert(!JSON.stringify(n.body).includes('PRIVATE KEY'));
@@ -111,13 +111,14 @@ try{
  console.log('PASS mandatory photo, chunk ordering, upload ownership, explicit map, real pending creation without video and idempotent retry');
  await request('/__fixture?uid=one&inventory=phones');await reset();
  const browseCall=data=>request(ai,{csrf:'fixture-csrf',mode:'search',...data});
- let browsed=await browseCall({message:'گوشی می خوام'});assert.equal(browsed.body.plan.ready,true);assert.equal(browsed.body.browse.total,3);assert.equal(browsed.body.browse.facet.key,'برند');assert.deepEqual(browsed.body.browse.facet.options.map(o=>o.value),['Samsung','Apple']);
+ let browsed=await browseCall({message:'گوشی می خوام'});assert.equal(browsed.body.plan.ready,true);assert.equal(browsed.body.browse.total,4);assert.equal(browsed.body.browse.facet.key,'برند');assert.deepEqual(browsed.body.browse.facet.options.map(o=>o.value).sort(),['Apple','Samsung']);
+ assert.equal((await browseCall({action:'contact',id:'demo_iphone'})).status,409);
  browsed=await browseCall({action:'refine',facet:'برند',value:'Samsung'});assert.equal(browsed.body.browse.total,2);assert.equal(browsed.body.browse.facet.key,'مدل');
  browsed=await browseCall({message:'A55'});assert.deepEqual(browsed.body.results.map(r=>r.id),['f55']);assert.equal(browsed.body.plan.attributes['مدل'],'Galaxy A55');
  assert.equal((await browseCall({action:'contact',id:'fa'})).status,403);
- browsed=await browseCall({action:'refine',facet:'برند',value:''});assert.equal(browsed.body.browse.total,3);
+ browsed=await browseCall({action:'refine',facet:'برند',value:''});assert.equal(browsed.body.browse.total,4);
  assert.equal((await browseCall({action:'refine',facet:'برند',value:'Invented'})).body.ok,false);
- const restoredBrowse=await browseCall({action:'resume'});assert.equal(restoredBrowse.body.browse.total,3);assert(!JSON.stringify(restoredBrowse.body).includes('کدام دسته است'));
+ const restoredBrowse=await browseCall({action:'resume'});assert.equal(restoredBrowse.body.browse.total,4);assert(!JSON.stringify(restoredBrowse.body).includes('کدام دسته است'));
  await request('/__fixture?uid=two');assert.equal((await browseCall({action:'resume'})).body.plan,undefined);
  console.log('PASS actual brand/model facets, chip and text refinement, rejected forged option, current-result contact authorization and isolated resume');
  assert(!logs.includes('Fatal error'),logs);

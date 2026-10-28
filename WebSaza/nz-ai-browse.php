@@ -1,13 +1,20 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__.'/nz-ai-core.php';
+require_once __DIR__.'/nz-demo-posts.php';
 /** Only existing eligible ads provide facets. Catalogue guesses never become options. */
-function nzab_posts(array $db,?array $viewer): array {
-    return array_values(array_filter($db['posts']??[],function($p)use($db,$viewer){
-        if(!nzai_public($p))return false;$seller=(string)($p['user_id']??'');
+function nzab_posts(array $db,?array $viewer,bool $showcase=false): array {
+    $items=[];foreach(array_merge($showcase?nzdemo_posts():[],$db['posts']??[]) as $post)$items[(string)$post['id']]=$post;
+    return array_values(array_filter($items,function($p)use($db,$viewer){
+        if(!nzai_public(array_replace($p,['demo'=>false])))return false;$seller=(string)($p['user_id']??'');
         if(function_exists('nzc_user_blocked')&&nzc_user_blocked($db,$seller))return false;
         return !$viewer||!function_exists('nzcc_blocked')||!nzcc_blocked($db,(string)$viewer['id'],$seller);
     }));
+}
+function nzab_demo(array $post): bool {return !empty($post['demo'])||str_starts_with((string)($post['id']??''),'demo_');}
+function nzab_search(array $posts,array $filters,int $limit=12): array {
+    $visible=array_map(fn($post)=>array_replace($post,['demo'=>false]),$posts);
+    return nzai_search($visible,$filters,$limit);
 }
 function nzab_safe(string $key,string $value): bool {
     if($value===''||mb_strlen($value)>80||mb_strlen($key)>60)return false;
@@ -16,7 +23,7 @@ function nzab_safe(string $key,string $value): bool {
     return !preg_match('/^09[0-9]{9}$/D',preg_replace('/\D/','',nznative_norm($value))??'');
 }
 function nzab_groups(array $posts,array $p): array {
-    $matches=nzai_search($posts,$p,50000);$ids=array_fill_keys(array_column($matches,'id'),true);$groups=[];
+    $matches=nzab_search($posts,$p,50000);$ids=array_fill_keys(array_column($matches,'id'),true);$groups=[];
     foreach($posts as $post){if(!isset($ids[(string)$post['id']]))continue;
         $attrs=is_array($post['attributes']??null)?$post['attributes']:[];
         if(!isset($attrs['برند'])&&isset($attrs['برند/سازنده']))$attrs['برند']=$attrs['برند/سازنده'];unset($attrs['برند/سازنده']);
@@ -97,8 +104,8 @@ function nzab_plan(array $posts,string $message,array $draft=[],array $examples=
     return $p;
 }
 function nzab_view(array $posts,array $p): array {
-    $matches=empty($p['ready'])?[]:nzai_search($posts,$p,50000);$count=count($matches);$offset=max(0,(int)($p['_browse']['offset']??0));$results=array_slice($matches,$offset,12);$byId=[];foreach($posts as $post)$byId[(string)$post['id']]=$post;
-    foreach($results as &$result){$post=$byId[$result['id']];$result['attributes']=[];foreach($post['attributes']??[] as $k=>$v)if(is_scalar($v)&&nzab_safe((string)$k,(string)$v))$result['attributes'][$k]=(string)$v;$image=basename((string)($post['images'][0]??''));$result['image']=$image!==''&&preg_match('/\.(jpe?g|png|webp)$/i',$image)?'/marketplace-uploads/'.rawurlencode($image):'';}unset($result);
+    $matches=empty($p['ready'])?[]:nzab_search($posts,$p,50000);$count=count($matches);$offset=max(0,(int)($p['_browse']['offset']??0));$results=array_slice($matches,$offset,12);$byId=[];foreach($posts as $post)$byId[(string)$post['id']]=$post;
+    foreach($results as &$result){$post=$byId[$result['id']];$result['demo']=nzab_demo($post);$result['attributes']=[];foreach($post['attributes']??[] as $k=>$v)if(is_scalar($v)&&nzab_safe((string)$k,(string)$v))$result['attributes'][$k]=(string)$v;$image=basename((string)($post['images'][0]??''));$result['image']=$image!==''&&preg_match('/\.(jpe?g|png|webp)$/i',$image)?'/marketplace-uploads/'.rawurlencode($image):'';if($result['image']===''&&$result['demo']&&parse_url((string)($post['demo_image']??''),PHP_URL_HOST)==='images.unsplash.com')$result['image']=$post['demo_image'];}unset($result);
     $groups=$count?nzab_groups($posts,$p):[];$order=['برند','مدل','__type','نوع معامله','نوع محصول/خدمت','نوع دستگاه/تجهیز','عنوان شغلی','نوع همکاری','وضعیت','تعداد اتاق','متراژ','سال ساخت','رنگ'];$keys=array_unique(array_merge($order,array_keys($groups),['شهر']));$facet=null;
     foreach($keys as $key){if(!isset($groups[$key])||isset($p['attributes'][$key]))continue;if($key==='__type'&&($p['subcategory']!==''||count($groups[$key])<2))continue;if($key==='شهر'&&$p['city']!=='')continue;$facet=['key'=>$key,'label'=>$key==='__type'?'نوع':$key,'options'=>array_slice($groups[$key],0,60)];break;}
     $selected=[];foreach($p['attributes']??[] as $key=>$value)if(nzab_safe((string)$key,(string)$value))$selected[]=['key'=>$key,'value'=>$value];if($p['city']!=='')$selected[]=['key'=>'شهر','value'=>$p['city']];if($p['min_price']!==null||$p['max_price']!==null)$selected[]=['key'=>'بودجه','value'=>($p['min_price']??0).' تا '.($p['max_price']??'∞').' تومان'];
