@@ -54,6 +54,7 @@ function nzab_match(string $text,string $key,array $options): ?string {
 function nzab_plan(array $posts,string $message,array $draft=[],array $examples=[],?array $selection=null): array {
     $s=nznative_norm($message);if(in_array($s,['از اول','شروع دوباره','گفتگوی تازه'],true))$draft=[];
     $p=nzab_base($draft);$p['_browse']['offset']=0;
+    if(preg_match('/^(?:همه آگهی ها|همه آگهیها|همه آگهی های موجود|همه آگهی های سایت)$/u',$s)){$p=nzab_base([]);$p['_browse']['subject']='همه آگهی‌ها';$message='';}
     if($selection!==null){
         $key=(string)($selection['key']??'');$value=(string)($selection['value']??'');
         if($value===''){

@@ -70,3 +70,7 @@ Run `php tests/niazestan-ai-personal-test.php` for ranking, constraints, consent
 ## Shared visible showcase
 
 `nz-demo-posts.php` owns the eight existing home-page sample listings; the home page, map and assistant reuse that exact source. It adds structured attributes already stated in those sample titles/descriptions, without inventing sellers or additional ads. Browsing includes these labelled samples and marks every sample result. Contact requests for samples are rejected server-side even for signed-in users, while real contacts keep their original visibility/authorization checks. Normal recommendation filtering continues to exclude samples. Tests cover the shared iPhone, its existing price, brand/model facets, sample labelling and contact denial.
+
+## Three-ad horizontal results
+
+Chat results use horizontally scrollable pages of exactly three available cards, with a partial final page when fewer ads remain. Each compact card links its first image and full-title accessibility label directly to the corresponding ad page. Sample labels remain visible. RTL scroll snapping, previous/next and keyboard navigation move by one page. Matching results are prefetched at the last loaded page without duplicating earlier cards, and selected facets plus the chat composer remain available. The “همه آگهی‌ها” message opens the full visible inventory. DOM tests cover 12 initial ads in four pages, loading the next three, unique links, first-image selection and navigation boundaries.

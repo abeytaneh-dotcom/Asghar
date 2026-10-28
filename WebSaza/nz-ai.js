@@ -8,7 +8,7 @@ function init(){
  const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
  const scroll=()=>{log.scrollTop=log.scrollHeight;};
  function bubble(text,mine=false){const e=node('div',text,'nzai-msg'+(mine?' mine':''));log.append(e);scroll();return e;}
- function lock(value){busy=value;input.disabled=send.disabled=value;root.querySelectorAll('[data-task]').forEach(b=>b.disabled=value);log.querySelectorAll('.nzai-actions button,.nzai-actions select,.nzai-browse button,input[type=file]').forEach(b=>b.disabled=value);}
+ function lock(value){busy=value;input.disabled=send.disabled=value;root.querySelectorAll('[data-task]').forEach(b=>b.disabled=value);log.querySelectorAll('.nzai-actions button,.nzai-actions select,.nzai-browse button,input[type=file]').forEach(b=>b.disabled=value);if(!value)log.querySelector('.nzai-carousel')?.update?.();}
  function actions(labels,callback){log.querySelectorAll('.nzai-actions').forEach(e=>e.remove());const row=node('div',undefined,'nzai-actions');if(labels.length<=6)labels.forEach(label=>{const b=node('button',label);b.type='button';b.onclick=()=>{if(!busy)callback(label);};row.append(b);});else{const select=node('select');select.setAttribute('aria-label','انتخاب پاسخ');const empty=node('option','از فهرست انتخاب کن…');empty.value='';select.append(empty);labels.forEach(v=>{const o=node('option',v);o.value=v;select.append(o);});const b=node('button','ارسال انتخاب');b.type='button';b.onclick=()=>{if(select.value&&!busy)callback(select.value);};row.append(select,b);if(labels.includes('سایر مدل')){const other=node('button','مدلم در فهرست نیست');other.type='button';other.onclick=()=>callback('سایر مدل');row.append(other);}}log.append(row);scroll();return row;}
  async function api(data){const r=await fetch('/nz-ai-api.php',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({csrf:cfg.csrf,mode,...data}),signal:AbortSignal.timeout(45000)});const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'ارتباط برقرار نشد؛ دوباره تلاش کن.');return j;}
  function open(){if(!dialog.open)dialog.showModal();launcher.hidden=true;document.documentElement.classList.add('nzai-modal-open');}
@@ -24,15 +24,30 @@ function init(){
   (view.selected||[]).forEach(selected=>{const b=node('button',selected.value+' ×','nzai-filter-selected');b.type='button';b.setAttribute('aria-label','حذف '+selected.key+' '+selected.value);b.onclick=()=>refineBrowse(selected.key,'');row.append(b);});
   if(view.facet){row.append(node('span',(view.facet.label||view.facet.key)+':'));view.facet.options.forEach(o=>{const b=node('button',o.value+' · '+o.count.toLocaleString('fa-IR'));b.type='button';b.onclick=()=>refineBrowse(view.facet.key,o.value);row.append(b);});}
   group.prepend(row);let count=group.querySelector('.nzai-browse-count');if(!count){count=node('p',undefined,'nzai-browse-count');row.after(count);}count.textContent=view.total?view.total.toLocaleString('fa-IR')+' آگهی مرتبط':'فعلاً آگهی مطابق این شرایط پیدا نشد. می‌توانی انتخاب‌ها را برداری یا پیام بعدی را بنویسی.';
-  let first=null;
-  (view.results||[]).forEach(p=>{const card=node('article',undefined,'nzai-browse-card');if(!first)first=card;
-   if(p.image){const img=node('img');img.src=p.image;img.alt=p.title;img.loading='lazy';img.referrerPolicy='no-referrer';card.append(img);}
-   const body=node('div',undefined,'nzai-browse-card-body'),choose=node('button',p.title,'nzai-ad-select');choose.type='button';choose.setAttribute('aria-label','انتخاب آگهی '+p.title);choose.setAttribute('aria-pressed','false');body.append(choose,node('p',(p.price?Number(p.price).toLocaleString('fa-IR')+' تومان':'توافقی')+' · '+p.city));
-   if(p.demo)body.append(node('span','نمایشی','nzai-demo-badge'));const values=Object.values(p.attributes||{}).slice(0,3);if(values.length)body.append(node('small',values.join(' · ')));
-   const detail=node('div',undefined,'nzai-ad-detail');detail.hidden=true;const link=node('a','صفحهٔ آگهی');link.href=p.url;const contact=node('button','اطلاعات تماس و گفتگو');contact.type='button';const contactResult=node('div');contact.onclick=async()=>{if(busy)return;lock(true);try{const j=await api({action:'contact',id:p.id});contactResult.replaceChildren();if(j.phone){const a=node('a',j.phone);a.href='tel:'+j.phone;a.dir='ltr';contactResult.append(a);}else contactResult.append(node('p','صاحب آگهی نمایش شماره را فعال نکرده است.'));if(j.chat_enabled){const a=node('a','گفتگو با صاحب آگهی');a.href=j.url;contactResult.append(a);}}catch(e){contactResult.textContent=e.message;if(!cfg.logged_in){const a=node('a','ورود به حساب');a.href='/nz?page=login';contactResult.append(a);}}finally{lock(false);}};
-   if(p.demo)detail.append(link,node('p','این آگهی نمونه است و اطلاعات تماس واقعی ندارد.'));else detail.append(link,contact,contactResult);choose.onclick=()=>{detail.hidden=!detail.hidden;choose.setAttribute('aria-pressed',String(!detail.hidden));card.classList.toggle('selected',!detail.hidden);};body.append(detail);card.append(body);group.append(card);
+  if(!view.total){group.querySelector('.nzai-carousel')?.remove();group.querySelector('.nzai-carousel-controls')?.remove();alignBrowse(group);return;}
+  let carousel=group.querySelector('.nzai-carousel');
+  if(!carousel){
+   carousel=node('div',undefined,'nzai-carousel');carousel.tabIndex=0;carousel.setAttribute('role','region');carousel.setAttribute('aria-label','آگهی‌ها، سه‌تایی');carousel.dir='rtl';group.append(carousel);
+   const controls=node('div',undefined,'nzai-carousel-controls'),previous=node('button','→'),pageLabel=node('span'),next=node('button','←');previous.type=next.type='button';previous.setAttribute('aria-label','۳ آگهی قبلی');next.setAttribute('aria-label','۳ آگهی بعدی');pageLabel.setAttribute('aria-live','polite');controls.append(previous,pageLabel,next);group.append(controls);
+   const index=()=>Math.min(carousel.children.length-1,Math.max(0,Math.round(Math.abs(carousel.scrollLeft)/Math.max(1,carousel.clientWidth))));
+   const go=i=>{const page=Math.max(0,Math.min(carousel.children.length-1,i));carousel.scrollTo({left:-page*carousel.clientWidth,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});};
+   carousel.update=()=>{const i=index();previous.disabled=i===0;next.disabled=i>=carousel.children.length-1&&carousel.dataset.more!=='1';controls.hidden=carousel.children.length<=1&&carousel.dataset.more!=='1';pageLabel.textContent='صفحهٔ '+(i+1).toLocaleString('fa-IR')+' از '+Math.max(1,Math.ceil(Number(carousel.dataset.total||0)/3)).toLocaleString('fa-IR');carousel.dataset.page=String(i);};
+   carousel.addEventListener('scroll',()=>{carousel.update();if(index()>=carousel.children.length-1&&carousel.dataset.more==='1'&&!busy)refineBrowse('','',true);},{passive:true});
+   previous.onclick=()=>go(index()-1);next.onclick=()=>{if(index()<carousel.children.length-1)go(index()+1);else if(carousel.dataset.more==='1'&&!busy){carousel.dataset.advance='1';refineBrowse('','',true);}};
+   carousel.addEventListener('keydown',e=>{if(e.target!==carousel)return;if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();if(e.key==='ArrowLeft')next.click();else if(e.key==='ArrowRight')previous.click();else go(e.key==='Home'?0:carousel.children.length-1);}});
+  }
+  const oldPages=carousel.children.length;
+  (view.results||[]).forEach(p=>{
+   let page=carousel.lastElementChild;if(!page||page.children.length===3){page=node('div',undefined,'nzai-carousel-page');const start=(carousel.children.length*3)+1;page.setAttribute('role','group');page.setAttribute('aria-label','آگهی‌های '+start.toLocaleString('fa-IR')+' تا '+(start+2).toLocaleString('fa-IR'));carousel.append(page);}
+   const card=node('a',undefined,'nzai-browse-card');card.href=p.url;card.setAttribute('aria-label','مشاهده آگهی '+p.title);
+   const img=node('img');img.src=p.image||'/niazestan-icon.svg';img.alt=p.title;img.loading='lazy';img.referrerPolicy='no-referrer';img.onerror=()=>{img.onerror=null;img.src='/niazestan-icon.svg';img.alt='تصویر آگهی در دسترس نیست';};card.append(img,node('span',p.title,'nzai-carousel-title'));
+   if(p.demo)card.append(node('span','نمایشی','nzai-demo-badge'));page.append(card);
   });
-  if(view.has_more){const more=node('button','آگهی‌های بیشتر','nzai-more');more.type='button';more.onclick=()=>refineBrowse('','',true);group.append(more);}alignBrowse(append&&first?first:group);
+  [...carousel.children].forEach((page,i)=>page.setAttribute('aria-label','آگهی‌های '+(i*3+1).toLocaleString('fa-IR')+' تا '+(i*3+page.children.length).toLocaleString('fa-IR')));
+  carousel.dataset.more=view.has_more?'1':'0';carousel.dataset.total=String(view.total);carousel.update();
+  if(carousel.dataset.advance==='1'&&carousel.children.length>oldPages){delete carousel.dataset.advance;carousel.scrollTo({left:-oldPages*carousel.clientWidth,behavior:'smooth'});}
+  if(!append)alignBrowse(group);
+
  }
  async function refineBrowse(key,value,more=false){if(busy)return;lock(true);status.textContent='در حال جستجو…';if(!more)bubble(value||'حذف انتخاب',true);try{const j=await api(more?{action:'more'}:{action:'refine',facet:key,value});plan=j.plan;showBrowse(j.browse,more);}catch(e){bubble(e.message);}finally{lock(false);status.textContent='';}}
  async function answer(text){if(busy)return;input.value='';bubble(text,true);if(finished){bubble('آگهی‌ات ارسال شده است. برای آگهی بعدی «ثبت آگهی» را بزن.');return;}
