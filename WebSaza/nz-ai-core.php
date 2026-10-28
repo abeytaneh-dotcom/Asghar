@@ -31,19 +31,19 @@ function nzai_public(array $p): bool {
         (empty($p['expires_at'])||strtotime($p['expires_at'])>time());
 }
 function nzai_norm(string $text): string {return nznative_norm($text);}
-function nzai_search(array $posts,array $f): array {
+function nzai_search(array $posts,array $f,int $limit=12,int $offset=0): array {
     $terms=preg_split('/\s+/u',trim(nzai_norm($f['query']??'')),-1,PREG_SPLIT_NO_EMPTY)?:[];
     $rows=[];foreach($posts as $p){if(!nzai_public($p))continue;
         foreach(['category','subcategory','province','city','district'] as $key)if(($f[$key]??'')!==''&&nzai_norm((string)($p[$key]??''))!==nzai_norm($f[$key]))continue 2;
         $price=(int)($p['price']??0);if((($f['min_price']??null)!==null||($f['max_price']??null)!==null)&&$price<=0)continue;
         if(($f['min_price']??null)!==null&&$price<$f['min_price'])continue;
         if(($f['max_price']??null)!==null&&$price>$f['max_price'])continue;
-        foreach($f['attributes']??[] as $label=>$value)if($value!==''&&nzai_norm((string)($p['attributes'][$label]??''))!==nzai_norm($value))continue 2;
+        foreach($f['attributes']??[] as $label=>$value)if($value!==''&&nzai_norm((string)($p['attributes'][$label]??($label==='برند'?($p['attributes']['برند/سازنده']??''):'')))!==nzai_norm($value))continue 2;
         $hay=nzai_norm(implode(' ',[(string)($p['title']??''),(string)($p['description']??''),json_encode($p['attributes']??[],JSON_UNESCAPED_UNICODE)?:'']));
         foreach($terms as $term)if(!str_contains($hay,$term))continue 2;
         $rows[]=['id'=>(string)$p['id'],'title'=>(string)($p['title']??''),'city'=>(string)($p['city']??''),'district'=>(string)($p['district']??''),'price'=>$price,'url'=>'/nz?id='.rawurlencode((string)$p['id']),'created_at'=>(string)($p['created_at']??'')];
     }
-    usort($rows,fn($a,$b)=>strcmp($b['created_at'],$a['created_at']));return array_slice($rows,0,12);
+    usort($rows,fn($a,$b)=>strcmp($b['created_at'],$a['created_at']));return array_slice($rows,max(0,$offset),max(1,$limit));
 }
 function nzai_contact(array $db,string $id,?array $viewer): array {
     if(!$viewer)throw new RuntimeException('برای مشاهده اطلاعات تماس وارد حساب شوید.');
