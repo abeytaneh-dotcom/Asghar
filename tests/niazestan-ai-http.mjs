@@ -30,6 +30,12 @@ try{
  console.log('PASS HTTP method, CSRF and anonymous access guards');
  const native=await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'سلام',mode:'search'});assert.equal(native.status,200);assert.equal(native.body.plan.engine,'native');assert.equal(native.body.plan.ready,false);assert.deepEqual(native.body.results,[]);
  console.log('PASS native assistant works without a provider and asks before searching');
+ await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'یه چیزی لازم دارم',mode:'search'});
+ let phone=await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'گوشی چی داری',mode:'search'});assert.equal(phone.body.plan.subcategory,'موبایل');assert.equal(phone.body.plan.stage,'city');assert.equal(phone.body.plan.query,'');
+ await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'همه شهرها',mode:'search'});
+ phone=await request('/nz-ai-api.php',{csrf:'fixture-csrf',message:'بودجه مهم نیست',mode:'search'});assert.equal(phone.body.plan.ready,true);assert.equal(phone.body.plan.query,'');assert.deepEqual(phone.body.results,[]);
+ await request('/nz-ai-api.php',{csrf:'fixture-csrf',action:'reset'});
+ console.log('PASS anonymous colloquial phone search recovers from clarification and completes without spurious filters');
  await request('/__fixture?uid=one');let n=await request('/nz-notification-api.php');assert.equal(n.status,200);assert.equal(n.body.items[0].id,'private-one');assert(n.body.public_key);assert(!JSON.stringify(n.body).includes('PRIVATE KEY'));
  assert.equal((await request('/nz-notification-api.php',{endpoint:'https://fcm.googleapis.com/test'})).status,403);
  assert.equal((await request('/nz-notification-api.php',{csrf:'fixture-csrf',endpoint:'https://localhost/test'})).status,400);
