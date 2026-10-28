@@ -75,6 +75,33 @@ function nznative_fields(string $cat,string $sub): array {
     $catalog=nzcv_catalog($sub);if($catalog)$fields['برند']=array_keys($catalog);
     return $fields;
 }
+function nznative_model_norm(string $s): string {
+    $s=nznative_norm($s);
+    $aliases=['proمکس'=>'pro max','مکس'=>'max','پلاس'=>'plus','اولترا'=>'ultra','مینی'=>'mini','گلکسی'=>'galaxy','ردمی'=>'redmi','پوکو'=>'poco','نوت'=>'note','پیکسل'=>'pixel','ایر'=>'air'];
+    return preg_replace_callback('/(?<![\p{L}\p{N}])('.implode('|',array_keys($aliases)).')(?![\p{L}\p{N}])/u',fn($m)=>$aliases[$m[0]],$s)??$s;
+}
+/** Accept an unambiguous catalogue model, including a brand-scoped short name. */
+function nznative_model(string $text,array $models,bool $shorthand): ?string {
+    $s=nznative_model_norm($text);$compact=fn($v)=>preg_replace('/[^\p{L}\p{N}]+/u','',nznative_model_norm($v));
+    $candidates=[];
+    foreach($models as $model){
+        if($model==='سایر مدل'){if(nznative_has($s,$model))return $model;continue;}
+        $m=nznative_model_norm($model);$aliases=[$m];
+        if($shorthand)$aliases[]=preg_replace('/^(?:iphone|galaxy|redmi|xiaomi|honor|pixel)\s+/u','',$m)??$m;
+        // Never turn an unsupported Pro/Max/Plus/Ultra variant into its base model.
+        foreach(['pro','max','plus','ultra','mini','air'] as $variant)if(nznative_has($s,$variant)&&!nznative_has($m,$variant))continue 2;
+        foreach($aliases as $alias)if(nznative_has($s,$alias)||$compact($s)===$compact($alias)){$candidates[$model]=mb_strlen($m);break;}
+    }
+    if(!$candidates)return null;arsort($candidates);$names=array_keys($candidates);$best=$names[0];
+    // Multiple different models in one reply require clarification, not a guess.
+    foreach(array_slice($names,1) as $other)if(!nznative_has(nznative_model_norm($best),nznative_model_norm($other)))return null;
+    return $best;
+}
+function nznative_brand(string $text,array $catalog,string $sub): ?string {
+    $matches=[];foreach(array_keys($catalog) as $brand)if(($brand!=='سایر'||nznative_norm($text)==='سایر')&&nznative_has($text,$brand))$matches[]=$brand;
+    if(in_array($sub,['موبایل','تبلت'],true)&&nznative_has($text,'iphone'))$matches[]='Apple';
+    $matches=array_unique($matches);return count($matches)===1?reset($matches):null;
+}
 function nznative_subject(string $text): string {
     $s=nznative_norm($text);$s=preg_replace('/(?:از|حداقل|تا|حداکثر|بودجه|قیمت(?:ش)?|مبلغ)\s*[0-9].*$/u','',$s)??$s;
     $s=preg_replace('/[0-9]+(?:\.[0-9]+)?\s*(?:میلیون|میلیارد|هزار|تومان|تومن|ریال).*$/u','',$s)??$s;
@@ -118,19 +145,26 @@ function nznative_plan(array $history,string $mode,array $draft,array $examples=
         $classification=nznative_classify($subject,$examples);if($classification&&$classification['subcategory']!==$p['subcategory']){$p['attributes']=[];$state['subject']=$subject;$p['title']=$subject;unset($state['district_done'],$state['street_done'],$state['description_done']);}
     }
     if($classification){$p['category']=$classification['category'];$p['subcategory']=$classification['subcategory'];$state['matched']=$classification['phrase'];$state['learned']=!empty($classification['learned']);}
-    $fields=nznative_fields($p['category'],$p['subcategory']);$catalog=nzcv_catalog($p['subcategory']);
+    $fields=nznative_fields($p['category'],$p['subcategory']);$catalog=nzcv_catalog($p['subcategory']);$changedBrand=false;
+    if($catalog&&!preg_match('/(?:نیست|نباشد|نباشه|ندارد|نداره)/u',$s)&&($brand=nznative_brand($s,$catalog,$p['subcategory']))){
+        if(($p['attributes']['برند']??'')!==$brand){unset($p['attributes']['مدل']);$changedBrand=true;}$p['attributes']['برند']=$brand;
+    }
     if($stage==='attribute'&&!empty($p['next_attribute'])){
         $label=$p['next_attribute'];$allowed=$fields[$label]??'text';if($label==='مدل'&&$catalog)$allowed=$catalog[$p['attributes']['برند']??'']??[];
-        if(is_array($allowed)){foreach($allowed as $v)if(nznative_norm($v)===$s){$p['attributes'][$label]=$v;break;}}
+        if($label==='مدل'&&$catalog){if(!preg_match('/(?:نیست|نباشد|نباشه|ندارد|نداره)/u',$s)&&($model=nznative_model($s,$allowed,true)))$p['attributes']['مدل']=$model;}
+        elseif(is_array($allowed)){foreach($allowed as $v)if(nznative_norm($v)===$s){$p['attributes'][$label]=$v;break;}}
         elseif(in_array($allowed,['number','year'],true)){
             if(preg_match('/^[0-9]+$/D',$s)&&($allowed!=='year'||((int)$s>=1300&&(int)$s<=1405)))$p['attributes'][$label]=$s;
         }elseif(!$skip&&mb_strlen($text)<=150)$p['attributes'][$label]=trim($text);
     }
     // Infer only explicit values, never interpret a negated condition as a positive claim.
     if(!preg_match('/(?:نیست|نباشد|نباشه|ندارد|نداره)/u',$s)){
-        foreach($fields as $label=>$allowed)if(is_array($allowed)){usort($allowed,fn($a,$b)=>mb_strlen($b)<=>mb_strlen($a));foreach($allowed as $value)if(nznative_has($s,$value)){$p['attributes'][$label]=$value;break;}}
+        foreach($fields as $label=>$allowed)if(is_array($allowed)&&!($catalog&&$label==='برند')){usort($allowed,fn($a,$b)=>mb_strlen($b)<=>mb_strlen($a));foreach($allowed as $value)if(nznative_has($s,$value)){$p['attributes'][$label]=$value;break;}}
     }
-    if($catalog){$brand=$p['attributes']['برند']??'';if($brand!==''&&!isset($catalog[$brand]))unset($p['attributes']['برند']);if(isset($catalog[$brand]))foreach($catalog[$brand] as $model)if(nznative_has($s,$model)){$p['attributes']['مدل']=$model;break;}}
+    if($catalog){$brand=$p['attributes']['برند']??'';if($brand!==''&&!isset($catalog[$brand]))unset($p['attributes']['برند']);if(isset($catalog[$brand])){
+        if(isset($p['attributes']['مدل'])&&!in_array($p['attributes']['مدل'],$catalog[$brand],true))unset($p['attributes']['مدل']);
+        if(!preg_match('/(?:نیست|نباشد|نباشه|ندارد|نداره)/u',$s)&&($model=nznative_model($s,$catalog[$brand],($p['next_attribute']??'')==='مدل')))$p['attributes']['مدل']=$model;
+    }}
     $p['ready']=false;$p['next_attribute']='';$stage='subject';$reply='چه کالا یا خدمتی می‌خواهی '.($mode==='create'?'آگهی کنی؟':'پیدا کنی؟');
     if(!empty($state['subject'])){
         if($p['category']===''){$retry=($p['stage']??'')==='category';$stage='category';$reply=$retry?'هنوز نوع کالا یا خدمت را تشخیص ندادم. نامش را ساده بنویس، مثلاً «گوشی»، «مبل» یا «آپارتمان»؛ یا یک دسته را انتخاب کن.':'این کالا یا خدمت در کدام دسته است؟';$choices=array_keys(nzt_categories());}
@@ -155,5 +189,29 @@ function nznative_plan(array $history,string $mode,array $draft,array $examples=
     if($mode==='create'&&!empty($state['subject'])){
         $lines=[$state['subject']];foreach($p['attributes'] as $label=>$value)$lines[]=$label.': '.$value;if(!empty($state['details']))$lines[]=$state['details'];$p['description']='مشخصات ثبت‌شده توسط آگهی‌دهنده:'."\n".implode("\n",$lines);
     }
-    $p['engine']='native';$p['stage']=$stage;$p['reply']=$reply;$p['choices']=$choices;$p['_native']=$state;return $p;
+    $p['engine']='native';$p['stage']=$stage;$p['reply']=$reply;$p['choices']=$choices;$p['_native']=$state;
+    return nznative_guidance($p,$mode,$draft,$changedBrand);
+}
+/** Refresh guidance without consuming a user reply, including old saved sessions. */
+function nznative_guidance(array $p,string $mode,array $draft=[],bool $changedBrand=false): array {
+    $stage=$p['stage']??'subject';$reply=$p['reply']??'';$choices=$p['choices']??[];
+    $fields=nznative_fields($p['category']??'',$p['subcategory']??'');$catalog=nzcv_catalog($p['subcategory']??'');
+    if($stage==='attribute'){$allowed=$fields[$p['next_attribute']]??'text';if($p['next_attribute']==='مدل'&&$catalog)$allowed=$catalog[$p['attributes']['برند']??'']??[];$choices=is_array($allowed)?array_slice($allowed,0,80):[];}
+    $p['hint']='می‌توانی پاسخ را بنویسی یا از گزینه‌های همین مرحله انتخاب کنی.';$p['placeholder']='پاسخت را اینجا بنویس…';
+    if($stage==='subject'){$p['hint']=$mode==='create'?'نام کالا یا خدمت را بگو؛ بعد مشخصات، قیمت و محل را قدم‌به‌قدم می‌پرسم.':'نام کالا، شهر و اگر خواستی بودجه‌ات را بنویس.';$p['placeholder']=$mode==='create'?'مثلاً: گوشی سامسونگ A55 برای فروش دارم':'مثلاً: مبل در شیراز تا ۲۰ میلیون تومان';}
+    elseif($stage==='attribute'){
+        $label=$p['next_attribute'];$example=$choices[0]??'';
+        $reply='«'.$label.'» را مشخص کن.';
+        if($label==='مدل'&&$catalog){$reply='مدل '.$p['subcategory'].' با برند «'.($p['attributes']['برند']??'').'» چیست؟';$p['hint']='مدل را بنویس یا از فهرست انتخاب کن؛ مثال: '.$example.'. اگر در فهرست نیست، «سایر مدل» را بزن و نام دقیق را در توضیحات آخر بنویس.';$p['placeholder']='مثلاً: '.$example;}
+        elseif($choices){$p['hint']='یکی از گزینه‌ها را انتخاب کن یا نامش را بنویس؛ مثلاً «'.$example.'».';$p['placeholder']='مثلاً: '.$example;}
+        else{$p['hint']=match($fields[$label]??'text'){'year'=>'سال را چهاررقمی بین ۱۳۰۰ تا ۱۴۰۵ بنویس؛ مثلاً ۱۴۰۲.','number'=>'فقط عدد را بنویس؛ مثلاً ۸۰.',default=>'مقدار «'.$label.'» را کوتاه و دقیق بنویس.'};$p['placeholder']=$label.' را بنویس…';}
+        if(($draft['stage']??'')==='attribute'&&($draft['next_attribute']??'')===$label&&!$changedBrand)$reply='این پاسخ با «'.$label.'» تطبیق نداشت. '.$reply;
+    }elseif($stage==='price'){$p['hint']='عدد و واحد را بنویس؛ یا برای قیمت توافقی، «توافقی» را بزن.';$p['placeholder']='مثلاً: ۲۵ میلیون تومان';$choices=['توافقی'];}
+    elseif($stage==='city'){$p['hint']='نام شهر را بنویس؛ مثلاً «شیراز».'.($mode==='search'?' برای جستجوی سراسری «همه شهرها» را بزن.':'');$p['placeholder']='نام شهر، مثلاً شیراز';}
+    elseif($stage==='district'){$p['hint']='نام محله را بنویس یا با «رد» از این مرحله بگذر.';$p['placeholder']='مثلاً: معالی‌آباد';}
+    elseif($stage==='street'){$p['hint']='نشانی را بنویس یا «بعداً» را بزن. موقعیت نقشه را در فرم نهایی خودت تأیید می‌کنی.';$p['placeholder']='خیابان و نشانی، یا بعداً';}
+    elseif($stage==='description'){$p['hint']='ویژگی‌ها، ایرادها و اگر «سایر مدل» انتخاب کردی، نام دقیق مدل را بنویس؛ یا «توضیح دیگری ندارم» را بزن.';$p['placeholder']='مثلاً: مدل دقیق و ظرفیت، لوازم همراه یا ایراد کالا';}
+    elseif($stage==='review'){$p['hint']='خلاصه را بررسی کن و دکمهٔ «تأیید پیش‌نویس و تکمیل عکس و نقشه» را بزن. آگهی هنوز ثبت نشده است.';$p['placeholder']='اگر لازم است، اصلاح قیمت یا شهر را بنویس…';}
+    elseif($stage==='budget'){$p['hint']='بازه را به تومان بنویس یا «بودجه مهم نیست» را انتخاب کن.';$p['placeholder']='مثلاً: تا ۲۰ میلیون تومان';}
+    $p['reply']=$reply;$p['choices']=$choices;return $p;
 }

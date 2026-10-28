@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+const {Window}=await import(process.env.HAPPY_DOM_MODULE||'happy-dom');
+const php=spawnSync(process.env.PHP_BIN||'php',[...JSON.parse(process.env.PHP_ARGS_JSON||'[]'),'-r',`
+require 'WebSaza/nz-ai-core.php';$p=[];$out=[];
+foreach(['گوشی سامسونگ','مدل ناشناخته','مدلش A55 هست','کارکرده سالم','۲۵ میلیون تومان','شیراز','رد','بعداً','توضیح دیگری ندارم'] as $answer){$p=nzai_plan([['role'=>'user','content'=>$answer]],'create',$p);$out[]=$p;}
+echo json_encode($out,JSON_UNESCAPED_UNICODE);`],{encoding:'utf8'});
+assert.equal(php.status,0,php.stderr);const plans=JSON.parse(php.stdout);
+const w=new Window({url:'https://example.test/nz?page=new',settings:{disableJavaScriptEvaluation:true,disableCSSFileLoading:true,disableJavaScriptFileLoading:true}});
+w.HTMLElement.prototype.scrollIntoView=()=>{};
+w.document.write(`<html dir="rtl"><body><script id="nz-ai-config" type="application/json">{"csrf":"test","logged_in":true}</script>
+<dialog id="nzai-dialog"><button id="nzai-close">بستن</button><section id="nz-ai" data-mode="create"><div class="nzai-heading"></div><button id="nzai-smart"></button><button id="nzai-manual"></button><div id="nzai-panel"><div class="nzai-examples"></div><div id="nzai-log" role="log"></div><form id="nzai-compose"><textarea id="nzai-message"></textarea><button type="submit">ارسال</button></form><div id="nzai-status" role="status"></div><div id="nzai-output"></div><button id="nzai-reset">گفتگوی تازه</button></div></section></dialog><button id="nzai-launcher"></button></body></html>`);
+let next=1,failOnce=false;const calls=[];
+w.fetch=async(url,options)=>{const action=options.body.get('action');calls.push({action,message:options.body.get('message')});if(failOnce){failOnce=false;throw new Error('ارتباط قطع شد');}if(action==='reset')return {ok:true,json:async()=>({ok:true})};return {ok:true,json:async()=>({ok:true,plan:action==='resume'?plans[0]:plans[next++]})};};
+w.eval(readFileSync('WebSaza/nz-ai.js','utf8'));w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
+const settle=()=>new Promise(resolve=>setTimeout(resolve,20));await settle();
+const d=w.document,input=d.querySelector('textarea'),send=d.querySelector('#nzai-compose button');
+const answer=async text=>{input.value=text;d.querySelector('form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await settle();};
+assert(d.querySelector('#nzai-question').textContent.includes('مدل'));
+assert(d.querySelector('#nzai-hint').textContent.includes('سایر مدل'));
+assert(input.getAttribute('aria-describedby').includes('nzai-question'));
+assert.equal(d.querySelector('.nzai-history-box').open,false);
+const select=d.querySelector('select');assert(select);assert([...select.options].some(o=>o.value==='Galaxy A55'));
+assert.equal(d.querySelector('.nzai-guide').textContent.includes('مرحلهٔ ۲ از ۵'),true);
+console.log('PASS restored model stage has current question, hint, labelled choices, progress and compact history');
+const count=calls.length;select.value='Galaxy A55';select.dispatchEvent(new w.Event('change'));await settle();assert.equal(calls.length,count,'selection waits for explicit confirmation');
+await answer('مدل ناشناخته');assert(d.querySelector('#nzai-question').textContent.includes('تطبیق'));assert(d.querySelector('.nzai-choices').textContent.includes('مدلم در فهرست نیست'));assert.equal(input.disabled,false);
+console.log('PASS unknown model remains actionable with an explicit unlisted-model route');
+await answer('مدلش A55 هست');assert(d.querySelector('#nzai-question').textContent.includes('وضعیت'));assert.equal(d.querySelector('select'),null);
+assert([...d.querySelectorAll('.nzai-choices button')].some(b=>b.textContent==='کارکرده سالم'));assert.equal(d.querySelector('.nzai-collected').open,false);
+console.log('PASS shorthand advances to condition buttons while partial draft stays collapsed');
+failOnce=true;await answer('کارکرده سالم');assert(d.querySelector('#nzai-status').textContent.includes('قطع'));assert.equal(input.value,'کارکرده سالم');assert.equal(send.disabled,false);assert([...d.querySelectorAll('.nzai-choices button')].every(b=>!b.disabled));
+console.log('PASS network failure preserves typed answer and re-enables recovery controls');
+for(const text of ['کارکرده سالم','۲۵ میلیون تومان','شیراز','رد','بعداً','توضیح دیگری ندارم'])await answer(text);
+assert(d.querySelector('#nzai-hint').textContent.includes('آگهی هنوز ثبت نشده'));assert.equal(d.querySelector('.nzai-collected'),null);assert(d.querySelector('.nzai-apply'));assert.equal(send.textContent,'ارسال اصلاح');
+console.log('PASS complete phone journey reveals final draft and explains photo/map handoff');
+d.querySelector('#nzai-reset').click();await settle();assert(d.querySelector('#nzai-question').textContent.includes('چه کالا'));assert.equal(d.querySelector('.nzai-apply'),null);assert.equal(d.querySelector('.nzai-choices'),null);
+console.log('PASS new conversation clears stale question, choices and draft');
+next=0;await answer('گوشی سامسونگ');next=2;const restoredSelect=d.querySelector('select');restoredSelect.value='Galaxy A55';restoredSelect.dispatchEvent(new w.Event('change'));[...d.querySelectorAll('.nzai-choices button')].find(b=>b.textContent==='تأیید انتخاب').click();await settle();assert.equal(calls.at(-1).message,'Galaxy A55');assert(d.querySelector('#nzai-question').textContent.includes('وضعیت'));
+console.log('PASS explicit list confirmation submits the chosen model and advances');
+await w.happyDOM.abort();w.close();

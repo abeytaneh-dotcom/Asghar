@@ -19,6 +19,14 @@ The parser has deliberately bounded language coverage. It asks for clarification
 
 This is supervised incremental learning of item classification plus optional personal memory, not autonomous modification of prompts, security rules or model weights. Automatic publication and access-control rules never learn from user text.
 
+## Guided creation and model recovery
+
+The current question, phase, answer example and input hint are shown in a dedicated card. Short choice lists use buttons; longer lists require an explicit confirmation after selection. Conversation history and incomplete drafts are collapsed by default. Final review states that the ad has not been submitted and explains the photo/map handoff. Resume renders the same controls and refreshes native guidance for older sessions without consuming a reply.
+
+Model matching accepts brand-scoped short names such as `A55` and Persian `۱۳ پرو`, with controlled canonical values. Full model matching preserves the specific variant. Ambiguous, negated and unsupported variants require clarification instead of silently choosing a base model. A brand change clears an incompatible model. Every controlled brand has an explicit `سایر مدل` choice, also supported by manual selectors and server validation; users are asked to put the exact unlisted model in the final description. No arbitrary model text is silently added to the catalogue.
+
+`tests/niazestan-native-test.php` covers a complete phone draft, model recovery and strict validation. HTTP tests exercise authenticated creation and resume. `tests/niazestan-ai-guidance-dom.mjs` uses PHP-generated plans and Happy DOM 21.0.4 to verify restored choices, explicit confirmation, error recovery, compact drafts and final handoff instructions; set `HAPPY_DOM_MODULE` to the installed module path when it is outside the repository. CI installs the pinned DOM dependency into its temporary directory.
+
 ## Optional cloud model
 
 Set server `NZ_AI_ENGINE=cloud` to use the existing OpenAI Responses API adapter, which supports strict JSON-schema output and uses `store: false`. Set `NZ_AI_API_KEY` on the server, or add the GitHub Actions secret `NIAZESTAN_AI_API_KEY` before deployment. The cPanel workflow writes that secret only to protected `public_html/.marketplace-data/ai-config.php`; it is never committed or sent to browsers. `NZ_AI_MODEL` can override the default `gpt-4.1-mini` with a compatible Responses model. The interface discloses external processing when cloud mode is selected. Cloud failures are explicit. Native mode remains the default even if a provider secret exists.

@@ -37,6 +37,15 @@ try{
  await request('/nz-ai-api.php',{csrf:'fixture-csrf',action:'reset'});
  console.log('PASS anonymous colloquial phone search recovers from clarification and completes without spurious filters');
  await request('/__fixture?uid=one');let n=await request('/nz-notification-api.php');assert.equal(n.status,200);assert.equal(n.body.items[0].id,'private-one');assert(n.body.public_key);assert(!JSON.stringify(n.body).includes('PRIVATE KEY'));
+ const createAnswer=message=>request('/nz-ai-api.php',{csrf:'fixture-csrf',mode:'create',message});
+ await createAnswer('گوشی سامسونگ برای فروش دارم');
+ let creation=(await request('/nz-ai-api.php',{csrf:'fixture-csrf',mode:'create',action:'resume'})).body.plan;assert.equal(creation.next_attribute,'مدل');assert(creation.choices.includes('سایر مدل'));assert(creation.hint.includes('فهرست'));
+ creation=(await createAnswer('مدلش A55 هست')).body.plan;assert.equal(creation.attributes['مدل'],'Galaxy A55');assert.equal(creation.next_attribute,'وضعیت');
+ for(const text of ['کارکرده سالم','۲۵ میلیون تومان','شیراز','رد','بعداً','توضیح دیگری ندارم'])creation=(await createAnswer(text)).body.plan;
+ assert.equal(creation.ready,true);assert.equal(creation.stage,'review');assert(creation.hint.includes('آگهی هنوز ثبت نشده'));
+ await request('/nz-ai-api.php',{csrf:'fixture-csrf',mode:'create',action:'reset'});
+ await createAnswer('گوشی سامسونگ');creation=(await createAnswer('مدل ناشناخته')).body.plan;assert.equal(creation.next_attribute,'مدل');assert(creation.reply.includes('تطبیق'));creation=(await createAnswer('سایر مدل')).body.plan;assert.equal(creation.attributes['برند'],'Samsung');assert.equal(creation.next_attribute,'وضعیت');
+ console.log('PASS authenticated phone creation, shorthand model, restored choices, unlisted-model escape and complete draft review');
  assert.equal((await request('/nz-notification-api.php',{endpoint:'https://fcm.googleapis.com/test'})).status,403);
  assert.equal((await request('/nz-notification-api.php',{csrf:'fixture-csrf',endpoint:'https://localhost/test'})).status,400);
  assert.equal((await request('/nz-notification-api.php',{csrf:'fixture-csrf',endpoint:'https://fcm.googleapis.com/test'})).status,200);
