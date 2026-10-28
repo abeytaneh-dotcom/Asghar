@@ -95,5 +95,18 @@ try{
  await request('/__fixture?uid=one');await request(personal,{csrf:'fixture-csrf',action:'consent',enabled:'0'});recommendations=await request(personal);assert.deepEqual(recommendations.body.history,[]);assert.deepEqual(recommendations.body.cards,[]);
  await request(personal,{csrf:'fixture-csrf',action:'consent',enabled:'1'});await reset();await request(ai,{csrf:'fixture-csrf',mode:'search',message:'مبل در شیراز تا ۲۰ میلیون تومان'});await request(learning,{csrf:'fixture-csrf',action:'forget'});assert.equal((await request(personal)).body.enabled,false);
  console.log('PASS personal consent, real ranking changes, dismiss/undo, contact signal, history recall, cross-account denial and erasure');
+ const submitEndpoint='/nz-ai-submit.php';
+ assert.equal((await request(submitEndpoint)).status,405);assert.equal((await request(submitEndpoint,{action:'start'})).status,403);
+ await request('/nz-ai-api.php',{csrf:'fixture-csrf',mode:'create',action:'reset'});
+ for(const message of ['گوشی سامسونگ','A55','کارکرده سالم','۲۵ میلیون تومان','شیراز','رد','بعداً','توضیح دیگری ندارم'])await createAnswer(message);
+ const requestId='fixture-submission-123456789';const finalFields={csrf:'fixture-csrf',action:'submit',request_id:requestId,media:'[]',latitude:'29.6',longitude:'52.5',chat_enabled:'1',phone_visible:'0'};
+ assert.equal((await request(submitEndpoint,finalFields)).status,400);
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAZUlEQVR4nO3PQQ3AIADAQEADmhCBfyETweOypKegnfue8WdLB7xqQGtAa0BrQGtAa0BrQGtAa0BrQGtAa0BrQGtAa0BrQGtAa0BrQGtAa0BrQGtAa0BrQGtAa0BrQGtAa0BrQPsALlgBNEM8zP0AAAAASUVORK5CYII=','base64');
+ const started=await request(submitEndpoint,{csrf:'fixture-csrf',action:'start',size:String(png.length),kind:'image'});assert.equal(started.status,200,JSON.stringify(started));const uploadId=started.body.id;
+ async function chunk(offset){const data=new FormData();data.set('csrf','fixture-csrf');data.set('action','chunk');data.set('id',uploadId);data.set('offset',String(offset));data.set('chunk',new Blob([png]),'part');const r=await fetch(base+submitEndpoint,{method:'POST',headers:{Cookie:cookie},body:data});return{status:r.status,body:await r.json()};}
+ assert.equal((await chunk(5)).status,400);await request('/__fixture?uid=two');assert.equal((await chunk(0)).status,403);await request('/__fixture?uid=one');assert.equal((await chunk(0)).body.offset,png.length);
+ assert.equal((await request(submitEndpoint,{...finalFields,media:JSON.stringify([uploadId]),latitude:''})).status,400);
+ const posted=await request(submitEndpoint,{...finalFields,media:JSON.stringify([uploadId])});assert.equal(posted.status,200,JSON.stringify(posted));assert(posted.body.id);const repeated=await request(submitEndpoint,{...finalFields,media:JSON.stringify([uploadId])});assert.equal(repeated.body.id,posted.body.id);
+ console.log('PASS mandatory photo, chunk ordering, upload ownership, explicit map, real pending creation without video and idempotent retry');
  assert(!logs.includes('Fatal error'),logs);
 }finally{server.kill();await rm(temp,{recursive:true,force:true});}

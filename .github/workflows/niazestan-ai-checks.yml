@@ -24,6 +24,13 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/nz-ai-dom" --no-audit --no-fund --ignore-scripts happy-dom@21.0.4
           HAPPY_DOM_MODULE="$RUNNER_TEMP/nz-ai-dom/node_modules/happy-dom/lib/index.js" node tests/niazestan-ai-guidance-dom.mjs
+      - name: Verify media compression and full video duration
+        run: |
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y ffmpeg
+          fi
+          node tests/niazestan-ai-media-test.mjs
       - name: Verify HTTP authorization and subscription ownership
         env:
           NZ_AI_API_KEY: ''
