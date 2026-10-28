@@ -3,13 +3,23 @@
   const cfg=JSON.parse(document.getElementById('nz-ai-config')?.textContent||'{}');
   function init(){
     const root=document.getElementById('nz-ai');if(!root)return;
+    const dialog=document.getElementById('nzai-dialog'),launcher=document.getElementById('nzai-launcher'),closeButton=document.getElementById('nzai-close');
     const mode=root.dataset.mode,log=document.getElementById('nzai-log'),status=document.getElementById('nzai-status'),output=document.getElementById('nzai-output');
     if(!window.matchMedia('(display-mode: standalone)').matches&&!navigator.standalone){const install=document.createElement('button');install.type='button';install.textContent='نصب نیازستان روی گوشی';install.className='nzai-install';install.onclick=()=>window.nzInstallApp?.();root.querySelector('.nzai-heading').after(install);window.addEventListener('appinstalled',()=>install.remove(),{once:true});}
     const compose=document.getElementById('nzai-compose'),input=document.getElementById('nzai-message'),send=compose.querySelector('button');let busy=false,plan=null;
     const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
     const manual=()=>[...document.querySelectorAll('.nz-wizard-head,.nz-wizard-form')];
     const toggle=smart=>{root.classList.toggle('nzai-manual-only',!smart);document.getElementById('nzai-smart').setAttribute('aria-pressed',String(smart));document.getElementById('nzai-manual').setAttribute('aria-pressed',String(!smart));if(mode==='create')manual().forEach(e=>e.classList.toggle('nzai-hide-manual',smart));if(!smart&&mode==='search')document.querySelector('.filter-card input,.mobile-search input')?.focus();};
-    document.getElementById('nzai-smart').onclick=()=>toggle(true);document.getElementById('nzai-manual').onclick=()=>toggle(false);
+    function closed(){if(dialog.open)return;launcher.hidden=false;launcher.setAttribute('aria-expanded','false');document.documentElement.classList.remove('nzai-modal-open');toggle(false);}
+    function closeAssistant(focus=true){if(typeof dialog.close==='function')dialog.close();else dialog.removeAttribute('open');closed();if(focus)launcher.focus({preventScroll:true});}
+    function openAssistant(){toggle(true);if(!dialog.open){if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');}launcher.hidden=true;launcher.setAttribute('aria-expanded','true');document.documentElement.classList.add('nzai-modal-open');closeButton.focus({preventScroll:true});}
+    launcher.onclick=openAssistant;closeButton.onclick=()=>closeAssistant();
+    dialog.addEventListener('cancel',event=>{event.preventDefault();closeAssistant();});dialog.addEventListener('close',closed);
+    dialog.addEventListener('click',event=>{if(event.target!==dialog)return;const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)closeAssistant();});
+    dialog.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();closeAssistant();}else if(event.key==='Tab'){const controls=[...dialog.querySelectorAll('button,a[href],input,select,textarea,summary')].filter(e=>!e.disabled&&!e.closest('[hidden]')&&e.getClientRects().length);const first=controls[0],last=controls.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}}});
+    function positionLauncher(){let bottom=16;document.querySelectorAll('.mobile-nav,.nzux-detail-cta,.compose').forEach(el=>{const r=el.getBoundingClientRect();const style=getComputedStyle(el);if(style.position==='fixed'&&style.display!=='none'&&r.height&&r.top<innerHeight&&r.bottom>0)bottom=Math.max(bottom,innerHeight-r.top+12);});document.documentElement.style.setProperty('--nzai-dock-bottom',bottom+'px');}
+    positionLauncher();window.addEventListener('resize',positionLauncher);window.visualViewport?.addEventListener('resize',positionLauncher);if('ResizeObserver' in window){const observer=new ResizeObserver(positionLauncher);document.querySelectorAll('.mobile-nav,.nzux-detail-cta,.compose').forEach(el=>observer.observe(el));}
+    document.getElementById('nzai-smart').onclick=openAssistant;document.getElementById('nzai-manual').onclick=()=>closeAssistant(false);
     const bubble=(text,mine=false)=>{log.appendChild(node('div',text,'nzai-msg'+(mine?' mine':'')));log.scrollTop=log.scrollHeight;};
     const request=async data=>{const r=await fetch('/nz-ai-api.php',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({csrf:cfg.csrf,mode,...data}),signal:AbortSignal.timeout(45000)});const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'ارتباط برقرار نشد. دوباره تلاش کنید.');return j;};
     function showDraft(p){
@@ -21,7 +31,7 @@
       apply.onclick=()=>{const f=document.querySelector('input[name="action"][value="create_post"]')?.form;if(!f){status.textContent='برای ثبت آگهی وارد حساب شوید.';return;}
         const event=new CustomEvent('nz:ai-draft',{detail:plan,cancelable:true});f.dispatchEvent(event);
         if(!event.defaultPrevented){status.textContent='فرم هنوز آماده نیست؛ مسیر دستی را باز کنید.';return;}
-        toggle(false);status.textContent='اطلاعات منتقل شد. عکس، نقطه روی نقشه، ویژگی‌ها و اجازهٔ نمایش شماره را بررسی کنید؛ سپس برای بررسی ارسال کنید.';f.scrollIntoView({behavior:'smooth',block:'start'});
+        closeAssistant(false);status.textContent='اطلاعات منتقل شد. عکس، نقطه روی نقشه، ویژگی‌ها و اجازهٔ نمایش شماره را بررسی کنید؛ سپس برای بررسی ارسال کنید.';f.scrollIntoView({behavior:'smooth',block:'start'});f.querySelector('[name="title"]')?.focus({preventScroll:true});
       };if(p.ready!==false)preview.append(apply);output.append(preview);
     }
     function showResults(results){
@@ -39,7 +49,7 @@
         document.dispatchEvent(new CustomEvent('nzai:turn',{detail:{turn:j.turn,plan}}));
       }
       catch(e){status.textContent=e.name==='TimeoutError'?'پاسخ دیر شد. دوباره تلاش کنید.':e.message;}
-      finally{busy=false;send.disabled=false;input.disabled=false;document.getElementById('nzai-reset').disabled=false;input.focus();}
+      finally{busy=false;send.disabled=false;input.disabled=false;document.getElementById('nzai-reset').disabled=false;if(dialog.open)input.focus();}
     }
     compose.addEventListener('submit',e=>{e.preventDefault();const text=input.value.trim();if(text)submit(text);});
     root.querySelectorAll('[data-example]').forEach(b=>{b.onclick=()=>{input.value=b.dataset.example;input.focus();};});
@@ -48,7 +58,8 @@
     document.addEventListener('nzai:forgotten',()=>{clear();status.textContent='حافظه و نمونه‌های آموزشی شما حذف شدند.';});
     busy=true;send.disabled=true;input.disabled=true;
     request({action:'resume'}).then(j=>{if(!j.plan)return;plan=j.plan;(j.history||[]).forEach(h=>bubble(h.text,h.role==='user'));if(mode==='create')showDraft(plan);else if(plan.ready!==false)showResults(j.results||[]);}).catch(e=>{status.textContent=e.message;}).finally(()=>{busy=false;send.disabled=false;input.disabled=false;});
-    toggle(true);
+    let autoOpen=true;try{autoOpen=sessionStorage.getItem('nzai-entered')!=='1';sessionStorage.setItem('nzai-entered','1');}catch(_){}
+    if(autoOpen||cfg.open_requested)openAssistant();else closed();
     if(mode==='create'&&!cfg.logged_in){status.textContent='برای ثبت آگهی ابتدا وارد حساب شوید.';toggle(false);}
   }
   if(document.readyState==='complete')init();else document.addEventListener('DOMContentLoaded',init,{once:true});
