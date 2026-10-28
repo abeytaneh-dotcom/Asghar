@@ -5,7 +5,7 @@ function nzcv_colors(): array {
     return ['سفید','مشکی','نقره‌ای','خاکستری','نوک‌مدادی','ذغالی','آبی','آبی تیره','آبی روشن','سرمه‌ای','قرمز','زرشکی','سبز','سبز تیره','یشمی','زرد','نارنجی','قهوه‌ای','کرم','بژ','طلایی','مسی','بنفش','صورتی','فیروزه‌ای','طوسی','دودی','سفید صدفی','مشکی متالیک','نقره‌ای متالیک','خاکستری متالیک','چند رنگ','سایر'];
 }
 function nzcv_catalog(string $subcategory): array {
-    return match ($subcategory) {
+    $catalog = match ($subcategory) {
         'خودرو' => [
             'ایران خودرو'=>['پژو 206','پژو 207','پژو 405','پژو پارس','سمند','سمند سورن','سورن پلاس','دنا','دنا پلاس','دنا پلاس توربو','رانا','رانا پلاس','تارا','ری‌را','آریسان','وانت آریسان','هایما S5','هایما S7','هایما S8','هایما 7X'],
             'سایپا'=>['پراید 111','پراید 131','پراید 132','پراید 141','پراید 151','تیبا','تیبا 2','ساینا','ساینا S','کوییک','کوییک R','کوییک S','شاهین','شاهین G','شاهین پلاس','اطلس','سهند','چانگان CS35','چانگان CS55 پلاس'],
@@ -73,6 +73,10 @@ function nzcv_catalog(string $subcategory): array {
         ],
         default => []
     };
+    // Keep a valid manual and assistant path for models outside this finite catalogue.
+    foreach ($catalog as &$models) if (!in_array('سایر مدل', $models, true)) $models[] = 'سایر مدل';
+    unset($models);
+    return $catalog;
 }
 function nzcv_validate(string $category, string $subcategory, array $attrs): void {
     foreach ($attrs as $label => $value) {

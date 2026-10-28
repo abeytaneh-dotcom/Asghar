@@ -20,6 +20,10 @@ jobs:
         run: php tests/niazestan-native-test.php
       - name: Verify personal recommendations and consent
         run: php tests/niazestan-ai-personal-test.php
+      - name: Verify guided assistant interface and resume
+        run: |
+          npm install --prefix "$RUNNER_TEMP/nz-ai-dom" --no-audit --no-fund --ignore-scripts happy-dom@21.0.4
+          HAPPY_DOM_MODULE="$RUNNER_TEMP/nz-ai-dom/node_modules/happy-dom/lib/index.js" node tests/niazestan-ai-guidance-dom.mjs
       - name: Verify HTTP authorization and subscription ownership
         env:
           NZ_AI_API_KEY: ''

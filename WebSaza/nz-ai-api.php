@@ -23,7 +23,7 @@ try {
     }elseif(($_POST['action']??'')==='resume'){
         $s=$_SESSION['nzai_'.$mode]??[];$out=[];
         if(($s['uid']??null)===($user['id']??'anonymous')&&(int)($s['expires']??0)>time()){
-            $plan=$s['draft'];$out=['plan'=>$plan,'history'=>[]];foreach($s['history']??[] as $h){$value=$h['content'];if($h['role']==='assistant')$value=json_decode($value,true)['reply']??'';$out['history'][]=['role'=>$h['role'],'text'=>$value];}
+            $plan=$s['draft'];if(($plan['engine']??'')==='native')$plan=nznative_guidance($plan,$mode);$out=['plan'=>$plan,'history'=>[]];foreach($s['history']??[] as $h){$value=$h['content'];if($h['role']==='assistant')$value=json_decode($value,true)['reply']??'';$out['history'][]=['role'=>$h['role'],'text'=>$value];}
             if($mode==='search'){$out['results']=($plan['ready']??true)?nzai_search($db['posts'],$plan):[];$_SESSION['nzai_results']=array_column($out['results'],'id');}
         }
     }else{

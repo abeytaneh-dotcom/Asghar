@@ -39,4 +39,21 @@ $types=['آپارتمان'=>'املاک','ماشین'=>'وسایل نقلیه','
 foreach($types as $phrase=>$category)test(turn($phrase,'search')['category']===$category,'supports category '.$category);
 
 $p=turn("می‌خواهم یک مبل بفروشم");$p=turn("کارکرده سالم","create",$p);$p=turn("۲۰ میلیون و ۵۰۰ هزار تومان","create",$p);test($p["price"]===20500000,"compound Persian price units");
+$phone=turn('گوشی برای فروش دارم');$phone=turn('سامسونگ','create',$phone);
+test($phone['next_attribute']==='مدل'&&in_array('سایر مدل',$phone['choices'],true),'model step offers a supported escape for unlisted models');
+$phone=turn('مدلش A55 هست','create',$phone);test(($phone['attributes']['مدل']??'')==='Galaxy A55'&&$phone['next_attribute']==='وضعیت','accepts shorthand model within selected brand and advances');
+foreach(['کارکرده سالم','۲۵ میلیون تومان','شیراز','رد','بعداً','توضیح دیگری ندارم'] as $answer)$phone=turn($answer,'create',$phone);
+test($phone['ready']&&$phone['stage']==='review','phone creation reaches review after model, condition, price and location');nzcv_validate($phone['category'],$phone['subcategory'],$phone['attributes']);
+$apple=turn('میخوام گوشی بفروشم');$apple=turn('آیفون','create',$apple);test(($apple['attributes']['برند']??'')==='Apple','accepts familiar Persian brand name');
+$apple=turn('۱۳ پرو','create',$apple);test(($apple['attributes']['مدل']??'')==='iPhone 13 Pro','Persian shorthand preserves exact model variant');
+$full=turn('گوشی آیفون ۱۳ پرو برای فروش');test(($full['attributes']['مدل']??'')==='iPhone 13 Pro','full initial model does not collapse to shorter base variant');
+$unlisted=turn('گوشی سامسونگ');$unlisted=turn('A999','create',$unlisted);test(!isset($unlisted['attributes']['مدل'])&&str_contains($unlisted['reply'],'تطبیق')&&str_contains($unlisted['hint'],'سایر مدل'),'unrecognized model explains the problem and a way forward');
+$unlisted=turn('سایر مدل','create',$unlisted);test($unlisted['next_attribute']==='وضعیت'&&$unlisted['attributes']['مدل']==='سایر مدل','explicit unlisted-model choice advances without inventing a model');
+$unsupported=turn('گوشی اپل');$unsupported=turn('آیفون ۱۵ پرو مکس','create',$unsupported);test(!isset($unsupported['attributes']['مدل']),'unlisted variant is not silently replaced with base or Pro model');
+$change=turn('سامسونگ','create',$apple);test(($change['attributes']['برند']??'')==='Samsung'&&!isset($change['attributes']['مدل'])&&$change['next_attribute']==='مدل','brand correction clears incompatible model');
+$badCondition=turn('خوبه','create',turn('A55','create',turn('گوشی سامسونگ')));test(str_contains($badCondition['reply'],'تطبیق')&&count($badCondition['choices'])===4,'invalid condition gives actionable choices');
+$negated=turn('A55 نیست','create',turn('گوشی سامسونگ'));test(!isset($negated['attributes']['مدل']),'negated model is not inferred as a positive value');
+$ambiguous=turn('A55 یا A56','create',turn('گوشی سامسونگ'));test(!isset($ambiguous['attributes']['مدل']),'multiple model candidates require a choice');
+$old=turn('گوشی سامسونگ');unset($old['hint'],$old['placeholder']);$old['choices']=['Galaxy A55'];$restored=nznative_guidance($old,'create');test(in_array('سایر مدل',$restored['choices'],true)&&str_contains($restored['hint'],'فهرست'),'old sessions receive current model choices and guidance without an extra turn');
+nzcv_validate($unlisted['category'],$unlisted['subcategory'],$unlisted['attributes']);test($unlisted['attributes']['برند']==='Samsung','unlisted model remains valid under its real brand');
 echo "All native assistant checks passed.\n";
