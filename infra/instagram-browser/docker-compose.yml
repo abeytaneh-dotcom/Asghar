@@ -1,0 +1,53 @@
+services:
+  chromium:
+    image: lscr.io/linuxserver/chromium:latest
+    container_name: websaza-instagram-browser
+    restart: unless-stopped
+    shm_size: "1gb"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Berlin
+      - LC_ALL=fa_IR.UTF-8
+      - HARDEN_DESKTOP=true
+      - HARDEN_OPENBOX=true
+      - DISABLE_SUDO=true
+      - DISABLE_TERMINALS=true
+      - DISABLE_OPEN_TOOLS=true
+      - RESTART_APP=true
+      - NO_DECOR=true
+      - NO_GAMEPAD=true
+      - NO_STEAM=true
+      - NO_WEBCAM=true
+      - SELKIES_COMMAND_ENABLED=false|locked
+      - SELKIES_FILE_TRANSFERS=upload
+      - SELKIES_UI_SIDEBAR_SHOW_APPS=false|locked
+      - SELKIES_UI_SIDEBAR_SHOW_FILES=true|locked
+      - SELKIES_PRINTING_ENABLED=false|locked
+      - CHROME_CLI=--kiosk https://www.instagram.com/
+    volumes:
+      - ./data/chromium:/config
+    expose:
+      - "3000"
+    networks:
+      - private
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: websaza-instagram-caddy
+    restart: unless-stopped
+    depends_on:
+      - chromium
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy-data:/data
+      - ./data/caddy-config:/config
+    networks:
+      - private
+
+networks:
+  private:
+    driver: bridge
