@@ -26,7 +26,7 @@ function nzailearn_save_memory(array &$db,string $uid,array $plan,bool $enable=f
     $db['ai_profiles']=array_values(array_filter($db['ai_profiles']??[],fn($p)=>($p['user_id']??'')!==$uid));$db['ai_profiles'][]=$row;
 }
 function nzailearn_forget(array &$db,string $uid): void {
-    foreach(['ai_profiles','ai_examples'] as $bucket)$db[$bucket]=array_values(array_filter($db[$bucket]??[],fn($row)=>($row['user_id']??'')!==$uid));
+    foreach(['ai_profiles','ai_examples','ai_personalization','ai_search_history','ai_interactions'] as $bucket)$db[$bucket]=array_values(array_filter($db[$bucket]??[],fn($row)=>($row['user_id']??'')!==$uid));
 }
 function nzailearn_submit(array &$db,array $user,array $input): string {
     if(($input['consent']??'')!=='1')throw new RuntimeException('ارسال نمونه برای بهبود دستیار نیازمند رضایت شماست.');

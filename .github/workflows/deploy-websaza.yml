@@ -127,7 +127,7 @@ jobs:
         run: |
           set -euo pipefail
           upload_binary(){ file="$1";name=$(basename "$file");RESPONSE=$(curl --fail-with-body --silent --show-error -H "Authorization: cpanel vt6qdx8:$CPANEL_TOKEN" -F "file-1=@$file;filename=$name" -F "dir=public_html" -F "overwrite=1" "https://mch4444.dnsuserver.com:2083/execute/Fileman/upload_files");echo "$RESPONSE" | jq -e '.status == 1' >/dev/null; }
-          for f in WebSaza/hero-real-v10.jpg WebSaza/service-web-v8.jpg WebSaza/service-app-v8.jpg WebSaza/service-seo-v8.jpg WebSaza/studio-real-v10.jpg WebSaza/meeting-real-v10.jpg WebSaza/project-htaelec-v10.png WebSaza/project-achinu-v10.png WebSaza/project-goldartmis-v10.png; do upload_binary "$f"; done
+          for f in WebSaza/hero-real-v10.jpg WebSaza/service-web-v8.jpg WebSaza/service-app-v8.jpg WebSaza/service-seo-v8.jpg WebSaza/studio-real-v10.jpg WebSaza/meeting-real-v10.jpg WebSaza/project-htaelec-v10.png WebSaza/project-achinu-v10.png WebSaza/project-goldartmis-v10.png WebSaza/nz-ai-avatar.webp; do upload_binary "$f"; done
 
       - name: Configure Niazestan AI when a provider secret is available
         shell: bash
