@@ -18,7 +18,7 @@ $static=[
     nzsw_asset('nz-offline.html'),nzsw_asset('nz-install-direct.js'),nzsw_asset('nz-media-client.js'),nzsw_asset('nz-geocode-proxy.js'),
     nzsw_asset('nz-submit-wizard.js'),nzsw_asset('nz-location-privacy.js'),nzsw_asset('nz-taxonomy-client.js'),nzsw_asset('nz-spec-lite.js'),
     nzsw_asset('nz-brand-model.js'),nzsw_asset('nz-image-moderation.js'),nzsw_asset('nz-draft-preview.js'),nzsw_asset('nz-chat-live.js'),nzsw_asset('nz-a11y.js'),
-    nzsw_asset('nz-ai.css'),nzsw_asset('nz-ai.js'),nzsw_asset('nz-notify.js'),nzsw_asset('nz-ai-learning.js'),nzsw_asset('nz-ai-personal.js'),nzsw_asset('nz-ai-avatar.webp')
+    nzsw_asset('nz-ai-media.js'),nzsw_asset('nz-ai.css'),nzsw_asset('nz-ai.js'),nzsw_asset('nz-notify.js'),nzsw_asset('nz-ai-learning.js'),nzsw_asset('nz-ai-personal.js'),nzsw_asset('nz-ai-avatar.webp')
 ];
 $cache='niazestan-'.substr(hash('sha256',implode('|',$static)),0,16);
 $staticJson=json_encode($static,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
@@ -28,7 +28,7 @@ echo "const CACHE={$cacheJson};\nconst STATIC={$staticJson};\n";
 ?>
 const NEVER_CACHE_PATHS=new Set([
   '/nz-chat-api.php','/nz-lifecycle-cron.php','/nz-models.php','/nz-taxonomy.php','/nz-geocode.php','/nz-health.php',
-  '/nz-sitemap.php','/nz-sms-status.php','/nz-backup-export.php','/nz-sw.php','/nz-ai-api.php','/nz-notification-api.php','/nz-ai-learning-api.php','/nz-ai-personal-api.php'
+  '/nz-sitemap.php','/nz-sms-status.php','/nz-backup-export.php','/nz-sw.php','/nz-ai-api.php','/nz-ai-submit.php','/nz-notification-api.php','/nz-ai-learning-api.php','/nz-ai-personal-api.php'
 ]);
 function staticMatch(url){if(url.origin!==self.location.origin||NEVER_CACHE_PATHS.has(url.pathname))return false;return STATIC.some(entry=>{const e=new URL(entry,self.location.origin);return e.pathname===url.pathname&&(!e.search||e.search===url.search)});}
 async function cacheOne(cache,url){try{const r=await fetch(url,{cache:'reload'});if(r&&r.ok)await cache.put(url,r.clone());return !!(r&&r.ok)}catch(_){return false}}
