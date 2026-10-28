@@ -9,7 +9,7 @@
   }
   async function video(file,progress){
     if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream||!window.AudioContext)return file;
-    const mime=['video/mp4','video/webm;codecs=vp8,opus','video/webm'].find(v=>MediaRecorder.isTypeSupported(v));if(!mime)return file;
+    const mime=['video/webm;codecs=vp8,opus','video/webm','video/mp4'].find(v=>MediaRecorder.isTypeSupported(v));if(!mime)return file;
     const el=document.createElement('video'),url=URL.createObjectURL(file);let stream,audio,recorder,timer;
     el.muted=true;el.playsInline=true;el.preload='auto';el.src=url;
     try{
