@@ -18,6 +18,8 @@ jobs:
         run: php tests/niazestan-ai-test.php
       - name: Verify native Persian assistant and supervised learning
         run: php tests/niazestan-native-test.php
+      - name: Verify personal recommendations and consent
+        run: php tests/niazestan-ai-personal-test.php
       - name: Verify HTTP authorization and subscription ownership
         env:
           NZ_AI_API_KEY: ''

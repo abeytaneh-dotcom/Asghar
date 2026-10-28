@@ -6,6 +6,7 @@ require_once __DIR__.'/nz-hardening.php';
 require_once __DIR__.'/nz-chat-controls.php';
 require_once __DIR__.'/nz-ai-core.php';
 require_once __DIR__.'/nz-ai-learning.php';
+require_once __DIR__.'/nz-ai-personal.php';
 header('Content-Type: application/json; charset=utf-8');header('Cache-Control: no-store');header('X-Robots-Tag: noindex, nofollow');
 try {
     if(($_SERVER['REQUEST_METHOD']??'')!=='POST'){http_response_code(405);header('Allow: POST');throw new RuntimeException('درخواست نامعتبر است.');}
@@ -17,6 +18,7 @@ try {
         if(!$user){http_response_code(401);throw new RuntimeException('برای مشاهده اطلاعات تماس وارد حساب شوید.');}
         if(!in_array((string)($_POST['id']??''),$_SESSION['nzai_results']??[],true)){http_response_code(403);throw new RuntimeException('ابتدا آگهی را جستجو کنید.');}
         $out=nzai_contact($db,(string)$_POST['id'],$user);
+        if(nzaiexp_enabled($db,(string)$user['id']))try{nzc_db_write(fn(&$db)=>nzaiexp_react($db,(string)$user['id'],(string)$_POST['id'],'contact'));}catch(Throwable $e){error_log('Niazestan interaction history unavailable');}
     }elseif(($_POST['action']??'')==='reset'){unset($_SESSION['nzai_'.$mode],$_SESSION['nzai_results']);$out=[];
     }elseif(($_POST['action']??'')==='resume'){
         $s=$_SESSION['nzai_'.$mode]??[];$out=[];
@@ -26,13 +28,15 @@ try {
         }
     }else{
         if($mode==='create'&&!$user){http_response_code(401);throw new RuntimeException('برای ثبت آگهی ابتدا وارد حساب شوید.');}
-        $message=trim((string)($_POST['message']??''));if($message===''||mb_strlen($message)>2000){http_response_code(400);throw new RuntimeException('پیام باید بین ۱ تا ۲۰۰۰ حرف باشد.');}
+        $recall=($_POST['action']??'')==='recall';$recalled=null;
+        if($recall){if(!$user||$mode!=='search'){http_response_code(403);throw new RuntimeException('جستجوی قبلی فقط در حساب خودتان در دسترس است.');}try{$recalled=nzaiexp_recall($db,(string)$user['id'],(string)($_POST['history_id']??''));}catch(RuntimeException $e){http_response_code(404);throw $e;}}
+        $message=$recall?'ادامهٔ جستجوی قبلی':trim((string)($_POST['message']??''));if($message===''||mb_strlen($message)>2000){http_response_code(400);throw new RuntimeException('پیام باید بین ۱ تا ۲۰۰۰ حرف باشد.');}
         $s=$_SESSION['nzai_'.$mode]??['history'=>[],'draft'=>[]];if(($s['expires']??0)<time()||($s['uid']??null)!==($user['id']??'anonymous'))$s=['history'=>[],'draft'=>$user?nzailearn_seed($db,(string)$user['id']):[]];
         $history=array_slice($s['history'],-18);$history[]=['role'=>'user','content'=>$message];
-        $plan=nzai_plan($history,$mode,$s['draft'],$db['ai_examples']??[]);$history[]=['role'=>'assistant','content'=>json_encode($plan,JSON_UNESCAPED_UNICODE)];
+        $plan=$recalled?nzaiexp_plan($recalled):nzai_plan($history,$mode,$s['draft'],$db['ai_examples']??[]);$history[]=['role'=>'assistant','content'=>json_encode($plan,JSON_UNESCAPED_UNICODE)];
         $_SESSION['nzai_'.$mode]=['history'=>$history,'draft'=>$plan,'expires'=>time()+3600,'uid'=>$user['id']??'anonymous'];
         $token=bin2hex(random_bytes(16));$_SESSION['nzai_turns']=array_filter($_SESSION['nzai_turns']??[],fn($t)=>(int)($t['expires']??0)>time());$_SESSION['nzai_turns']=array_slice($_SESSION['nzai_turns'],-19,null,true);$_SESSION['nzai_turns'][$token]=['uid'=>$user['id']??'','expires'=>time()+1800];
-        $out=['plan'=>$plan,'turn'=>$token];if($mode==='search'){$out['results']=($plan['ready']??true)?nzai_search($db['posts'],$plan):[];$_SESSION['nzai_results']=array_column($out['results'],'id');if($user&&nzailearn_profile($db,(string)$user['id']))nzc_db_write(fn(&$db)=>nzailearn_save_memory($db,(string)$user['id'],$plan));}
+        $out=['plan'=>$plan,'turn'=>$token];if($mode==='search'){$out['results']=($plan['ready']??true)?nzai_search($db['posts'],$plan):[];$_SESSION['nzai_results']=array_column($out['results'],'id');if($user&&nzailearn_profile($db,(string)$user['id']))nzc_db_write(fn(&$db)=>nzailearn_save_memory($db,(string)$user['id'],$plan));if($user&&nzaiexp_enabled($db,(string)$user['id']))try{nzc_db_write(fn(&$db)=>nzaiexp_record_search($db,(string)$user['id'],$plan));}catch(Throwable $e){error_log('Niazestan personal history unavailable');}}
     }
     echo json_encode(['ok'=>true]+$out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 }catch(Throwable $e){if(http_response_code()<400)http_response_code(503);echo json_encode(['ok'=>false,'error'=>$e->getMessage()],JSON_UNESCAPED_UNICODE);}

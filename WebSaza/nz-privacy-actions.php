@@ -9,7 +9,7 @@ function nzprivacy_handle(string $action): never {
         foreach($db['notifications']??[]as$r)if(($r['user_id']??'')===$uid)$out['notifications'][]=$r;
         foreach($db['saved_searches']??[]as$r)if(($r['user_id']??'')===$uid)$out['saved_searches'][]=$r;
         foreach($db['messages']??[]as$r)if(($r['sender_id']??'')===$uid)$out['messages_sent'][]=$r;
-        foreach(['ai_profiles','ai_examples'] as $bucket)$out[$bucket]=array_values(array_filter($db[$bucket]??[],fn($r)=>($r['user_id']??'')===$uid));
+        foreach(['ai_profiles','ai_examples','ai_personalization','ai_search_history','ai_interactions'] as $bucket)$out[$bucket]=array_values(array_filter($db[$bucket]??[],fn($r)=>($r['user_id']??'')===$uid));
         nzc_audit($user,'account_export','user',$uid);header('Content-Type: application/json; charset=utf-8');header('Content-Disposition: attachment; filename="niazestan-my-data-'.date('Ymd').'.json"');header('Cache-Control: no-store');echo json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRETTY_PRINT);exit;
     }
     if($action==='deactivate_account'){

@@ -9,7 +9,7 @@ await writeFile(join(temp,'router.php'),`<?php
 $path=parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH);
 if($path==='/__fixture'){
  require __DIR__.'/site/nz-session-bootstrap.php';require __DIR__.'/site/nz-community.php';
- $db=nzc_db_read();if(!$db['users'])nzc_db_write(function(&$db){$db['users']=[['id'=>'one'],['id'=>'two'],['id'=>'admin','role'=>'admin']];$db['notifications']=[['id'=>'private-one','user_id'=>'one','text'=>'private text','read'=>false,'created_at'=>date('c')]];});
+ $db=nzc_db_read();if(!$db['users'])nzc_db_write(function(&$db){$db['users']=[['id'=>'one'],['id'=>'two'],['id'=>'admin','role'=>'admin'],['id'=>'seller']];$p=['user_id'=>'seller','status'=>'published','title'=>'مبل راحتی سالم','description'=>'مبل سه نفره سالم','category'=>'خانه و آشپزخانه','subcategory'=>'مبلمان','province'=>'فارس','city'=>'شیراز','price'=>15000000,'created_at'=>date('c'),'phone_visible'=>false,'chat_enabled'=>true];$db['posts']=[$p+['id'=>'a'],$p+['id'=>'b']];$db['notifications']=[['id'=>'private-one','user_id'=>'one','text'=>'private text','read'=>false,'created_at'=>date('c')]];});
  if(in_array($_GET['uid']??'',['one','two','admin'],true))$_SESSION['uid']=$_GET['uid'];else unset($_SESSION['uid']);
  if(($_GET['uid']??'')==='admin'&&($_GET['elevated']??'')==='1'){require __DIR__.'/site/nz-admin-stepup.php';$_SESSION['nz_admin_stepup']=['uid'=>'admin','until'=>time()+600,'fp'=>nzauth_fp()];}else unset($_SESSION['nz_admin_stepup']);
  $_SESSION['csrf']='fixture-csrf';echo json_encode(['ok'=>true,'subscriptions'=>nzc_db_read()['push_subscriptions']??[]]);return;
@@ -61,5 +61,24 @@ try{
  await request('/__fixture?uid=two');await request(learning,{csrf:'fixture-csrf',action:'forget'});assert.equal((await request(learning)).body.remember,false);
  await reset();inference=await request(ai,{csrf:'fixture-csrf',message:'مبل',mode:'search'});assert.equal(inference.body.plan.city,'');
  console.log('PASS opt-in memory, cross-account isolation, deletion and unlearning');
+ const personal='/nz-ai-personal-api.php';
+ await request('/__fixture');assert.equal((await request(personal)).status,401);
+ await request('/__fixture?uid=one');assert.equal((await request(personal)).body.enabled,false);
+ assert.equal((await request(personal,{action:'consent',enabled:'1'})).status,403);
+ await request(personal,{csrf:'fixture-csrf',action:'consent',enabled:'1'});
+ assert.equal((await request(personal,{csrf:'fixture-csrf',action:'reaction',id:'a',value:'like'})).status,403);
+ await reset();await request(ai,{csrf:'fixture-csrf',mode:'search',message:'مبل در شیراز تا ۲۰ میلیون تومان'});
+ let recommendations=await request(personal);assert.equal(recommendations.body.cards.length,2);assert.equal(recommendations.body.history.length,1);const savedId=recommendations.body.history[0].id;
+ let rated=await request(personal,{csrf:'fixture-csrf',action:'reaction',id:'b',value:'like'});assert.equal(rated.body.cards[0].id,'b');assert.equal(rated.body.cards[0].liked,true);
+ rated=await request(personal,{csrf:'fixture-csrf',action:'reaction',id:'b',value:'dismiss'});assert.deepEqual(rated.body.cards.map(p=>p.id),['a']);
+ await request(personal,{csrf:'fixture-csrf',action:'reaction',id:'b',value:'clear'});
+ await reset();let recalled=await request(ai,{csrf:'fixture-csrf',mode:'search',action:'recall',history_id:savedId});assert.equal(recalled.body.plan.max_price,20000000);assert.equal(recalled.body.results.length,2);
+ await request(ai,{csrf:'fixture-csrf',mode:'search',action:'contact',id:'a'});recommendations=await request(personal);assert.equal(recommendations.body.cards[0].id,'a');
+ await request('/__fixture?uid=two');assert.deepEqual((await request(personal)).body.history,[]);
+ assert.equal((await request(ai,{csrf:'fixture-csrf',mode:'search',action:'recall',history_id:savedId})).status,404);
+ assert.equal((await request(personal,{csrf:'fixture-csrf',action:'reaction',id:'b',value:'like'})).status,403);
+ await request('/__fixture?uid=one');await request(personal,{csrf:'fixture-csrf',action:'consent',enabled:'0'});recommendations=await request(personal);assert.deepEqual(recommendations.body.history,[]);assert.deepEqual(recommendations.body.cards,[]);
+ await request(personal,{csrf:'fixture-csrf',action:'consent',enabled:'1'});await reset();await request(ai,{csrf:'fixture-csrf',mode:'search',message:'مبل در شیراز تا ۲۰ میلیون تومان'});await request(learning,{csrf:'fixture-csrf',action:'forget'});assert.equal((await request(personal)).body.enabled,false);
+ console.log('PASS personal consent, real ranking changes, dismiss/undo, contact signal, history recall, cross-account denial and erasure');
  assert(!logs.includes('Fatal error'),logs);
 }finally{server.kill();await rm(temp,{recursive:true,force:true});}

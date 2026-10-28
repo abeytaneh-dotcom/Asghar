@@ -43,8 +43,8 @@
         card.append(b,contact);grid.append(card);
       });output.append(grid);
     }
-    async function submit(text){if(busy)return;busy=true;send.disabled=true;document.getElementById('nzai-reset').disabled=true;input.disabled=true;status.textContent='دارم بررسی می‌کنم…';bubble(text,true);
-      try{const j=await request({message:text});plan=j.plan;bubble(plan.reply||'اطلاعات دریافت شد.');status.textContent='';input.value='';if(mode==='create')showDraft(plan);else if(plan.ready!==false)showResults(j.results||[]);else output.replaceChildren();
+    async function submit(text,extra={}){if(busy)return;busy=true;send.disabled=true;document.getElementById('nzai-reset').disabled=true;input.disabled=true;status.textContent='دارم بررسی می‌کنم…';bubble(text,true);
+      try{const j=await request({message:text,...extra});plan=j.plan;bubble(plan.reply||'اطلاعات دریافت شد.');status.textContent='';input.value='';if(mode==='create')showDraft(plan);else if(plan.ready!==false)showResults(j.results||[]);else output.replaceChildren();
         root.querySelector('.nzai-choices')?.remove();if(plan.choices?.length){const options=node('div',undefined,'nzai-choices');const select=node('select');select.setAttribute('aria-label','پاسخ‌های پیشنهادی');const empty=node('option','انتخاب پاسخ پیشنهادی');empty.value='';select.append(empty);plan.choices.forEach(value=>{const o=node('option',value);o.value=value;select.append(o);});select.onchange=()=>{if(select.value)submit(select.value);};options.append(select);compose.before(options);}
         document.dispatchEvent(new CustomEvent('nzai:turn',{detail:{turn:j.turn,plan}}));
       }
@@ -55,6 +55,7 @@
     root.querySelectorAll('[data-example]').forEach(b=>{b.onclick=()=>{input.value=b.dataset.example;input.focus();};});
     const clear=()=>{log.replaceChildren();output.replaceChildren();root.querySelector('.nzai-choices')?.remove();plan=null;input.value='';document.dispatchEvent(new CustomEvent('nzai:turn',{detail:{turn:null,plan:null}}));};
     document.getElementById('nzai-reset').onclick=async()=>{if(busy)return;try{await request({action:'reset'});clear();status.textContent='گفتگوی تازه آماده است.';input.focus();}catch(e){status.textContent=e.message;}};
+    document.addEventListener('nzai:recall',event=>{if(mode==='search')submit('ادامهٔ جستجوی قبلی',{action:'recall',history_id:event.detail.id});});
     document.addEventListener('nzai:forgotten',()=>{clear();status.textContent='حافظه و نمونه‌های آموزشی شما حذف شدند.';});
     busy=true;send.disabled=true;input.disabled=true;
     request({action:'resume'}).then(j=>{if(!j.plan)return;plan=j.plan;(j.history||[]).forEach(h=>bubble(h.text,h.role==='user'));if(mode==='create')showDraft(plan);else if(plan.ready!==false)showResults(j.results||[]);}).catch(e=>{status.textContent=e.message;}).finally(()=>{busy=false;send.disabled=false;input.disabled=false;});
