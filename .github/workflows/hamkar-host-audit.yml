@@ -1,0 +1,62 @@
+name: Hamkar hosting read-only audit
+on:
+  push:
+    branches: [arena/hamkar-host-check]
+    paths: [.github/workflows/hamkar-host-audit.yml]
+permissions:
+  contents: read
+jobs:
+  read-only-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_USER: vt6qdx8
+      CPANEL_HOST: mch4444.dnsuserver.com
+    steps:
+      - name: Check domain and hosting capabilities without modifying files
+        shell: bash
+        run: |
+          set -eu
+          test -n "$CPANEL_TOKEN" || { echo 'HOST_TOKEN_MISSING'; exit 1; }
+          BASE="https://${CPANEL_HOST}:2083/execute"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          fetch() {
+            local endpoint="$1" output="$2"
+            shift 2
+            curl -fsS --connect-timeout 10 --max-time 45 -H "$AUTH" --get "$@" "$BASE/$endpoint" -o "$output"
+          }
+          fetch DomainInfo/single_domain_data "$RUNNER_TEMP/domain.json" --data-urlencode 'domain=websaza.ir'
+          ROOT=$(jq -er 'select((.status // .result.status) == 1) | (.data // .result.data) | .documentroot // .document_root' "$RUNNER_TEMP/domain.json")
+          case "$ROOT" in /home*/vt6qdx8/*) ;; *) echo 'DOMAIN_ROOT_UNEXPECTED'; exit 1;; esac
+          echo "DOMAIN_ROOT=$ROOT"
+          fetch Fileman/list_files "$RUNNER_TEMP/files.json" --data-urlencode "dir=$ROOT" --data-urlencode 'show_hidden=1'
+          fetch Backup/list_backups "$RUNNER_TEMP/backups.json" || printf '{"status":0}' > "$RUNNER_TEMP/backups.json"
+          fetch Mysql/list_databases "$RUNNER_TEMP/dbs.json" || printf '{"status":0}' > "$RUNNER_TEMP/dbs.json"
+          fetch LangPHP/php_get_vhost_versions "$RUNNER_TEMP/php.json" --data-urlencode 'vhost=websaza.ir' || printf '{"status":0}' > "$RUNNER_TEMP/php.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          def load(name):
+              d=json.loads((root/(name+'.json')).read_text())
+              if 'result' in d and isinstance(d['result'],dict): d=d['result']
+              return d
+          f=load('files')
+          if f.get('status') != 1: raise SystemExit('ROOT_LISTING_DENIED')
+          data=f.get('data') or []
+          if isinstance(data,dict): data=data.get('files',[])
+          names=[str(x.get('file') or x.get('name') or '') for x in data if isinstance(x,dict)]
+          print('ROOT_ENTRY_COUNT='+str(len(names)))
+          print('ROOT_CRITICAL_PRESENT='+','.join(x for x in ['index.php','index.html','.htaccess','tehran','.marketplace-data'] if x in names))
+          for name in ('backups','dbs','php'):
+              d=load(name); dat=d.get('data') or []
+              print(name.upper()+'_STATUS='+str(d.get('status')))
+              if name in ('backups','dbs'):
+                  print(name.upper()+'_COUNT='+str(len(dat) if isinstance(dat,(list,dict)) else 0))
+              if name=='php':
+                  arr=dat if isinstance(dat,list) else [dat] if isinstance(dat,dict) else []
+                  for row in arr:
+                      if isinstance(row,dict):
+                          print('PHP_VERSION='+str(row.get('version') or row.get('phpversion') or row.get('php_version') or 'unknown'))
+          PY
