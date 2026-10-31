@@ -1,0 +1,50 @@
+name: Hamkar temporary host write probe
+on:
+  push:
+    branches: [arena/hamkar-host-check]
+    paths: [.github/workflows/hamkar-write-probe.yml]
+permissions:
+  contents: read
+jobs:
+  write-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_USER: vt6qdx8
+      CPANEL_HOST: mch4444.dnsuserver.com
+    steps:
+      - name: Upload and remove one non-public one-kilobyte probe
+        shell: bash
+        run: |
+          set -eu
+          test -n "$CPANEL_TOKEN" || { echo 'HOST_TOKEN_MISSING'; exit 1; }
+          BASE="https://${CPANEL_HOST}:2083/execute"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          DIR='/home/vt6qdx8'
+          FILE=".hamkar-writecheck-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tmp"
+          case "$FILE" in .hamkar-writecheck-[0-9]*.tmp) ;; *) exit 1;; esac
+          python3 -c 'print("probe"*200)' > "$RUNNER_TEMP/$FILE"
+          cleanup() {
+            curl -fsS --max-time 20 -H "$AUTH" --get --data-urlencode "path=$DIR/$FILE" "$BASE/Fileman/delete_file" -o "$RUNNER_TEMP/remove.json" || true
+          }
+          trap cleanup EXIT
+          HTTP=$(curl -sS --connect-timeout 10 --max-time 45 -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$FILE;filename=$FILE" -F "dir=$DIR" -F 'overwrite=0' -o "$RUNNER_TEMP/upload.json" -w '%{http_code}' "$BASE/Fileman/upload_files")
+          export HTTP
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'upload.json'
+          try: d=json.loads(p.read_text())
+          except Exception: print('PROBE_HTTP='+os.environ['HTTP']); print('PROBE_RESPONSE_UNREADABLE'); raise SystemExit(1)
+          if isinstance(d.get('result'),dict): d=d['result']
+          print('PROBE_HTTP='+os.environ['HTTP'])
+          print('PROBE_API_STATUS='+str(d.get('status')))
+          errs=d.get('errors') or []
+          # Limit diagnostics to a short server error; never output credentials.
+          print('PROBE_ERRORS='+str(errs)[:350])
+          if d.get('status')!=1: raise SystemExit(1)
+          PY
+          curl -fsS --max-time 20 -H "$AUTH" --get --data-urlencode "dir=$DIR" --data-urlencode "file=$FILE" "$BASE/Fileman/get_file_content" -o "$RUNNER_TEMP/verify.json"
+          jq -e '(.status // .result.status)==1' "$RUNNER_TEMP/verify.json" >/dev/null
+          echo 'PROBE_WRITE_VERIFIED=true'
