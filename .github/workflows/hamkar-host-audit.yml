@@ -35,7 +35,7 @@ jobs:
           fetch Mysql/list_databases "$RUNNER_TEMP/dbs.json" || printf '{"status":0}' > "$RUNNER_TEMP/dbs.json"
           fetch LangPHP/php_get_vhost_versions "$RUNNER_TEMP/php.json" --data-urlencode 'vhost=websaza.ir' || printf '{"status":0}' > "$RUNNER_TEMP/php.json"
           fetch StatsBar/get_stats "$RUNNER_TEMP/stats.json" --data-urlencode 'display=diskusage' || printf '{"status":0}' > "$RUNNER_TEMP/stats.json"
-          fetch Fileman/get_file_content "$RUNNER_TEMP/htaccess.json" --data-urlencode "dir=$ROOT" --data-urlencode 'file=.htaccess' || printf '{"status":0}' > "$RUNNER_TEMP/htaccess.json
+          fetch Fileman/get_file_content "$RUNNER_TEMP/htaccess.json" --data-urlencode "dir=$ROOT" --data-urlencode 'file=.htaccess' || printf '{"status":0}' > "$RUNNER_TEMP/htaccess.json"
           python3 - <<'PY'
           import hashlib, json, os
           from pathlib import Path
