@@ -31,6 +31,7 @@ jobs:
           case "$ROOT" in /home*/vt6qdx8/*) ;; *) echo 'DOMAIN_ROOT_UNEXPECTED'; exit 1;; esac
           echo "DOMAIN_ROOT=$ROOT"
           fetch Fileman/list_files "$RUNNER_TEMP/files.json" --data-urlencode "dir=$ROOT" --data-urlencode 'show_hidden=1'
+          fetch Fileman/list_files "$RUNNER_TEMP/home.json" --data-urlencode 'dir=/home/vt6qdx8' --data-urlencode 'show_hidden=1'
           fetch Backup/list_backups "$RUNNER_TEMP/backups.json" || printf '{"status":0}' > "$RUNNER_TEMP/backups.json"
           fetch Mysql/list_databases "$RUNNER_TEMP/dbs.json" || printf '{"status":0}' > "$RUNNER_TEMP/dbs.json"
           fetch LangPHP/php_get_vhost_versions "$RUNNER_TEMP/php.json" --data-urlencode 'vhost=websaza.ir' || printf '{"status":0}' > "$RUNNER_TEMP/php.json"
@@ -55,6 +56,11 @@ jobs:
           names=[str(x.get('file') or x.get('name') or '') for x in data if isinstance(x,dict)]
           print('ROOT_ENTRY_COUNT='+str(len(names)))
           print('ROOT_CRITICAL_PRESENT='+','.join(x for x in ['index.php','index.html','.htaccess','tehran','.marketplace-data'] if x in names))
+          print('ROOT_PROBE_LEFTOVERS='+json.dumps([n for n in names if n.startswith('hamkar-capability-41240')],ensure_ascii=False))
+          h=load('home'); hd=h.get('data') or []
+          if isinstance(hd,dict): hd=hd.get('files',[])
+          hn=[str(x.get('file') or x.get('name') or '') for x in hd if isinstance(x,dict)]
+          print('HOME_PROBE_LEFTOVERS='+json.dumps([n for n in hn if n.startswith('.hamkar-writecheck-412397')],ensure_ascii=False))
           for name in ('backups','dbs','php','stats','htaccess','quota','local_quota','backup_quota','website_backups'):
               d=load(name); dat=d.get('data') or []
               print(name.upper()+'_STATUS='+str(d.get('status')))
