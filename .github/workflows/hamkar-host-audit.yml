@@ -35,6 +35,10 @@ jobs:
           fetch Mysql/list_databases "$RUNNER_TEMP/dbs.json" || printf '{"status":0}' > "$RUNNER_TEMP/dbs.json"
           fetch LangPHP/php_get_vhost_versions "$RUNNER_TEMP/php.json" --data-urlencode 'vhost=websaza.ir' || printf '{"status":0}' > "$RUNNER_TEMP/php.json"
           fetch StatsBar/get_stats "$RUNNER_TEMP/stats.json" --data-urlencode 'display=diskusage' || printf '{"status":0}' > "$RUNNER_TEMP/stats.json"
+          fetch Quota/get_quota_info "$RUNNER_TEMP/quota.json" || printf '{"status":0}' > "$RUNNER_TEMP/quota.json"
+          fetch Quota/get_local_quota_info "$RUNNER_TEMP/local_quota.json" || printf '{"status":0}' > "$RUNNER_TEMP/local_quota.json"
+          fetch WebsiteBackup/disk_quota_check "$RUNNER_TEMP/backup_quota.json" --data-urlencode 'domain=websaza.ir' || printf '{"status":0}' > "$RUNNER_TEMP/backup_quota.json"
+          fetch WebsiteBackup/list_backups "$RUNNER_TEMP/website_backups.json" --data-urlencode 'domain=websaza.ir' || printf '{"status":0}' > "$RUNNER_TEMP/website_backups.json"
           fetch Fileman/get_file_content "$RUNNER_TEMP/htaccess.json" --data-urlencode "dir=$ROOT" --data-urlencode 'file=.htaccess' || printf '{"status":0}' > "$RUNNER_TEMP/htaccess.json"
           python3 - <<'PY'
           import hashlib, json, os
@@ -51,7 +55,7 @@ jobs:
           names=[str(x.get('file') or x.get('name') or '') for x in data if isinstance(x,dict)]
           print('ROOT_ENTRY_COUNT='+str(len(names)))
           print('ROOT_CRITICAL_PRESENT='+','.join(x for x in ['index.php','index.html','.htaccess','tehran','.marketplace-data'] if x in names))
-          for name in ('backups','dbs','php','stats','htaccess'):
+          for name in ('backups','dbs','php','stats','htaccess','quota','local_quota','backup_quota','website_backups'):
               d=load(name); dat=d.get('data') or []
               print(name.upper()+'_STATUS='+str(d.get('status')))
               if name in ('backups','dbs'):
@@ -62,6 +66,10 @@ jobs:
                   for row in arr:
                       if isinstance(row,dict):
                           print(name.upper()+'_DETAIL='+json.dumps({k:row[k] for k in allowed if k in row},ensure_ascii=False))
+              if name in ('quota','local_quota','backup_quota'):
+                  print(name.upper()+'_DATA='+json.dumps(dat,ensure_ascii=False))
+              if name=='website_backups':
+                  print('WEBSITE_BACKUPS_COUNT='+str(len(dat) if isinstance(dat,(list,dict)) else 0))
               if name=='htaccess' and isinstance(dat,dict):
                   content=dat.get('content')
                   if isinstance(content,str): print('HTACCESS_SHA256='+hashlib.sha256(content.encode()).hexdigest())
