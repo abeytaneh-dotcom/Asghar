@@ -34,8 +34,10 @@ jobs:
           fetch Backup/list_backups "$RUNNER_TEMP/backups.json" || printf '{"status":0}' > "$RUNNER_TEMP/backups.json"
           fetch Mysql/list_databases "$RUNNER_TEMP/dbs.json" || printf '{"status":0}' > "$RUNNER_TEMP/dbs.json"
           fetch LangPHP/php_get_vhost_versions "$RUNNER_TEMP/php.json" --data-urlencode 'vhost=websaza.ir' || printf '{"status":0}' > "$RUNNER_TEMP/php.json"
+          fetch StatsBar/get_stats "$RUNNER_TEMP/stats.json" --data-urlencode 'display=diskusage' || printf '{"status":0}' > "$RUNNER_TEMP/stats.json"
+          fetch Fileman/get_file_content "$RUNNER_TEMP/htaccess.json" --data-urlencode "dir=$ROOT" --data-urlencode 'file=.htaccess' || printf '{"status":0}' > "$RUNNER_TEMP/htaccess.json
           python3 - <<'PY'
-          import json, os
+          import hashlib, json, os
           from pathlib import Path
           root=Path(os.environ['RUNNER_TEMP'])
           def load(name):
@@ -49,14 +51,18 @@ jobs:
           names=[str(x.get('file') or x.get('name') or '') for x in data if isinstance(x,dict)]
           print('ROOT_ENTRY_COUNT='+str(len(names)))
           print('ROOT_CRITICAL_PRESENT='+','.join(x for x in ['index.php','index.html','.htaccess','tehran','.marketplace-data'] if x in names))
-          for name in ('backups','dbs','php'):
+          for name in ('backups','dbs','php','stats','htaccess'):
               d=load(name); dat=d.get('data') or []
               print(name.upper()+'_STATUS='+str(d.get('status')))
               if name in ('backups','dbs'):
                   print(name.upper()+'_COUNT='+str(len(dat) if isinstance(dat,(list,dict)) else 0))
-              if name=='php':
+              if name in ('php','stats'):
                   arr=dat if isinstance(dat,list) else [dat] if isinstance(dat,dict) else []
+                  allowed=('vhost','domain','version','phpversion','php_version','name','id','count','max','maxed','units','percent','usage','limit','description')
                   for row in arr:
                       if isinstance(row,dict):
-                          print('PHP_VERSION='+str(row.get('version') or row.get('phpversion') or row.get('php_version') or 'unknown'))
+                          print(name.upper()+'_DETAIL='+json.dumps({k:row[k] for k in allowed if k in row},ensure_ascii=False))
+              if name=='htaccess' and isinstance(dat,dict):
+                  content=dat.get('content')
+                  if isinstance(content,str): print('HTACCESS_SHA256='+hashlib.sha256(content.encode()).hexdigest())
           PY
