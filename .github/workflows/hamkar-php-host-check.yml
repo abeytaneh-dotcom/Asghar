@@ -56,7 +56,7 @@ jobs:
           }
           trap cleanup EXIT
           curl -fsS --connect-timeout 10 --max-time 30 -H "$AUTH" --request POST --data-urlencode "dir=$DIR" --data-urlencode "file=$FILE" --data-urlencode "content@$RUNNER_TEMP/probe.php" "$BASE/Fileman/save_file_content" -o "$RUNNER_TEMP/save.json"
-          jq -e '(.status // .result.status)==1' "$RUNNER_TEMP/save.json" >/dev/null
+          if ! jq -e '(.status // .result.status)==1' "$RUNNER_TEMP/save.json" >/dev/null; then jq -c '{status,errors}' "$RUNNER_TEMP/save.json"; exit 1; fi
           curl -fsS --connect-timeout 10 --max-time 30 -H "X-Hamkar-Probe: $SECRET" "https://websaza.ir/$FILE" -o "$RUNNER_TEMP/result.json"
           python3 - <<'PY'
           import json,os
