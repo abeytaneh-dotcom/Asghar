@@ -29,7 +29,7 @@ jobs:
             curl -fsS --max-time 20 -H "$AUTH" --get --data-urlencode "path=$DIR/$FILE" "$BASE/Fileman/delete_file" -o "$RUNNER_TEMP/remove.json" || true
           }
           trap cleanup EXIT
-          HTTP=$(curl -sS --connect-timeout 10 --max-time 45 -H "$AUTH" -F "file-1=@$RUNNER_TEMP/$FILE;filename=$FILE" -F "dir=$DIR" -F 'overwrite=0' -o "$RUNNER_TEMP/upload.json" -w '%{http_code}' "$BASE/Fileman/upload_files")
+          HTTP=$(curl -sS --connect-timeout 10 --max-time 45 -H "$AUTH" --request POST --data-urlencode "dir=$DIR" --data-urlencode "file=$FILE" --data-urlencode "content@$RUNNER_TEMP/$FILE" -o "$RUNNER_TEMP/upload.json" -w '%{http_code}' "$BASE/Fileman/save_file_content")
           export HTTP
           python3 - <<'PY'
           import json,os
