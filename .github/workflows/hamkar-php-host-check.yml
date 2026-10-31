@@ -1,0 +1,68 @@
+name: Hamkar short-lived PHP capability probe
+on:
+  push:
+    branches: [arena/hamkar-host-check]
+    paths: [.github/workflows/hamkar-php-host-check.yml]
+permissions:
+  contents: read
+jobs:
+  php-capabilities:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+      CPANEL_USER: vt6qdx8
+      CPANEL_HOST: mch4444.dnsuserver.com
+    steps:
+      - name: Temporarily check effective PHP version and extensions
+        shell: bash
+        run: |
+          set -eu
+          test -n "$CPANEL_TOKEN"
+          BASE="https://${CPANEL_HOST}:2083/execute"
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          DIR='/home/vt6qdx8/public_html'
+          RANDOM_TAG=$(openssl rand -hex 12)
+          FILE="hamkar-capability-${GITHUB_RUN_ID}-${RANDOM_TAG}.php"
+          SECRET=$(openssl rand -hex 32)
+          echo "::add-mask::$SECRET"
+          HASH=$(printf '%s' "$SECRET" | sha256sum | cut -d' ' -f1)
+          cat > "$RUNNER_TEMP/probe.php" <<'PHP'
+          <?php
+          header('Cache-Control: no-store, private');
+          header('X-Content-Type-Options: nosniff');
+          $provided = $_SERVER['HTTP_X_HAMKAR_PROBE'] ?? '';
+          if (!is_string($provided) || !hash_equals('__EXPECTED_HASH__', hash('sha256', $provided))) {
+              http_response_code(404); exit;
+          }
+          header('Content-Type: application/json');
+          $extensions = ['intl','mbstring','curl','openssl','pdo','pdo_mysql','pdo_sqlite','xml','zip'];
+          $out=[];
+          foreach ($extensions as $extension) { $out[$extension]=extension_loaded($extension); }
+          echo json_encode(['php'=>PHP_VERSION,'extensions'=>$out], JSON_UNESCAPED_SLASHES);
+          PHP
+          sed -i "s/__EXPECTED_HASH__/$HASH/" "$RUNNER_TEMP/probe.php"
+          cleanup() {
+            curl -fsS --connect-timeout 10 --max-time 20 -H "$AUTH" --get --data-urlencode "path=$DIR/$FILE" "$BASE/Fileman/delete_file" -o "$RUNNER_TEMP/delete.json" || true
+            python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'delete.json'
+          try:
+              d=json.loads(p.read_text()); d=d.get('result',d)
+              print('PROBE_CLEANUP_STATUS='+str(d.get('status')))
+          except Exception: print('PROBE_CLEANUP_STATUS=unknown')
+          PY
+          }
+          trap cleanup EXIT
+          curl -fsS --connect-timeout 10 --max-time 30 -H "$AUTH" --request POST --data-urlencode "dir=$DIR" --data-urlencode "file=$FILE" --data-urlencode "content@$RUNNER_TEMP/probe.php" "$BASE/Fileman/save_file_content" -o "$RUNNER_TEMP/save.json"
+          jq -e '(.status // .result.status)==1' "$RUNNER_TEMP/save.json" >/dev/null
+          curl -fsS --connect-timeout 10 --max-time 30 -H "X-Hamkar-Probe: $SECRET" "https://websaza.ir/$FILE" -o "$RUNNER_TEMP/result.json"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          r=json.loads((Path(os.environ['RUNNER_TEMP'])/'result.json').read_text())
+          assert isinstance(r.get('php'),str) and isinstance(r.get('extensions'),dict)
+          print('EFFECTIVE_PHP='+r['php'])
+          for name,value in r['extensions'].items(): print('EXTENSION_'+name.upper()+'='+str(bool(value)).lower())
+          PY
