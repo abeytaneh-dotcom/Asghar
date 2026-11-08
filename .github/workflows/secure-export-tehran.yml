@@ -45,19 +45,19 @@ jobs:
           id=$(cat "$RUNNER_TEMP/export-id")
           cleanup(){
             curl -ksS --connect-timeout 10 --max-time 30 --get \
-              -H "$authheader" --data-urlencode "dir=public_html/tehran" \
-              --data-urlencode "file=$filename" \
+              -H "$authheader" --data-urlencode "path=public_html/tehran/$filename" \
               "https://${CPANEL_HOST}:2083/execute/Fileman/delete_file" -o /dev/null || true
             rm -f "$RUNNER_TEMP/source-plaintext.zip" "$RUNNER_TEMP/export-auth" "$RUNNER_TEMP/$filename"
           }
           trap cleanup EXIT
           response="$RUNNER_TEMP/upload-response.json"
-          http=$(curl -ksS --max-time 70 -H "$authheader" \
-            -F "dir=public_html/tehran" -F "overwrite=1" \
-            -F "file=@$RUNNER_TEMP/$filename;filename=$filename" \
-            "https://${CPANEL_HOST}:2083/execute/Fileman/upload_files" -o "$response" -w '%{http_code}')
-          echo "UPLOAD_HTTP=$http"
-          jq -r '{status:.status,result_status:.result.status,errors:.errors,result_errors:.result.errors,metadata:.metadata}' "$response" 2>/dev/null | head -c 1600 || true
+          http=$(curl -ksS --max-time 70 --request POST -H "$authheader" \
+            --data-urlencode "dir=public_html/tehran" \
+            --data-urlencode "file=$filename" \
+            --data-urlencode "content@$RUNNER_TEMP/$filename" \
+            "https://${CPANEL_HOST}:2083/execute/Fileman/save_file_content" -o "$response" -w '%{http_code}')
+          echo "SAVE_HTTP=$http"
+          jq -r '{status:.status,errors:.errors,result_status:.result.status}' "$response" 2>/dev/null | head -c 1000 || true
           if [[ "$http" != 200 ]]; then exit 1; fi
           jq -e '((.result.status // .status // 0)|tostring) == "1"' "$response" >/dev/null
           echo 'Temporary authenticated exporter installed.'
