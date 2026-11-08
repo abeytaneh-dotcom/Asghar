@@ -1,0 +1,38 @@
+name: Source cPanel Tehran Migration Read-Only Check
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/source-tehran-readonly-check.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CP_HOST: mch4444.dnsuserver.com
+      CP_USER: vt6qdx8
+      CP_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+    steps:
+      - name: Verify source access without exposing secrets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "${CP_TOKEN}" ]]; then
+            echo "SOURCE_SECRET_MISSING"; exit 1
+          fi
+          for p in public_html public_html/tehran public_html/tehran/storage; do
+            tmp="$(mktemp)"
+            status=$(curl -skS --connect-timeout 12 --max-time 25 -o "$tmp" -w '%{http_code}' \
+              -H "Authorization: cpanel ${CP_USER}:${CP_TOKEN}" \
+              --get --data-urlencode "dir=$p" --data-urlencode 'show_hidden=1' \
+              "https://${CP_HOST}:2083/execute/Fileman/list_files") || status=000
+            parsed=$(jq -r '(.result.status // .status // 0)|tostring' "$tmp" 2>/dev/null || echo 0)
+            echo "PATH=$p HTTP=$status API=$parsed"
+            if [[ "$status" == 200 && "$parsed" == 1 ]]; then
+              jq -r '(.result.data // .data // []) | .[] | (.file // .name // "") | tostring' "$tmp" | head -n 80 || true
+            else
+              jq -r '(.result.errors // .errors // [])[]?' "$tmp" | head -c 500 || true
+            fi
+            rm -f "$tmp"
+          done
