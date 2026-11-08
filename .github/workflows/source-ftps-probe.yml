@@ -1,0 +1,50 @@
+name: Test temporary source FTP account and clean up
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/source-ftps-probe.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      CP_HOST: mch4444.dnsuserver.com
+      CP_USER: vt6qdx8
+      CP_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+    steps:
+      - name: Create and immediately remove temporary FTP access
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lftp >/dev/null
+          ftpuser="tmmigr$(openssl rand -hex 4)"
+          ftppass="$(openssl rand -hex 22)"
+          domain="websaza.ir"
+          auth="Authorization: cpanel ${CP_USER}:${CP_TOKEN}"
+          cleanup() {
+            curl -sk --max-time 30 -G -H "$auth" --data-urlencode "user=$ftpuser" --data-urlencode "domain=$domain" \
+              "https://${CP_HOST}:2083/execute/Ftp/delete_ftp" > /dev/null || true
+          }
+          trap cleanup EXIT
+          res="$RUNNER_TEMP/ftp.json"
+          curl -sk --max-time 40 -G -H "$auth" \
+            --data-urlencode "user=$ftpuser" --data-urlencode "domain=$domain" \
+            --data-urlencode "pass=$ftppass" --data-urlencode "quota=0" \
+            "https://${CP_HOST}:2083/execute/Ftp/add_ftp" -o "$res"
+          jq '{status,errors,data}' "$res" | head -c 1600
+          jq -e '.status == 1' "$res" > /dev/null
+          echo "Temporary FTP account created."
+          lftp -u "$ftpuser@$domain","$ftppass" -p 21 "$CP_HOST" -e "
+            set ftp:ssl-force true;
+            set ftp:ssl-protect-data true;
+            set ssl:verify-certificate false;
+            set net:timeout 20;
+            set net:max-retries 1;
+            pwd;
+            cls -1 | head;
+            bye;
+          "
+          echo "Temporary FTP login test finished; cleanup triggered."
