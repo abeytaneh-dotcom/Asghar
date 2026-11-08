@@ -1,0 +1,99 @@
+name: Secure export Tehran source files and database
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/secure-export-tehran.yml']
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      CPANEL_HOST: mch4444.dnsuserver.com
+      CPANEL_USER: vt6qdx8
+      CPANEL_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Prepare temporary authenticated exporter
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$CPANEL_TOKEN"
+          id=$(openssl rand -hex 12)
+          printf '%s' "$id" > "$RUNNER_TEMP/export-id"
+          auth=$(openssl rand -hex 32)
+          name="tm-migrate-export-${id}.php"
+          printf '%s' "$name" > "$RUNNER_TEMP/export-name"
+          python3 - "$auth" <<'PY'
+          import sys
+          p=open('ops/tehran-migration-export.php.tpl').read()
+          assert '__MIGRATION_TOKEN__' in p
+          open('/tmp/tehran-migration-export.php','w').write(p.replace('__MIGRATION_TOKEN__',sys.argv[1]))
+          PY
+          php -l /tmp/tehran-migration-export.php | sed 's# /tmp/.*##'
+          cp /tmp/tehran-migration-export.php "$RUNNER_TEMP/$name"
+          printf '%s' "$auth" > "$RUNNER_TEMP/export-auth"
+      - name: Download one-time protected backup and encrypt before storage
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          authheader="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          filename=$(cat "$RUNNER_TEMP/export-name")
+          id=$(cat "$RUNNER_TEMP/export-id")
+          cleanup(){
+            curl -ksS --connect-timeout 10 --max-time 30 --get \
+              -H "$authheader" --data-urlencode "dir=public_html/tehran" \
+              --data-urlencode "file=$filename" \
+              "https://${CPANEL_HOST}:2083/execute/Fileman/delete_file" -o /dev/null || true
+            rm -f "$RUNNER_TEMP/source-plaintext.zip" "$RUNNER_TEMP/export-auth" "$RUNNER_TEMP/$filename"
+          }
+          trap cleanup EXIT
+          response="$RUNNER_TEMP/upload-response.json"
+          curl -ksS --fail-with-body --max-time 70 -H "$authheader" \
+            -F "dir=public_html/tehran" -F "overwrite=1" \
+            -F "file-1=@$RUNNER_TEMP/$filename;filename=$filename" \
+            "https://${CPANEL_HOST}:2083/execute/Fileman/upload_files" -o "$response"
+          jq -e '(.result.status // .status // 0) == 1' "$response" >/dev/null
+          echo 'Temporary authenticated exporter installed.'
+          curl -fsS --retry 1 --connect-timeout 25 --max-time 600 \
+            -H "X-Tehran-Migration-Auth: $(cat "$RUNNER_TEMP/export-auth")" \
+            "https://websaza.ir/tehran/$filename" \
+            -o "$RUNNER_TEMP/source-plaintext.zip"
+          unzip -tq "$RUNNER_TEMP/source-plaintext.zip" >/dev/null
+          unzip -Z1 "$RUNNER_TEMP/source-plaintext.zip" | grep -Fxq 'tehran/config.php'
+          unzip -Z1 "$RUNNER_TEMP/source-plaintext.zip" | grep -Fxq 'migration-data/latest-database.sql.gz'
+          echo "Verified original PHP source and latest database backup in export."
+          unzip -p "$RUNNER_TEMP/source-plaintext.zip" migration-data/manifest.json | jq '{exported_at,files,uncompressed_file_bytes,database_backup,database_backup_bytes,extra_uploads_backup}'
+          openssl rand -hex 32 > "$RUNNER_TEMP/transfer-passphrase"
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 -pass file:"$RUNNER_TEMP/transfer-passphrase" \
+            -in "$RUNNER_TEMP/source-plaintext.zip" -out "$RUNNER_TEMP/tehran-encrypted.bin"
+          openssl pkeyutl -encrypt -pubin -inkey ops/tehran-migration-public.pem \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+            -in "$RUNNER_TEMP/transfer-passphrase" -out "$RUNNER_TEMP/tehran-key.encrypted"
+          rm -f "$RUNNER_TEMP/source-plaintext.zip" "$RUNNER_TEMP/transfer-passphrase"
+          cipher="tm-crypt-${id}.bin"
+          keyfile="tm-key-${id}.bin"
+          for item in "tehran-encrypted.bin:$cipher" "tehran-key.encrypted:$keyfile"; do
+            src="${item%%:*}"
+            dst="${item#*:}"
+            curl -ksS --fail-with-body --connect-timeout 20 --max-time 240 -H "$authheader" \
+              -F "dir=public_html/tehran" -F "overwrite=1" \
+              -F "file-1=@$RUNNER_TEMP/$src;filename=$dst" \
+              "https://${CPANEL_HOST}:2083/execute/Fileman/upload_files" -o "$response"
+            jq -e '(.result.status // .status // 0) == 1' "$response" >/dev/null
+          done
+          echo "ENCRYPTED_ARCHIVE_URL=https://websaza.ir/tehran/$cipher"
+          echo "ENCRYPTED_KEY_URL=https://websaza.ir/tehran/$keyfile"
+          echo "ENCRYPTED_ARCHIVE_BYTES=$(wc -c < "$RUNNER_TEMP/tehran-encrypted.bin")"
+      - name: Keep encrypted artifact for disaster recovery
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-tehran-source-backup
+          path: |
+            ${{ runner.temp }}/tehran-encrypted.bin
+            ${{ runner.temp }}/tehran-key.encrypted
+          retention-days: 2
