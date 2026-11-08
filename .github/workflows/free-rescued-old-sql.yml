@@ -1,0 +1,28 @@
+name: Free source quota by removing externally rescued October 26 SQL snapshot
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/free-rescued-old-sql.yml']
+permissions:
+  contents: read
+jobs:
+  free:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      CP_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+    steps:
+      - name: Delete exactly one archived historical SQL snapshot
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$CP_TOKEN"
+          path="tehran_backups/db-2026-10-26_135731.sql.gz"
+          reply="$RUNNER_TEMP/deleted.json"
+          curl -skS --connect-timeout 15 --max-time 40 --get \
+            -H "Authorization: cpanel vt6qdx8:$CP_TOKEN" \
+            --data-urlencode "path=$path" \
+            "https://mch4444.dnsuserver.com:2083/execute/Fileman/delete_file" -o "$reply"
+          jq '{status,errors,data}' "$reply" | head -c 1100
+          jq -e '.status == 1' "$reply" >/dev/null
+          echo "Historical snapshot safely removed after encrypted offsite archival."
