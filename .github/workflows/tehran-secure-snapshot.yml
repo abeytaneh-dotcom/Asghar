@@ -1,0 +1,105 @@
+name: Tehran secure full-source FTP snapshot
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/tehran-secure-snapshot.yml']
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    env:
+      CP_HOST: mch4444.dnsuserver.com
+      CP_USER: vt6qdx8
+      CP_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Acquire live source PHP, images and latest MySQL backup via FTPS
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lftp >/dev/null
+          umask 077
+          FTP_ACCOUNT="tmcopy$(openssl rand -hex 4)"
+          FTP_PASS="$(openssl rand -hex 28)"
+          AUTH="Authorization: cpanel ${CP_USER}:${CP_TOKEN}"
+          HAVE_ACCOUNT=0
+          cleanup(){
+            if [[ "$HAVE_ACCOUNT" = 1 ]]; then
+              curl -sk --max-time 40 -G -H "$AUTH" \
+                --data-urlencode "user=$FTP_ACCOUNT" --data-urlencode 'domain=websaza.ir' \
+                "https://${CP_HOST}:2083/execute/Ftp/delete_ftp" -o /dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+          response="$RUNNER_TEMP/create-ftp.json"
+          curl -skS --max-time 50 -G -H "$AUTH" \
+            --data-urlencode "user=$FTP_ACCOUNT" --data-urlencode 'domain=websaza.ir' \
+            --data-urlencode "pass=$FTP_PASS" --data-urlencode 'quota=0' --data-urlencode 'homedir=.' \
+            "https://${CP_HOST}:2083/execute/Ftp/add_ftp" -o "$response"
+          if ! jq -e '(.status|tostring)=="1"' "$response" >/dev/null;then
+            jq '{status,errors}' "$response";exit 1
+          fi
+          HAVE_ACCOUNT=1
+          echo "FTP access created temporarily for source read."
+          mkdir -p "$RUNNER_TEMP/full-source/tehran" "$RUNNER_TEMP/full-source/database"
+          lftp -u "$FTP_ACCOUNT@websaza.ir","$FTP_PASS" -p 21 "$CP_HOST" -e "
+            set ftp:ssl-force true;
+            set ftp:ssl-protect-data true;
+            set ssl:verify-certificate false;
+            set net:timeout 35;
+            set net:max-retries 3;
+            set xfer:clobber true;
+            mirror --verbose=0 --parallel=3 public_html/tehran $RUNNER_TEMP/full-source/tehran;
+            get tehran_backups/db-2026-11-08_182425.sql.gz -o $RUNNER_TEMP/full-source/database/latest.sql.gz;
+            bye;
+          "
+          test -s "$RUNNER_TEMP/full-source/tehran/config.php"
+          test -s "$RUNNER_TEMP/full-source/tehran/index.php"
+          gzip -t "$RUNNER_TEMP/full-source/database/latest.sql.gz"
+          python3 - <<'PY'
+          import os,gzip,hashlib,json,datetime
+          b=os.path.join(os.environ['RUNNER_TEMP'],'full-source')
+          p=os.path.join(b,'database','latest.sql.gz')
+          data=gzip.open(p,'rb').read()
+          count=data.count(b'CREATE TABLE')
+          if count<10: raise ValueError('Incomplete SQL backup')
+          files=[os.path.join(root,f) for root,_,fs in os.walk(os.path.join(b,'tehran')) for f in fs]
+          out={'captured_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+               'php_count':sum(p.endswith('.php') for p in files),
+               'files_count':len(files),'site_size_bytes':sum(os.path.getsize(p) for p in files),
+               'database_size_compressed':os.path.getsize(p),
+               'database_sql_tables':count,
+               'database_sha256':hashlib.sha256(open(p,'rb').read()).hexdigest()}
+          print({k:v for k,v in out.items() if k!='database_sha256'})
+          json.dump(out,open(os.path.join(b,'snapshot-manifest.json'),'w'),indent=2)
+          PY
+      - name: Encrypt copy using destination's public encryption key
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          tar -czf "$RUNNER_TEMP/tehran-site-plaintext.tgz" -C "$RUNNER_TEMP/full-source" .
+          openssl rand -hex 32 > "$RUNNER_TEMP/transfer-pass"
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+            -pass file:"$RUNNER_TEMP/transfer-pass" -in "$RUNNER_TEMP/tehran-site-plaintext.tgz" \
+            -out "$RUNNER_TEMP/tehran-site-full.enc"
+          openssl pkeyutl -encrypt -pubin -inkey ops/tehran-migration-public.pem \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+            -in "$RUNNER_TEMP/transfer-pass" -out "$RUNNER_TEMP/tehran-site-key.enc"
+          rm -rf "$RUNNER_TEMP/full-source" "$RUNNER_TEMP/tehran-site-plaintext.tgz" "$RUNNER_TEMP/transfer-pass"
+          test -s "$RUNNER_TEMP/tehran-site-full.enc"
+          test -s "$RUNNER_TEMP/tehran-site-key.enc"
+          echo "Encrypted transfer artifacts generated."
+      - name: Save encrypted full-source package to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: tehran-full-source-encrypted-transfer
+          path: |
+            ${{ runner.temp }}/tehran-site-full.enc
+            ${{ runner.temp }}/tehran-site-key.enc
+          retention-days: 3
