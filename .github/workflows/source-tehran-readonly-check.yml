@@ -21,7 +21,7 @@ jobs:
           if [[ -z "${CP_TOKEN}" ]]; then
             echo "SOURCE_SECRET_MISSING"; exit 1
           fi
-          for p in public_html public_html/tehran public_html/tehran/storage; do
+          for p in tehran_backups public_html/tehran/storage/backups public_html/tehran/uploads public_html/tehran; do
             tmp="$(mktemp)"
             status=$(curl -skS --connect-timeout 12 --max-time 25 -o "$tmp" -w '%{http_code}' \
               -H "Authorization: cpanel ${CP_USER}:${CP_TOKEN}" \
@@ -30,7 +30,7 @@ jobs:
             parsed=$(jq -r '(.result.status // .status // 0)|tostring' "$tmp" 2>/dev/null || echo 0)
             echo "PATH=$p HTTP=$status API=$parsed"
             if [[ "$status" == 200 && "$parsed" == 1 ]]; then
-              jq -r '(.result.data // .data // []) | .[] | (.file // .name // "") | tostring' "$tmp" | head -n 80 || true
+              jq -r '(.result.data // .data // []) | .[] | (.file // .name // "") | tostring' "$tmp" | head -n 100 || true
             else
               jq -r '(.result.errors // .errors // [])[]?' "$tmp" | head -c 500 || true
             fi
