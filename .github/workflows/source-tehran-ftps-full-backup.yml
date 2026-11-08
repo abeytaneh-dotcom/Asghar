@@ -1,0 +1,80 @@
+name: Full encrypted source Tehran FTP snapshot (no writes to source)
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/source-tehran-ftps-full-backup.yml']
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CP_HOST: mch4444.dnsuserver.com
+      CP_USER: vt6qdx8
+      CP_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Read source PHP, assets, uploads, SQL backups to temporary runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lftp >/dev/null
+          user="tmfull$(openssl rand -hex 4)"
+          pass="$(openssl rand -hex 22)"
+          domain="websaza.ir"
+          header="Authorization: cpanel ${CP_USER}:${CP_TOKEN}"
+          created=0
+          cleanup() {
+            if [ "$created" = 1 ]; then
+              curl -sk --max-time 30 -G -H "$header" \
+                --data-urlencode "user=$user" --data-urlencode "domain=$domain" \
+                "https://${CP_HOST}:2083/execute/Ftp/delete_ftp" > /dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+          response="$RUNNER_TEMP/ftp-response.json"
+          curl -skS --max-time 35 -G -H "$header" \
+            --data-urlencode "user=$user" --data-urlencode "domain=$domain" \
+            --data-urlencode "pass=$pass" --data-urlencode "homedir=." --data-urlencode "quota=0" \
+            "https://${CP_HOST}:2083/execute/Ftp/add_ftp" -o "$response"
+          jq -e '.status == 1' "$response" >/dev/null
+          created=1
+          mkdir -p "$RUNNER_TEMP/tehran-source-files/tehran" "$RUNNER_TEMP/tehran-source-files/tehran_backups"
+          lftp -u "$user@$domain","$pass" -p 21 "$CP_HOST" -e "
+            set ftp:ssl-force true;
+            set ftp:ssl-protect-data true;
+            set ssl:verify-certificate false;
+            set net:timeout 25;
+            set net:max-retries 2;
+            mirror -a --parallel=3 --verbose=0 public_html/tehran $RUNNER_TEMP/tehran-source-files/tehran;
+            mirror -a --parallel=2 --verbose=0 tehran_backups $RUNNER_TEMP/tehran-source-files/tehran_backups;
+            bye;
+          "
+          test -s "$RUNNER_TEMP/tehran-source-files/tehran/config.php"
+          test -s "$RUNNER_TEMP/tehran-source-files/tehran/shop.php"
+          test -s "$RUNNER_TEMP/tehran-source-files/tehran/index.php"
+          test -s "$RUNNER_TEMP/tehran-source-files/tehran_backups/db-2026-10-30_094112.sql.gz"
+          echo "FULL_SOURCE_FILE_COUNT=$(find "$RUNNER_TEMP/tehran-source-files" -type f | wc -l)"
+          echo "FULL_SOURCE_KIB=$(du -sk "$RUNNER_TEMP/tehran-source-files" | cut -f1)"
+          tar -czf "$RUNNER_TEMP/tehran-full-source.tar.gz" -C "$RUNNER_TEMP/tehran-source-files" .
+          openssl rand -hex 32 > "$RUNNER_TEMP/passphrase"
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 -pass file:"$RUNNER_TEMP/passphrase" \
+            -in "$RUNNER_TEMP/tehran-full-source.tar.gz" -out "$RUNNER_TEMP/tehran-full-source.enc"
+          openssl pkeyutl -encrypt -pubin -inkey ops/tehran-migration-public.pem \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+            -in "$RUNNER_TEMP/passphrase" -out "$RUNNER_TEMP/tehran-full-source.key.enc"
+          rm -rf "$RUNNER_TEMP/tehran-source-files" "$RUNNER_TEMP/tehran-full-source.tar.gz" "$RUNNER_TEMP/passphrase"
+          test -s "$RUNNER_TEMP/tehran-full-source.enc"
+          echo "Encrypted source snapshot ready"
+      - name: Persist encrypted archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-tehran-complete-php-files-images-sql
+          path: |
+            ${{ runner.temp }}/tehran-full-source.enc
+            ${{ runner.temp }}/tehran-full-source.key.enc
+          retention-days: 30
