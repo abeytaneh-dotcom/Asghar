@@ -76,3 +76,5 @@ jobs:
             ${{ runner.temp }}/live-database.enc
             ${{ runner.temp }}/live-database.key.enc
           retention-days: 30
+
+# Corrected snapshot transaction syntax; read-only data export
