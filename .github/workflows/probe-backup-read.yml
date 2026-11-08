@@ -16,7 +16,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          for backup in db-2026-10-26_135731.sql.gz db-2026-11-08_182425.sql.gz; do
+          for backup in db-2026-10-30_094112.sql.gz db-2026-11-08_182425.sql.gz; do
             tmp="$RUNNER_TEMP/resp.json"
             http=$(curl -skS --connect-timeout 15 --max-time 60 -G \
               -H "Authorization: cpanel vt6qdx8:$CP_TOKEN" \
@@ -32,5 +32,17 @@ jobs:
             payload=d.get('data') if 'data' in d else d.get('result',{}).get('data')
             print({"file":name,"http":http,"status":d.get("status"),"errors":d.get("errors"),"payload_type":type(payload).__name__,"payload_keys":list(payload)[:12] if isinstance(payload,dict) else [],"content_type":type(payload.get("content")).__name__ if isinstance(payload,dict) else None,"content_size":len(payload.get("content","")) if isinstance(payload,dict) and isinstance(payload.get("content"),str) else None})
           except Exception as e: print({"file":name,"http":http,"parse_error":str(e)[:150]})
+          PY
+          python3 - "$tmp" "$backup" <<'PY'
+          import sys,zlib,hashlib
+          b=open(sys.argv[1],'rb').read()
+          i=b.find(bytes([31,139]))
+          print({"file":sys.argv[2],"response_bytes":len(b),"gzip_magic_index":i,"sha256_response":hashlib.sha256(b).hexdigest()[:16]})
+          if i>=0:
+            try:
+              d=zlib.decompressobj(31)
+              plain=d.decompress(b[i:]) + d.flush()
+              print({"gzip_decoded":len(plain),"sql_tables":plain.count(b'CREATE TABLE'),"sql_inserts":plain.count(b'INSERT INTO'),"gzip_eof":d.eof})
+            except Exception as e: print({"gzip_error":str(e)[:100]})
           PY
           done
