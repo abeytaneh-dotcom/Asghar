@@ -30,7 +30,7 @@ jobs:
             parsed=$(jq -r '(.result.status // .status // 0)|tostring' "$tmp" 2>/dev/null || echo 0)
             echo "PATH=$p HTTP=$status API=$parsed"
             if [[ "$status" == 200 && "$parsed" == 1 ]]; then
-              jq -r '(.result.data // .data // []) | .[] | (.file // .name // "") | tostring' "$tmp" | head -n 100 || true
+              jq -r '(.result.data // .data // []) | .[] | [(.file // .name // ""),(.size // 0)] | @tsv' "$tmp" | head -n 100 || true
             else
               jq -r '(.result.errors // .errors // [])[]?' "$tmp" | head -c 500 || true
             fi
