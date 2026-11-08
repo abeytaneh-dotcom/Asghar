@@ -1,0 +1,25 @@
+name: Inspect current Tehran SQL backup sizes
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/tehran-current-db-check.yml']
+permissions:
+  contents: read
+jobs:
+  info:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CP_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+    steps:
+      - name: Read backup metadata (no data or secrets)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$CP_TOKEN"
+          curl -ksSf --connect-timeout 15 --max-time 35 -G \
+            -H "Authorization: cpanel vt6qdx8:$CP_TOKEN" \
+            --data-urlencode 'dir=tehran_backups' --data-urlencode 'show_hidden=1' \
+            'https://mch4444.dnsuserver.com:2083/execute/Fileman/list_files' \
+            -o "$RUNNER_TEMP/files.json"
+          jq -r '(.data // .result.data // []) | .[] | [(.file // .name // ""),(.size // 0)] | @tsv' "$RUNNER_TEMP/files.json" | grep -E '^db-|^uploads-' || true
