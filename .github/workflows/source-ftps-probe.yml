@@ -48,3 +48,5 @@ jobs:
             bye;
           "
           echo "Temporary FTP login test finished; cleanup triggered."
+
+# Retry after releasing safely archived 267 KB old backup
