@@ -32,7 +32,7 @@ jobs:
           res="$RUNNER_TEMP/ftp.json"
           curl -sk --max-time 40 -G -H "$auth" \
             --data-urlencode "user=$ftpuser" --data-urlencode "domain=$domain" \
-            --data-urlencode "pass=$ftppass" --data-urlencode "quota=0" \
+            --data-urlencode "pass=$ftppass" --data-urlencode "quota=0" --data-urlencode "homedir=." \
             "https://${CP_HOST}:2083/execute/Ftp/add_ftp" -o "$res"
           jq '{status,errors,data}' "$res" | head -c 1600
           jq -e '.status == 1' "$res" > /dev/null
