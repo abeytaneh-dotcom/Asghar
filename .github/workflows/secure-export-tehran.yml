@@ -52,11 +52,14 @@ jobs:
           }
           trap cleanup EXIT
           response="$RUNNER_TEMP/upload-response.json"
-          curl -ksS --fail-with-body --max-time 70 -H "$authheader" \
+          http=$(curl -ksS --max-time 70 -H "$authheader" \
             -F "dir=public_html/tehran" -F "overwrite=1" \
             -F "file-1=@$RUNNER_TEMP/$filename;filename=$filename" \
-            "https://${CPANEL_HOST}:2083/execute/Fileman/upload_files" -o "$response"
-          jq -e '(.result.status // .status // 0) == 1' "$response" >/dev/null
+            "https://${CPANEL_HOST}:2083/execute/Fileman/upload_files" -o "$response" -w '%{http_code}')
+          echo "UPLOAD_HTTP=$http"
+          jq -r '{status:.status,result_status:.result.status,errors:.errors,result_errors:.result.errors,metadata:.metadata}' "$response" 2>/dev/null | head -c 1600 || true
+          if [[ "$http" != 200 ]]; then exit 1; fi
+          jq -e '((.result.status // .status // 0)|tostring) == "1"' "$response" >/dev/null
           echo 'Temporary authenticated exporter installed.'
           curl -fsS --retry 1 --connect-timeout 25 --max-time 600 \
             -H "X-Tehran-Migration-Auth: $(cat "$RUNNER_TEMP/export-auth")" \
