@@ -1,4 +1,4 @@
-name: Build CARMAP2 Local Admin APK
+name: Build CARMAP2 Local Admin APK - Offline Dashboard
 on:
   push:
     branches: ["build/carmap-local-admin-20261108"]
@@ -34,6 +34,103 @@ jobs:
           printf '%s' "$ARCHIVE_B64" | base64 --decode > source.tar.xz
           echo "dc79f2b0d741d7b97555ba3df25cae412ad5160206e3df87a17530382253ab4d  source.tar.xz" | sha256sum --check
           tar -xJf source.tar.xz
+      - name: Make local dashboard independent of server authorization
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/src/main/java/ir/hanaweb/carmap/ui/Screens.kt")
+          s = p.read_text(encoding="utf-8")
+          start = s.index("@Composable\nfun HomeScreen(")
+          end = s.index("\n@Composable\nfun CarScreen(", start)
+          replacement = r'''@Composable
+          fun HomeScreen(onCompany: (String) -> Unit) {
+              var requestNumber by remember { mutableIntStateOf(0) }
+              var loading by remember { mutableStateOf(false) }
+              var message by remember { mutableStateOf<String?>(null) }
+              var companies by remember { mutableStateOf<List<ir.hanaweb.carmap.data.Company>?>(null) }
+
+              LaunchedEffect(requestNumber) {
+                  if (requestNumber == 0) return@LaunchedEffect
+                  loading = true
+                  message = null
+                  try {
+                      companies = RemoteApi.service.getHomeData().companies.orEmpty()
+                  } catch (error: Exception) {
+                      companies = null
+                      message = if (error is retrofit2.HttpException && error.code() == 401) {
+                          "سرور درخواست فهرست را با خطای ۴۰۱ رد کرد. برای دریافت داده‌های آنلاین، مجوز معتبر سمت سرور لازم است. پنل مدیر محلی بدون ثبت‌نام قابل استفاده است."
+                      } else {
+                          "اطلاعات آنلاین دریافت نشد: " + (error.localizedMessage ?: "خطای ارتباط")
+                      }
+                  } finally {
+                      loading = false
+                  }
+              }
+
+              LazyColumn(
+                  Modifier.fillMaxSize(),
+                  contentPadding = PaddingValues(16.dp),
+                  verticalArrangement = Arrangement.spacedBy(12.dp)
+              ) {
+                  item { ScreenHeader("کارمپ", "داشبورد مدیر محلی — ورود بدون شماره و پیامک") }
+                  item {
+                      LabelCard(
+                          "مدیر محلی فعال است",
+                          "برنامه بدون ورود به حساب آنلاین باز می‌شود. برای استفاده از پنل مدیر، گزینه «مدیر» در پایین صفحه را انتخاب کنید."
+                      )
+                  }
+                  item {
+                      LabelCard(
+                          "دسترسی به اطلاعات آنلاین",
+                          "فهرست شرکت‌ها، نقشه‌ها و بسته‌های سرور ممکن است به مجوز واقعی نیاز داشته باشند؛ نمایش آفلاین این بخش‌ها به معنی دسترسی سرور نیست."
+                      )
+                  }
+                  item {
+                      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                          OutlinedButton(onClick = { requestNumber += 1 }, enabled = !loading) {
+                              Text(if (loading) "در حال بررسی سرور..." else "بررسی فهرست آنلاین خودروها")
+                          }
+                          if (loading) CircularProgressIndicator()
+                          if (message != null) {
+                              Text(message.orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                          }
+                      }
+                  }
+                  if (companies != null) {
+                      item { Text("شرکت‌های دریافت‌شده از سرور", style = MaterialTheme.typography.titleLarge) }
+                      if (companies.orEmpty().isEmpty()) {
+                          item { LabelCard("فهرست آنلاین خالی است") }
+                      }
+                      items(companies.orEmpty()) { company ->
+                          LabelCard(company.company.ifBlank { "شرکت بدون عنوان" }, "مشاهده خودروها") {
+                              onCompany(company.company)
+                          }
+                      }
+                  }
+                  item {
+                      LabelCard(
+                          "بخش‌های برنامه",
+                          "پنل مدیر، تنظیمات و راهنما بدون نیاز به ثبت‌نام در دسترس‌اند. بخش‌های وابسته به سرور فقط هنگام دریافت اطلاعات معتبر فعال می‌شوند."
+                      )
+                  }
+              }
+          }'''
+          s = s[:start] + replacement + s[end:]
+          s = s.replace('Text("اتصال به سرور برقرار نشد.", style = MaterialTheme.typography.titleMedium)', 'Text("این بخش به اطلاعات آنلاین نیاز دارد", style = MaterialTheme.typography.titleMedium)')
+          s = s.replace('Text(current.message, style = MaterialTheme.typography.bodySmall)', 'Text(if (current.message.contains("401")) "سرور مجوز معتبر ارائه نشده را رد کرد (HTTP 401). ورود به پنل مدیر محلی فعال است، ولی داده‌های آنلاین نیازمند تأیید سرور هستند." else current.message, style = MaterialTheme.typography.bodySmall)')
+          p.write_text(s, encoding="utf-8")
+          build = Path("app/build.gradle.kts")
+          b = build.read_text(encoding="utf-8")
+          b = b.replace('applicationId = "ir.hanaweb.carmap"', 'applicationId = "ir.hanaweb.carmap.local"')
+          b = b.replace('versionCode = 1', 'versionCode = 2')
+          b = b.replace('versionName = "1.0-local-admin"', 'versionName = "1.1-local-admin"')
+          build.write_text(b, encoding="utf-8")
+          strings = Path("app/src/main/res/values/strings.xml")
+          st = strings.read_text(encoding="utf-8")
+          strings.write_text(st.replace("CARMAP2", "CARMAP2 مدیر محلی"), encoding="utf-8")
+          print("Offline-first dashboard applied; no unauthorized server identity attempted.")
+          PY
       - name: Compile Android debug APK
         run: gradle :app:assembleDebug --no-daemon --stacktrace
       - uses: actions/upload-artifact@v4
