@@ -131,6 +131,11 @@ jobs:
           strings.write_text(st.replace("CARMAP2", "CARMAP2 مدیر محلی"), encoding="utf-8")
           print("Offline-first dashboard applied; no unauthorized server identity attempted.")
           PY
+      - name: Enable local map library
+        shell: bash
+        run: |
+          cp carmap-patches/LocalLibraryScreen.kt app/src/main/java/ir/hanaweb/carmap/ui/LocalLibraryScreen.kt
+          python3 carmap-patches/upgrade-local-library.py
       - name: Compile Android debug APK
         run: gradle :app:assembleDebug --no-daemon --stacktrace
       - uses: actions/upload-artifact@v4
