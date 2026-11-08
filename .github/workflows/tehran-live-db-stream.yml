@@ -1,0 +1,78 @@
+name: Stream and encrypt live Tehran MySQL with no server-side dump file
+on:
+  push:
+    branches: [websaza-hosting]
+    paths: ['.github/workflows/tehran-live-db-stream.yml']
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CP_HOST: mch4444.dnsuserver.com
+      CP_USER: vt6qdx8
+      CP_TOKEN: ${{ secrets.WEBSAZA_CPANEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: websaza-hosting
+      - name: Temporarily stream MySQL and remove endpoint
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          auth="Authorization: cpanel ${CP_USER}:${CP_TOKEN}"
+          name="tm-live-db-$(openssl rand -hex 12).php"
+          secret=$(openssl rand -hex 32)
+          file="$RUNNER_TEMP/$name"
+          python3 - "$secret" "$file" <<'PY'
+          import sys
+          s=open("ops/tehran-live-db-stream.php.tpl").read()
+          assert '__ONE_TIME_AUTH__' in s
+          open(sys.argv[2],'w').write(s.replace('__ONE_TIME_AUTH__',sys.argv[1]))
+          PY
+          php -l "$file" >/dev/null
+          cleanup() {
+            response="$RUNNER_TEMP/delete.json"
+            curl -ksS --max-time 30 -G -H "$auth" \
+              --data-urlencode "path=public_html/tehran/$name" \
+              "https://${CP_HOST}:2083/execute/Fileman/delete_file" -o "$response" || true
+            jq -r 'if .status == 1 then "TEMP_DB_EXPORTER_REMOVED" else "TEMP_DB_EXPORTER_DELETE_NEEDS_CHECK" end' "$response" 2>/dev/null || true
+            rm -f "$file" "$RUNNER_TEMP/live-database.sql"
+          }
+          trap cleanup EXIT
+          response="$RUNNER_TEMP/save.json"
+          curl -ksS --max-time 40 -X POST -H "$auth" \
+            --data-urlencode "dir=public_html/tehran" \
+            --data-urlencode "file=$name" \
+            --data-urlencode "content@$file" \
+            "https://${CP_HOST}:2083/execute/Fileman/save_file_content" -o "$response"
+          if ! jq -e '.status == 1' "$response" > /dev/null; then
+            jq '{status,errors}' "$response"
+            exit 1
+          fi
+          echo "Authenticated, temporary database streamer installed."
+          curl -fsS --connect-timeout 25 --max-time 240 \
+            -H "X-Tehran-Migration-Auth: $secret" \
+            "https://websaza.ir/tehran/$name" -o "$RUNNER_TEMP/live-database.sql"
+          tail -c 1200 "$RUNNER_TEMP/live-database.sql" | grep -q 'TEHRAN_DUMP_COMPLETE'
+          grep -q 'CREATE TABLE' "$RUNNER_TEMP/live-database.sql"
+          tables=$(grep -c 'CREATE TABLE' "$RUNNER_TEMP/live-database.sql" || true)
+          bytes=$(wc -c < "$RUNNER_TEMP/live-database.sql")
+          echo "LIVE_SQL_VERIFIED tables=$tables bytes=$bytes"
+          gzip -n -c "$RUNNER_TEMP/live-database.sql" > "$RUNNER_TEMP/live-database.sql.gz"
+          openssl rand -hex 32 > "$RUNNER_TEMP/passphrase"
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 -pass file:"$RUNNER_TEMP/passphrase" \
+            -in "$RUNNER_TEMP/live-database.sql.gz" -out "$RUNNER_TEMP/live-database.enc"
+          openssl pkeyutl -encrypt -pubin -inkey ops/tehran-migration-public.pem \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+            -in "$RUNNER_TEMP/passphrase" -out "$RUNNER_TEMP/live-database.key.enc"
+          rm -f "$RUNNER_TEMP/live-database.sql.gz" "$RUNNER_TEMP/passphrase"
+      - name: Store ciphertext in GitHub artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-tehran-current-live-mysql
+          path: |
+            ${{ runner.temp }}/live-database.enc
+            ${{ runner.temp }}/live-database.key.enc
+          retention-days: 30
