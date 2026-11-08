@@ -11,7 +11,7 @@ if (!is_array($config) || empty($config['db_name']) || empty($config['db_user'])
 try {
   $pdo=new PDO('mysql:host='.($config['db_host']??'localhost').';dbname='.$config['db_name'].';charset=utf8mb4',$config['db_user'],$config['db_pass']??'',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::MYSQL_ATTR_USE_BUFFERED_QUERY=>false]);
   $pdo->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
-  $pdo->exec('START TRANSACTION READ ONLY WITH CONSISTENT SNAPSHOT');
+  $pdo->exec('START TRANSACTION WITH CONSISTENT SNAPSHOT');
 } catch (Throwable $e) { http_response_code(503); exit('DB_CONNECTION_ERROR'); }
 while (ob_get_level()>0) @ob_end_clean();
 header('Content-Type: application/octet-stream');
