@@ -54,7 +54,7 @@ jobs:
           response="$RUNNER_TEMP/upload-response.json"
           http=$(curl -ksS --max-time 70 -H "$authheader" \
             -F "dir=public_html/tehran" -F "overwrite=1" \
-            -F "file-1=@$RUNNER_TEMP/$filename;filename=$filename" \
+            -F "file=@$RUNNER_TEMP/$filename;filename=$filename" \
             "https://${CPANEL_HOST}:2083/execute/Fileman/upload_files" -o "$response" -w '%{http_code}')
           echo "UPLOAD_HTTP=$http"
           jq -r '{status:.status,result_status:.result.status,errors:.errors,result_errors:.result.errors,metadata:.metadata}' "$response" 2>/dev/null | head -c 1600 || true
@@ -84,7 +84,7 @@ jobs:
             dst="${item#*:}"
             curl -ksS --fail-with-body --connect-timeout 20 --max-time 240 -H "$authheader" \
               -F "dir=public_html/tehran" -F "overwrite=1" \
-              -F "file-1=@$RUNNER_TEMP/$src;filename=$dst" \
+              -F "file=@$RUNNER_TEMP/$src;filename=$dst" \
               "https://${CPANEL_HOST}:2083/execute/Fileman/upload_files" -o "$response"
             jq -e '(.result.status // .status // 0) == 1' "$response" >/dev/null
           done
