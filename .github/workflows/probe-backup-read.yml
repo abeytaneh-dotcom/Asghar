@@ -45,4 +45,26 @@ jobs:
               print({"gzip_decoded":len(plain),"sql_tables":plain.count(b'CREATE TABLE'),"sql_inserts":plain.count(b'INSERT INTO'),"gzip_eof":d.eof})
             except Exception as e: print({"gzip_error":str(e)[:100]})
           PY
+          echo "Encoding conversion test for gzip backup"
+          for encoding in ISO-8859-1 latin1; do
+            outfile="$RUNNER_TEMP/converted.json"
+            curl -skS --connect-timeout 15 --max-time 60 -G \
+              -H "Authorization: cpanel vt6qdx8:$CP_TOKEN" \
+              --data-urlencode 'dir=tehran_backups' \
+              --data-urlencode 'file=db-2026-10-30_094112.sql.gz' \
+              --data-urlencode "from_charset=$encoding" --data-urlencode 'to_charset=UTF-8' \
+              "https://mch4444.dnsuserver.com:2083/execute/Fileman/get_file_content" -o "$outfile"
+            python3 - "$outfile" "$encoding" <<'PY'
+          import sys,json,zlib
+          try:
+            j=json.load(open(sys.argv[1]))
+            d=j.get('data') or j.get('result',{}).get('data') or {}
+            c=d.get('content')
+            raw=c.encode('latin-1') if isinstance(c,str) else b''
+            try: sql=zlib.decompress(raw,31); valid=True
+            except Exception as e: sql=b'';valid=False
+            print({"encoding":sys.argv[2],"api_status":j.get('status'),"content_bytes":len(raw),"gzip_valid":valid,"sql_unpacked_bytes":len(sql),"tables":sql.count(b'CREATE TABLE')})
+          except Exception as e: print({"encoding":sys.argv[2],"error":str(e)[:130]})
+          PY
+          done
           done
