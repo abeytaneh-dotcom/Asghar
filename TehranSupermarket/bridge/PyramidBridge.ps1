@@ -349,6 +349,53 @@ function Main {
     if($Mode -eq 'SyncOnce' -and -not $cfg.allow_live_catalog_writes){throw 'Catalog update disabled: no data transmitted'}
     $ordersResult=Website $cfg 'orders'
     $orders=@($ordersResult.orders)
+    # Existing, possibly manually posted orders must not be imported twice.
+    # This cutoff is written only during a separate reviewed connection bootstrap.
+    $orderCutoff=-1L
+    if($Mode -eq 'SyncOnce' -and $cfg.database -eq '1405') {
+      $cutoffFile='D:\TehranBridge\site_orders_start_after_id.txt'
+      if(!(Test-Path -LiteralPath $cutoffFile)){throw 'Historical order cutoff missing; live posting remains blocked'}
+      $cutoffText=(Get-Content -LiteralPath $cutoffFile -Raw).Trim()
+      if($cutoffText -notmatch '^[0-9]{1,13}
+    foreach($o in $orders) {
+      try {
+        if($Mode -eq 'SyncOnce' -and [long]$o.id -le $orderCutoff) {
+          Write-Output ('HISTORICAL_ORDER_REVIEW_REQUIRED='+[long]$o.id)
+          continue
+        }
+        if($Mode -eq 'OrderPreview'){
+          $result=Post-Order $db $cfg $o $true
+          $ready++
+        } else {
+          if(-not $cfg.allow_live_pos_writes){throw 'Live invoice posting is not enabled'}
+          $result=Post-Order $db $cfg $o $false
+          # Generate printable ticket before marking the remote order synchronized.
+          # A filesystem or printer-format error must keep the order retryable.
+          $receipt=Save-ReceiptHtml $o ([string]$result.invoice)
+          $ack=Website $cfg 'order_ack' @{order_id=[long]$o.id;invoice_no=[string]$result.invoice} ('ack-pos-'+[long]$o.id)
+          Write-Output ('ORDER_ACK_OK='+[long]$o.id+' POS_INVOICE='+$result.invoice+' PRINT_READY='+[bool](Test-Path $receipt))
+        }
+      } catch { $held++;Write-Output ('ORDER_HELD='+[long]$o.id+' REASON='+$_.Exception.Message)}
+    }
+    if($Mode -eq 'SyncOnce') {
+      if($held -ne 0){throw ('Orders held for review: '+$held+'; catalog snapshot intentionally not finalized')}
+      # Capture a fresh POS snapshot AFTER posting orders to prevent stock resurrection.
+      $freshRows=Catalog $db ([string]$cfg.warehouse)
+      $fresh=Catalog-Items $freshRows $cfg
+      Send-Snapshot $cfg $fresh
+    }
+    if($Mode -eq 'SyncOnce'){
+      if($held -ne 0){throw ('Orders held for review: '+$held+'; healthy cycle withheld')}
+      [void](Website $cfg 'heartbeat' @{device_id='EXSOM-J3';device_name='Pyramid';app_version='Bridge-3';platform='Windows';cycle_complete=$true})
+      Write-Output 'BRIDGE_CYCLE_HEARTBEAT=PASS'
+    }
+    Write-Output ('ORDERS_PREVIEWED='+$ready+' HELD='+$held)
+  } finally { $db.Dispose() }
+}
+Main
+){throw 'Invalid historical order cutoff'}
+      $orderCutoff=[long]$cutoffText
+    }
     $ready=0;$held=0
     foreach($o in $orders) {
       try {
