@@ -75,6 +75,8 @@ class Phase1Safety(unittest.TestCase):
         self.assertIn("TehranBridgeSandbox1405", bridge)
         self.assertIn("sp_getapplock", bridge)
         self.assertIn("already_posted", bridge)
+        self.assertIn("Historical order cutoff missing", bridge)
+        self.assertIn("HISTORICAL_ORDER_REVIEW_REQUIRED", bridge)
 
 
     def test_atomic_snapshot_is_fail_closed_and_staging_only(self):
