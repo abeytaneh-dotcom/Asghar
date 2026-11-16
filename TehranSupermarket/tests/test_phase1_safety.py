@@ -54,7 +54,11 @@ class Phase1Safety(unittest.TestCase):
         gate = api.index("'error'=>'sync_read_only'")
         for action in ("product_update", "products_batch", "order_ack"):
             self.assertIn(action, api[:gate])
-            self.assertGreater(api.index("if($action==='" + action + "'"), gate)
+            handler = "if($action==='" + action + "' && $method==='POST')"
+            self.assertGreater(api.index(handler), gate)
+        self.assertIn("!ts_bridge_write_enabled($action)", api[:gate])
+        self.assertIn("if($action==='product_update') return false", api[:gate])
+        self.assertIn("storage/pyramid_bridge_writes.php", api[:gate])
         self.assertNotIn("ts_sync_ensure_schema($pdo);", api)
 
     def test_sync_key_loading_never_creates_one(self):
