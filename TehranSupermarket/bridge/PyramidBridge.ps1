@@ -2,7 +2,7 @@
 # Default is read-only audit. POS posting and website pushes are opt-in only.
 [CmdletBinding()]
 param(
-  [ValidateSet('Audit','OrderPreview','SyncOnce')][string]$Mode='Audit',
+  [ValidateSet('Audit','OrderPreview','SyncOnce','SandboxTest')][string]$Mode='Audit',
   [string]$ConfigPath='D:\TehranBridge\bridge-config.json'
 )
 Set-StrictMode -Version Latest
@@ -12,7 +12,7 @@ $ErrorActionPreference='Stop'
 function Read-Config {
   if (!(Test-Path $ConfigPath)) { throw "Missing bridge config; run Audit only with a local config." }
   $c=Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
-  if ($c.database -ne '1405' -or $c.warehouse -ne '103') { throw 'Unexpected production database or warehouse: fail closed' }
+  if (($c.database -ne '1405' -and $c.database -ne 'TehranBridgeSandbox1405') -or $c.warehouse -ne '103') { throw 'Unexpected production database or warehouse: fail closed' }
   if ($c.website -ne 'https://tehranmarket-baharestan.ir') { throw 'Unexpected website origin: fail closed' }
   return $c
 }
@@ -209,10 +209,9 @@ function Post-Order($db,$config,$o,[bool]$dryRun) {
     [void]$fin.ExecuteNonQuery()
     $invoice=[long]$output.Value
     if($invoice -le 0 -or [int]$rc.Value -le 0){throw 'Pyramid invoice finalization failed'}
-    $exists=Sql-Value $db $tx 'SELECT COUNT(*) FROM dbo.headH WHERE Id_Havaleh=@x AND Nu_Havaleh=@n AND Kind_Flag=''7''' '@x' ([decimal]$invoice) 'Decimal'
-    # Execute a separate indexed check for the final invoice number.
-    $v=Sql-Value $db $tx 'SELECT COUNT(*) FROM dbo.headH WHERE Nu_Havaleh=@n AND Kind_Flag=''7''' AND Id_Havaleh=@x' '@n' ([string]$number) 'VarChar'
-    if([int]$v -ne 1){throw 'Pyramid invoice not visible after finalization'}
+    $byId=Sql-Value $db $tx 'SELECT COUNT(*) FROM dbo.headH WHERE Id_Havaleh=@x AND Kind_Flag=''7''' '@x' ([decimal]$invoice) 'Decimal'
+    $byNumber=Sql-Value $db $tx 'SELECT COUNT(*) FROM dbo.headH WHERE Nu_Havaleh=@n AND Kind_Flag=''7''' '@n' ([string]$number) 'VarChar'
+    if([int]$byId -ne 1 -or [int]$byNumber -ne 1){throw 'Final invoice identity not confirmed'}
     $tx.Commit()
     return [pscustomobject]@{state='posted';invoice=[string]$invoice}
   } catch {
@@ -228,6 +227,18 @@ function Main {
     $cat=Catalog-Items $rows $cfg
     Write-Output ('AUDIT_DB='+$cfg.database+' WAREHOUSE='+$cfg.warehouse+' TOTAL='+$rows.Rows.Count+' VALID='+$cat.Items.Count+' UNMAPPED='+$cat.Invalid+' FRACTIONAL='+$cat.Fractional)
     if($Mode -eq 'Audit'){return}
+    if($Mode -eq 'SandboxTest'){
+      if($cfg.database -ne 'TehranBridgeSandbox1405'){throw 'SandboxTest requires the isolated restored database'}
+      $testRow=$null
+      foreach($p in $rows.Rows){if([decimal]$p['quantity'] -gt 2 -and [decimal]$p['sale_price'] -gt 0 -and ![string]::IsNullOrWhiteSpace([string]$p['barcode'])){$testRow=$p;break}}
+      if($null -eq $testRow){throw 'No safe sandbox SKU'}
+      $unit=To-Price $testRow['sale_price'] $cfg.source_price_unit
+      $testOrder=[pscustomobject]@{id=900001;status='new';payment_method='cod';payment_status='unpaid';delivery_fee=0;subtotal=$unit;total=$unit;customer_name='Sandbox';phone='09999999999';address='SANDBOX';delivery_slot='sandbox';items=@([pscustomobject]@{barcode=[string]$testRow['barcode'];unit_price=$unit;quantity=1})}
+      $result=Post-Order $db $cfg $testOrder $false
+      Write-Output ('SANDBOX_POS_ORDER='+$result.state+' INVOICE='+$result.invoice)
+      return
+    }
+
     if(-not $cfg.enabled){throw 'Synchronization disabled in local config'}
     $status=Website $cfg 'status'
     Write-Output ('WEBSITE_STATUS=PASS PENDING_ORDERS='+$status.pending_orders)
