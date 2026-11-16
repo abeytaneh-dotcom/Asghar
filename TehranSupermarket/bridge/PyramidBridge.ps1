@@ -358,8 +358,10 @@ function Main {
         } else {
           if(-not $cfg.allow_live_pos_writes){throw 'Live invoice posting is not enabled'}
           $result=Post-Order $db $cfg $o $false
-          $ack=Website $cfg 'order_ack' @{order_id=[long]$o.id;invoice_no=[string]$result.invoice} ('ack-pos-'+[long]$o.id)
+          # Generate printable ticket before marking the remote order synchronized.
+          # A filesystem or printer-format error must keep the order retryable.
           $receipt=Save-ReceiptHtml $o ([string]$result.invoice)
+          $ack=Website $cfg 'order_ack' @{order_id=[long]$o.id;invoice_no=[string]$result.invoice} ('ack-pos-'+[long]$o.id)
           Write-Output ('ORDER_ACK_OK='+[long]$o.id+' POS_INVOICE='+$result.invoice+' PRINT_READY='+[bool](Test-Path $receipt))
         }
       } catch { $held++;Write-Output ('ORDER_HELD='+[long]$o.id+' REASON='+$_.Exception.Message)}
