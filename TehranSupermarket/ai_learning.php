@@ -17,7 +17,7 @@ try{
     $pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[
         PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false,
     ]);
-    require_once __DIR__.'/ai_learning_lib.php';ts_ai_learning_schema($pdo);
+    require_once __DIR__.'/ai_learning_lib.php';/* AI schema changes are CLI-only. */
 }catch(Throwable $e){ts_log_internal($e,'AI-LEARN-501');al_out(['ok'=>false],503);}
 
 $type=trim((string)($_POST['event_type']??''));
