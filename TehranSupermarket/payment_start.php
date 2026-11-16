@@ -3,7 +3,7 @@ declare(strict_types=1);require_once __DIR__.'/error_bootstrap.php';header('Cach
 $t=trim((string)($_GET['t']??''));if(!preg_match('/^[a-f0-9]{48,64}$/',$t))ts_html_fail('PAY-401',404,'track.php');
 if(!file_exists(__DIR__.'/config.php'))ts_html_fail('SYS-100',503,'track.php?t='.rawurlencode($t));$c=require __DIR__.'/config.php';
 try{
-    $pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);require_once __DIR__.'/payment_lib.php';
+    $pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);require_once __DIR__.'/schema.php';/* Schema and backup changes require reviewed CLI execution. */require_once __DIR__.'/payment_lib.php';
     $st=$pdo->prepare('SELECT o.*,c.phone FROM orders o JOIN customers c ON c.id=o.customer_id WHERE o.public_token=? LIMIT 1');$st->execute([$t]);$o=$st->fetch();
     if(!$o)ts_html_fail('PAY-401',404,'track.php');
     if($o['status']==='cancelled')ts_html_fail('PAY-402',409,'track.php?t='.rawurlencode($t));
