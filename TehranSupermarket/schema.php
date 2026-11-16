@@ -1,28 +1,12 @@
 <?php
 declare(strict_types=1);
 
-function pyramid_internal_ean13(int $id): string {
-    $body = '29'.str_pad((string)$id, 10, '0', STR_PAD_LEFT);
-    $sum = 0;
-    for ($i=0; $i<12; $i++) $sum += ((($i+1) % 2) === 0 ? 3 : 1) * (int)$body[$i];
-    $check = (10 - ($sum % 10)) % 10;
-    return $body.(string)$check;
-}
-
+/**
+ * Legacy automatic barcode generation and demo stock initialization are retired.
+ * Mapping is imported only from reviewed, exact source identifiers.
+ */
 function ensure_pyramid_mapping(PDO $pdo): void {
-    $rows = $pdo->query("SELECT id,barcode,stock,pyramid_code2,pyramid_barcode_generated,pyramid_initialized FROM products WHERE active=1 AND (pyramid_initialized=0 OR barcode IS NULL OR barcode='' OR pyramid_code2 IS NULL OR pyramid_code2='') ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
-    if (!$rows) return;
-    $st = $pdo->prepare('UPDATE products SET barcode=?, pyramid_code2=?, pyramid_barcode_generated=?, pyramid_initialized=1, stock=?, updated_at=NOW() WHERE id=?');
-    foreach ($rows as $r) {
-        $barcode = trim((string)($r['barcode'] ?? ''));
-        $generated = (int)($r['pyramid_barcode_generated'] ?? 0);
-        if ($barcode === '') {$barcode = pyramid_internal_ean13((int)$r['id']);$generated = 1;}
-        $code2 = trim((string)($r['pyramid_code2'] ?? ''));
-        if ($code2 === '') $code2 = (string)(900000 + (int)$r['id']);
-        $stock = (int)$r['stock'];
-        if (!(int)($r['pyramid_initialized'] ?? 0)) $stock = 10;
-        $st->execute([$barcode, $code2, $generated, $stock, (int)$r['id']]);
-    }
+    throw new LogicException('automatic_pyramid_mapping_disabled');
 }
 
 function ensure_order_public_tokens(PDO $pdo): void {
@@ -107,5 +91,5 @@ function ensure_product_schema(PDO $pdo): void {
     try{$pdo->exec("UPDATE order_items SET original_product_id=product_id WHERE original_product_id IS NULL");}catch(Throwable $e){}
     try{$pdo->exec("UPDATE order_items SET original_product_name=product_name WHERE original_product_name IS NULL OR original_product_name=''");}catch(Throwable $e){}
     ensure_order_public_tokens($pdo);
-    ensure_pyramid_mapping($pdo);
+    // No implicit barcode generation or stock modification.
 }
