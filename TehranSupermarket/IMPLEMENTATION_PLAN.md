@@ -42,6 +42,8 @@ Store: `TehranSupermarket/`
 - [x] Verify DNS and TLS handshake independently without HTTP page requests.
 - [ ] Provision and verify **actual cPanel staging database**, restore there only after resource/preflight checks and safe isolation.
 - [ ] Verify cPanel limits (CPU/RAM/DB connections/Cron); requires missing `TEHRANMARKET_CPANEL_TOKEN`.
+- [x] Run corrected Phase 1 customer homepage GET against disposable MySQL from restored source data; verify 18 tables, 9,849 products and unchanged aggregate price/stock (GitHub Actions run 43933117859).
+- [x] Read-only reconcile target FTPS: live index matches staged index; live shop differs; config/payment/.htaccess match; root index still runs seed and shop still has runtime DDL (run 43932511715).
 - [ ] Restore/test full site files and execute staging end-to-end login/checkout/payment and browser regression tests.
 - [ ] Final human review. Phase stays open until staging tests pass.
 
@@ -126,3 +128,9 @@ See [STAGING_RECOVERY_REPORT_FA.md](STAGING_RECOVERY_REPORT_FA.md).
 - TLS and DNS verified without requesting or modifying a PHP page.
 - Destination's `TEHRANMARKET_CPANEL_TOKEN` is still missing, so cPanel limit verification and new DB provisioning remain blocked.
 - **No production deployment or database modifications happened.**
+
+## Live vs staging reconciliation (2026-11-16)
+- Read-only FTPS evidence: [run 43932511715](https://github.com/abeytaneh-dotcom/tehranmarket-site1/actions/runs/43932511715).
+- Staging PHP GET and data invariance evidence: [run 43933117859](https://github.com/abeytaneh-dotcom/tehranmarket-site1/actions/runs/43933117859).
+- Documented audit: [report in destination feature branch](https://github.com/abeytaneh-dotcom/tehranmarket-site1/blob/feature/staging-recovery-validation/reports/tehran-host-state-audit-2026-11-16.md).
+- No fresh verified live DB backup, no end-to-end staging payments/orders and no confirmation of GitHub cPanel Secret. **Do not deploy** until gates pass.
