@@ -280,6 +280,27 @@ function Send-Catalog($cfg,$cat) {
   if($matched -ne $sent){throw ('Catalog mappings require manual review: '+($sent-$matched)+' items excluded; healthy-cycle heartbeat withheld')}
 }
 
+function Send-Snapshot($cfg,$cat) {
+  $items=$cat.Items
+  if($items.Count -lt 9000){throw 'Catalog item count below safety threshold'}
+  $sha=[Security.Cryptography.SHA256]::Create()
+  try {
+    $id=[BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(('EXSOM-J3|'+[Guid]::NewGuid().ToString('N')+'|'+[DateTime]::UtcNow.Ticks)))).Replace('-','').ToLowerInvariant()
+  } finally { $sha.Dispose() }
+  $sent=0
+  for($i=0;$i -lt $items.Count;$i+=150){
+    $count=[Math]::Min(150,$items.Count-$i)
+    $batch=@($items.GetRange($i,$count))
+    $response=Website $cfg 'snapshot_batch' @{snapshot_id=$id;products=$batch} ('snapshot-'+$id+'-'+$i)
+    if([int]$response.batch_count -ne $count -or $response.snapshot_id -ne $id){throw 'Snapshot batch not acknowledged: stopping before commit'}
+    $sent+=$count
+  }
+  if($sent -ne $items.Count){throw 'Snapshot incomplete'}
+  $resp=Website $cfg 'snapshot_finalize' @{snapshot_id=$id;expected_rows=$sent} ('snapshot-final-'+$id)
+  if([int]$resp.source_count -ne $sent -or [int]$resp.matched_count -lt 9000){throw 'Snapshot final confirmation invalid'}
+  Write-Output ('ATOMIC_CATALOG_FINALIZED='+$resp.matched_count+' TOTAL_SITE='+$resp.site_count+' UNMATCHED_SITE='+$resp.unmatched_site)
+}
+
 function Save-ReceiptHtml($o,[string]$invoice) {
   $dir='D:\TehranBridge\receipts'
   if(!(Test-Path $dir)){[void](New-Item -ItemType Directory -Path $dir)}
@@ -325,10 +346,7 @@ function Main {
     $status=Website $cfg 'status'
     Write-Output ('WEBSITE_STATUS=PASS PENDING_ORDERS='+$status.pending_orders)
     if($Mode -eq 'SyncOnce' -and ((-not $status.write_permissions.catalog) -or (-not $status.write_permissions.order_ack))){throw 'Remote catalog and invoice acknowledgement permissions are not verified; no POS sales posted'}
-    if($Mode -eq 'SyncOnce'){
-      if(-not $cfg.allow_live_catalog_writes){throw 'Catalog update disabled: no data transmitted'}
-      Send-Catalog $cfg $cat
-    }
+    if($Mode -eq 'SyncOnce' -and -not $cfg.allow_live_catalog_writes){throw 'Catalog update disabled: no data transmitted'}
     $ordersResult=Website $cfg 'orders'
     $orders=@($ordersResult.orders)
     $ready=0;$held=0
@@ -347,10 +365,11 @@ function Main {
       } catch { $held++;Write-Output ('ORDER_HELD='+[long]$o.id+' REASON='+$_.Exception.Message)}
     }
     if($Mode -eq 'SyncOnce') {
-      # Refresh only changed stock after finalized website orders were deducted in Pyramid.
+      if($held -ne 0){throw ('Orders held for review: '+$held+'; catalog snapshot intentionally not finalized')}
+      # Capture a fresh POS snapshot AFTER posting orders to prevent stock resurrection.
       $freshRows=Catalog $db ([string]$cfg.warehouse)
       $fresh=Catalog-Items $freshRows $cfg
-      Send-Catalog $cfg $fresh
+      Send-Snapshot $cfg $fresh
     }
     if($Mode -eq 'SyncOnce'){
       if($held -ne 0){throw ('Orders held for review: '+$held+'; healthy cycle withheld')}
