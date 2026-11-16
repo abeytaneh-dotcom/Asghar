@@ -252,7 +252,7 @@ function Main {
       foreach($p in $rows.Table.Rows){if([decimal]$p['quantity'] -gt 2 -and [decimal]$p['sale_price'] -gt 0 -and ![string]::IsNullOrWhiteSpace([string]$p['barcode'])){$testRow=$p;break}}
       if($null -eq $testRow){throw 'No safe sandbox SKU'}
       $unit=To-Price $testRow['sale_price'] $cfg.source_price_unit
-      $testOrder=[pscustomobject]@{id=900001;status='new';payment_method='cod';payment_status='unpaid';delivery_fee=0;subtotal=$unit;total=$unit;customer_name='Sandbox';phone='09999999999';address='SANDBOX';delivery_slot='sandbox';items=@([pscustomobject]@{barcode=[string]$testRow['barcode'];unit_price=$unit;quantity=1})}
+      $testOrder=[pscustomobject]@{id=900001;status='new';payment_method='cod';payment_status='unpaid';delivery_fee=0;subtotal=$unit;total=$unit;customer_name='Sandbox';phone='09999999999';address='SANDBOX';delivery_slot='sandbox';items=@([pscustomobject]@{barcode=[string]$testRow['barcode'];product_name='Sandbox Test Item';unit_price=$unit;quantity=1})}
       $result=Post-Order $db $cfg $testOrder $false
       Write-Output ('SANDBOX_POS_ORDER='+$result.state+' INVOICE='+$result.invoice)
       $receipt=Save-ReceiptHtml $testOrder ([string]$result.invoice)
