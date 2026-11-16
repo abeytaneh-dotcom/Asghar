@@ -66,9 +66,18 @@ $given=trim((string)($_SERVER['HTTP_X_SYNC_KEY']??''));
 if($given==='' || !hash_equals($expected,$given)) ts_json_fail('SYNC-701',401);
 
 $action=(string)($_GET['action']??'status');
-// Vendor contract, backups and signed staging checks are not yet verified.
-// Permanently fail closed for all POS-originating writes in Phase 1.
-if (in_array($action, ['product_update', 'products_batch', 'order_ack'], true)) {
+// Backward-compatible Phase 1 safety: no API write until a separate protected
+// server-side opt-in file is explicitly provisioned after end-to-end validation.
+function ts_bridge_write_enabled(string $action): bool {
+    $file=__DIR__.'/storage/pyramid_bridge_writes.php';
+    if(!is_file($file)) return false;
+    $config=require $file;
+    if(!is_array($config)) return false;
+    if($action==='order_ack') return ($config['order_ack']??false)===true;
+    if(in_array($action,['product_update','products_batch'],true)) return ($config['catalog']??false)===true;
+    return false;
+}
+if (in_array($action, ['product_update', 'products_batch', 'order_ack'], true) && !ts_bridge_write_enabled($action)) {
     out(['ok'=>false,'error'=>'sync_read_only','code'=>'SYNC-READONLY'],403);
 }
 $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
@@ -158,23 +167,67 @@ try{
         }
         $items=$d['products']??null;
         if(!is_array($items) || count($items)>1000) out(['ok'=>false,'error'=>'bad_products_batch','code'=>'SYNC-702'],422);
-        $updBarcode=$pdo->prepare('UPDATE products SET stock=?,price=?,updated_at=NOW() WHERE active=1 AND barcode=?');
-        $updCode=$pdo->prepare('UPDATE products SET stock=?,price=?,updated_at=NOW() WHERE active=1 AND pyramid_code2=?');
-        $updated=0;$notFound=[];$invalid=[];$pdo->beginTransaction();
+        // Apply an entire batch under row locks, and subtract orders not yet
+        // finalized in the POS. This prevents re-stocking a website reservation
+        // when the raw POS quantity has not been decremented yet.
+        $updated=0;$notFound=[];$invalid=[];
+        $pdo->exec('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+        $pdo->beginTransaction();
         try{
+            $valid=[];$barcodes=[];
             foreach($items as $idx=>$item){
                 if(!is_array($item)){$invalid[]=$idx;continue;}
-                $barcode=trim((string)($item['barcode']??''));$code2=trim((string)($item['code2']??''));
+                $barcode=trim((string)($item['barcode']??''));
                 $stock=filter_var($item['stock']??null,FILTER_VALIDATE_INT);
                 $price=price_to_toman($item['price']??null,(string)($item['price_unit']??($d['price_unit']??'toman')));
-                if(($barcode===''&&$code2==='') || $stock===false || $stock<0 || $price===null){$invalid[]=$idx;continue;}
-                $st=$barcode!==''?$updBarcode:$updCode;$st->execute([(int)$stock,$price,$barcode!==''?$barcode:$code2]);
-                if($st->rowCount()>0)$updated++;else $notFound[]=['index'=>$idx,'barcode'=>$barcode,'code2'=>$code2];
+                if($barcode==='' || strlen($barcode)>100 || $stock===false || $stock<0 || $stock>100000000 || $price===null || $price<1 || $price>10000000000){$invalid[]=$idx;continue;}
+                $valid[$idx]=['barcode'=>$barcode,'stock'=>(int)$stock,'price'=>$price,'code2'=>trim((string)($item['code2']??''))];
+                $barcodes[$barcode]=$barcode;
             }
+            $map=[];
+            if($barcodes){
+                $list=array_values($barcodes);
+                $ph=implode(',',array_fill(0,count($list),'?'));
+                $st=$pdo->prepare("SELECT id,barcode,pyramid_code2 FROM products WHERE active=1 AND barcode IN ($ph) ORDER BY id FOR UPDATE");
+                $st->execute($list);
+                foreach($st->fetchAll(PDO::FETCH_ASSOC) as $p)$map[(string)$p['barcode']][]=$p;
+            }
+            $ids=[];
+            foreach($valid as $idx=>$it){
+                $matches=$map[$it['barcode']]??[];
+                if(count($matches)!==1){$notFound[]=['index'=>$idx,'barcode'=>$it['barcode'],'reason'=>count($matches)>1?'ambiguous':'not_found'];continue;}
+                $p=$matches[0];
+                // Never accept a contradictory secondary key if the site has already mapped one.
+                $siteCode=trim((string)($p['pyramid_code2']??''));
+                if($siteCode!=='' && $it['code2']!=='' && $siteCode!==$it['code2']){
+                    $notFound[]=['index'=>$idx,'barcode'=>$it['barcode'],'reason'=>'code_mismatch'];continue;
+                }
+                $valid[$idx]['product_id']=(int)$p['id'];
+                $ids[(int)$p['id']]=(int)$p['id'];
+            }
+            $reserved=[];
+            if($ids){
+                $list=array_values($ids);
+                $ph=implode(',',array_fill(0,count($list),'?'));
+                $st=$pdo->prepare("SELECT oi.product_id,COALESCE(SUM(oi.quantity),0) qty
+                  FROM order_items oi JOIN orders o ON o.id=oi.order_id
+                  WHERE oi.product_id IN ($ph) AND o.pyramid_synced_at IS NULL AND o.status<>'cancelled'
+                  GROUP BY oi.product_id");
+                $st->execute($list);
+                foreach($st->fetchAll(PDO::FETCH_ASSOC) as $p)$reserved[(int)$p['product_id']]=(int)$p['qty'];
+            }
+            $upd=$pdo->prepare('UPDATE products SET stock=?,price=?,updated_at=NOW() WHERE id=? AND active=1');
+            foreach($valid as $idx=>$it){
+                if(!isset($it['product_id']))continue;
+                $net=max(0,$it['stock']-max(0,$reserved[$it['product_id']]??0));
+                $upd->execute([$net,$it['price'],$it['product_id']]);
+                $updated++;
+            }
+            $resp=['ok'=>true,'received'=>count($items),'updated'=>$updated,'not_found'=>$notFound,'invalid_indexes'=>$invalid,'server_time'=>date(DATE_ATOM)];
+            ts_sync_idempotency_store($pdo,$requestId,$action,$resp);
             $pdo->commit();
         }catch(Throwable $x){if($pdo->inTransaction())$pdo->rollBack();throw $x;}
-        $resp=['ok'=>true,'received'=>count($items),'updated'=>$updated,'not_found'=>$notFound,'invalid_indexes'=>$invalid,'server_time'=>date(DATE_ATOM)];
-        ts_sync_idempotency_store($pdo,$requestId,$action,$resp);out($resp);
+        out($resp);
     }
 
     if($action==='order_ack' && $method==='POST'){
@@ -185,11 +238,22 @@ try{
             if($old!==null) out($old,($old['ok']??false)?200:409);
         }
         $id=max(0,(int)($d['order_id']??0));$invoice=mb_substr(trim((string)($d['invoice_no']??'')),0,100);
-        if($id<1) out(['ok'=>false,'error'=>'bad_order_id','code'=>'SYNC-702'],422);
-        $st=$pdo->prepare('UPDATE orders SET pyramid_synced_at=COALESCE(pyramid_synced_at,NOW()),pyramid_invoice_no=COALESCE(NULLIF(?,\'\'),pyramid_invoice_no) WHERE id=?');
-        $st->execute([$invoice,$id]);
-        $resp=['ok'=>true,'updated'=>$st->rowCount(),'order_id'=>$id];
-        ts_sync_idempotency_store($pdo,$requestId,$action,$resp);out($resp);
+        if($id<1 || !preg_match('/^[0-9]{1,20}$/',$invoice)) out(['ok'=>false,'error'=>'invalid_invoice_ack','code'=>'SYNC-702'],422);
+        $pdo->beginTransaction();
+        try {
+            $st=$pdo->prepare('SELECT id,pyramid_synced_at,pyramid_invoice_no,status,payment_method,payment_status FROM orders WHERE id=? FOR UPDATE');
+            $st->execute([$id]);$order=$st->fetch(PDO::FETCH_ASSOC);
+            if(!$order || $order['status']==='cancelled') out(['ok'=>false,'error'=>'order_not_eligible'],409);
+            if($order['payment_method']!=='cod' && $order['payment_status']!=='paid') out(['ok'=>false,'error'=>'payment_not_verified'],409);
+            if($order['pyramid_synced_at']!==null && (string)$order['pyramid_invoice_no']!==$invoice) out(['ok'=>false,'error'=>'invoice_conflict'],409);
+            if($order['pyramid_synced_at']===null){
+                $pdo->prepare('UPDATE orders SET pyramid_synced_at=NOW(),pyramid_invoice_no=? WHERE id=?')->execute([$invoice,$id]);
+            }
+            $resp=['ok'=>true,'order_id'=>$id,'invoice_no'=>$invoice,'acknowledged'=>true];
+            ts_sync_idempotency_store($pdo,$requestId,$action,$resp);
+            $pdo->commit();
+        }catch(Throwable $x){if($pdo->inTransaction())$pdo->rollBack();throw $x;}
+        out($resp);
     }
 
     out(['ok'=>false,'error'=>'not_found','code'=>'REQ-101'],404);
