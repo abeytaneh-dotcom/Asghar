@@ -57,10 +57,8 @@ try{
         PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES=>false
     ]);
-    require_once __DIR__.'/schema.php';
-    ensure_product_schema($pdo);
+    // Database schema must be prepared by an explicit reviewed migration.
     require_once __DIR__.'/pyramid_sync_lib.php';
-    ts_sync_ensure_schema($pdo);
     $expected=ts_sync_key();
 }catch(Throwable $e){ts_log_internal($e,'SYNC-703');ts_json_fail('SYNC-703',503);}
 
