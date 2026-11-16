@@ -102,7 +102,11 @@ $latest = Join-Path $OutputDir 'pyramid-products-readonly.json'
 $tmp = Join-Path $OutputDir ('pyramid-products-' + [guid]::NewGuid().ToString('N') + '.tmp')
 try {
   [System.IO.File]::WriteAllText($tmp, (ConvertTo-Json -InputObject $payload -Depth 7 -Compress), $utf8)
-  if (Test-Path $latest) { [System.IO.File]::Replace($tmp,$latest,$null) }
+  if (Test-Path $latest) {
+    $backup=Join-Path $OutputDir ('previous-' + [guid]::NewGuid().ToString('N') + '.bak')
+    [System.IO.File]::Replace($tmp,$latest,$backup)
+    if (Test-Path $backup) { Remove-Item -LiteralPath $backup -Force }
+  }
   else { [System.IO.File]::Move($tmp,$latest) }
 } finally { if (Test-Path $tmp) { Remove-Item -LiteralPath $tmp -Force } }
 Write-Output ('BRIDGE_STATUS=' + $summary.status)
