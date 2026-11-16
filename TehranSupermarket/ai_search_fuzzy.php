@@ -51,8 +51,8 @@ try{
     $pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[
         PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false,
     ]);
-    require_once __DIR__.'/schema.php';ensure_product_schema($pdo);
-    require_once __DIR__.'/ai_learning_lib.php';ts_ai_learning_schema($pdo);
+    require_once __DIR__.'/schema.php';/* Schema changes are CLI-only (Phase 1 hardening). */
+    require_once __DIR__.'/ai_learning_lib.php';/* AI schema changes are CLI-only. */
 }catch(Throwable $e){ts_log_internal($e,'AI-FUZZY-501');fs_out(['ok'=>false,'message'=>'ارتباط با فروشگاه برقرار نشد.'],503);}
 
 $rows=$pdo->query("SELECT id,name,brand,quantity_label,category,image_path,price,stock FROM products WHERE active=1 AND price>0 ORDER BY id DESC LIMIT 12000")->fetchAll();
