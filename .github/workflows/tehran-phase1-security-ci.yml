@@ -32,6 +32,16 @@ jobs:
         run: |
           set -euo pipefail
           find TehranSupermarket -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Staging preflight CLI guard (no DB contact)
+        shell: bash
+        run: |
+          set -euo pipefail
+          php TehranSupermarket/bin/preflight.php --help
+          set +e
+          php TehranSupermarket/bin/preflight.php --check >/dev/null 2>&1
+          rc=$?
+          set -e
+          test "$rc" -eq 2
       - name: Python security regression checks (read-only)
         run: python3 TehranSupermarket/tests/test_phase1_safety.py
       - name: Ensure no live deployment in this job
