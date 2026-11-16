@@ -49,19 +49,9 @@ function delivery_zone(PDO $pdo,int $id): ?array {
  */
 function ts_bridge_checkout_fresh(PDO $pdo): bool {
     $switch=__DIR__.'/storage/pyramid_bridge_writes.php';
-    if(!is_file($switch)) return true;
+    if(!is_file($switch))return true;
     $flags=require $switch;
-    if(!is_array($flags) || ($flags['catalog']??false)!==true) return true;
-    try {
-        $st=$pdo->prepare('SELECT setting_value FROM store_settings WHERE setting_key=? LIMIT 1');
-        $st->execute(['pyramid_bridge_last_cycle_utc']);
-        $value=$st->fetchColumn();
-        if(!is_string($value) || $value==='') return false;
-        $moment=DateTimeImmutable::createFromFormat('!Y-m-d H:i:s',$value,new DateTimeZone('UTC'));
-        if($moment===false) return false;
-        $age=time()-$moment->getTimestamp();
-        return $age>=0 && $age<=180;
-    } catch(Throwable $error) {
-        return false; // fail closed if the protected POS sync was enabled
-    }
+    if(!is_array($flags) || ($flags['catalog']??false)!==true)return true;
+    require_once __DIR__.'/pyramid_snapshot_lib.php';
+    return ts_snapshot_fresh($pdo,180);
 }
