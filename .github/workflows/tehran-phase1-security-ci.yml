@@ -1,7 +1,7 @@
 name: Tehran Phase 1 Safety CI (no deploy)
 on:
   push:
-    branches: [feature/enterprise-v3]
+    branches: [feature/enterprise-v3, feature/pyramid-two-way-bridge]
     paths:
       - 'TehranSupermarket/**'
       - '.github/workflows/tehran-phase1-security-ci.yml'
