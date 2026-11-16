@@ -127,7 +127,7 @@ function ts_snapshot_finalize(PDO $pdo,array $payload): array {
         $pdo->commit();
         // Best-effort bounded storage cleanup; never affect the newly completed snapshot.
         try{
-            $pdo->prepare('DELETE FROM pyramid_catalog_stage WHERE snapshot_id<>?')->execute([$id]);
+            $pdo->prepare('DELETE s FROM pyramid_catalog_stage s JOIN pyramid_catalog_snapshots r ON r.snapshot_id=s.snapshot_id WHERE s.snapshot_id<>? AND r.completed_at IS NOT NULL')->execute([$id]);
             $pdo->prepare('DELETE FROM pyramid_catalog_snapshots WHERE snapshot_id<>? AND completed_at IS NOT NULL')->execute([$id]);
         }catch(Throwable $ignored){}
         return ['ok'=>true,'snapshot_id'=>$id,'source_count'=>$actual,'matched_count'=>$matched,
