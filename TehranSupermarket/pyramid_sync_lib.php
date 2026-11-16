@@ -10,19 +10,20 @@ function ts_sync_key_path(): string {
     return __DIR__.'/storage/pyramid_sync_key.php';
 }
 
+/**
+ * Never create or rotate secrets as a side effect of an HTTP request.
+ * The sync key must be provisioned explicitly in protected storage.
+ */
 function ts_sync_key(): string {
-    $dir=__DIR__.'/storage';
-    if(!is_dir($dir) && !@mkdir($dir,0755,true) && !is_dir($dir)) throw new RuntimeException('sync_storage');
-    $file=ts_sync_key_path();
-    if(is_file($file)){
-        $k=require $file;
-        if(is_string($k) && strlen($k)>=32) return $k;
+    $file = ts_sync_key_path();
+    if (!is_file($file)) {
+        throw new RuntimeException('sync_not_configured');
     }
-    $k=bin2hex(random_bytes(24));
-    $php="<?php return '".$k."';\n";
-    if(@file_put_contents($file,$php,LOCK_EX)===false) throw new RuntimeException('sync_key_write');
-    @chmod($file,0600);
-    return $k;
+    $key = require $file;
+    if (!is_string($key) || strlen($key) < 32) {
+        throw new RuntimeException('sync_not_configured');
+    }
+    return $key;
 }
 
 function ts_sync_ensure_schema(PDO $pdo): void {
