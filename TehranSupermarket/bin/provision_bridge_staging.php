@@ -30,12 +30,13 @@ try {
     require_once dirname(__DIR__).'/pyramid_sync_lib.php';
     ts_sync_ensure_schema($pdo);
     foreach (['sync_devices','sync_idempotency'] as $table) {
-        $q=$pdo->prepare("SHOW TABLES LIKE ?");
+        $q=$pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?');
         $q->execute([$table]);
-        if (!$q->fetchColumn()) throw new RuntimeException('missing '.$table);
+        if ((int)$q->fetchColumn()!==1) throw new RuntimeException('missing '.$table);
     }
     echo "BRIDGE_STAGING_SCHEMA=PASS\n";
 } catch(Throwable $e) {
-    fwrite(STDERR,"BRIDGE_STAGING_SCHEMA=FAIL\n");
+    $code=preg_replace('/[^A-Z0-9]/i','', (string)$e->getCode());
+    fwrite(STDERR,"BRIDGE_STAGING_SCHEMA=FAIL CLASS=".get_class($e)." CODE=".$code."\n");
     exit(1);
 }
