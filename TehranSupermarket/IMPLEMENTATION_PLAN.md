@@ -33,10 +33,11 @@ Store: `TehranSupermarket/`
 - [x] Enumerate repository and inspect existing PHP store source and selected workflows.
 - [x] Identify browser-triggered `ts_seed_pyramid_1400()`, product image mutations and runtime `ensure_product_schema()`.
 - [x] Isolate work on `feature/enterprise-v3`.
-- [ ] Remove browser-triggered demo/seed and DDL side effects on staging branch; protect private endpoints.
-- [ ] Add explicit fail-closed safeguards, security headers and static regression checks; keep `install.php` inaccessible on production.
+- [x] Remove browser-triggered demo/seed and DDL side effects on staging branch; protect private endpoints (static regression passed).
+- [x] Add fail-closed installer/seed, protected paths and static regression checks to the branch; production HTTP validation remains pending.
 - [ ] Review authentication/CSRF/authorization/rate-limiting, uploads, API keys, error handling and backup policy.
-- [ ] Lint all modified PHP and JS, test GET/POST flows against staging; produce changed-file list.
+- [x] PHP syntax check and static regression suite in isolated GitHub CI (no JS modified in this phase).
+- [ ] Test actual GET/POST flows against a restored staging clone and verify Apache protection, UI and checkout.
 - [ ] Obtain staging backup and execute restore drill; verify cPanel limits (CPU/RAM/DB connections/Cron).
 - [ ] Final human review. Phase stays open until staging tests pass.
 
@@ -99,7 +100,15 @@ Each phase must document:
 - Current MySQL/PHP/cPanel CPU, RAM, concurrency, disk and Cron limits unknown.
 - Pyramid's vendor documentation, version, price currency, official API and order/stock event semantics unknown.
 - Live payment provider configuration, checkout acceptance, DNS and TLS not independently verified.
-- Runtime PHP may create or alter tables and seed demo stock; stop that behavior in code, then test against a clone.
+- Legacy browser-triggered schema/seed operations have been removed on the feature branch; staging runtime compatibility and rollback remain untested.
 - Public assets, AI and barcode UI differ across old/new deployments; UI parity remains a separate acceptance gate.
 
 **Status gate:** code-only work in isolated Git branch is allowed; no production deploy, DB writes or cutover without explicit approval.
+
+## Phase 1 evidence
+
+- [Security audit and changed-file inventory](PHASE1_SECURITY_AUDIT_FA.md)
+- [Static regression tests](tests/test_phase1_safety.py)
+- [Staging-only read-only database preflight](bin/preflight.php)
+- [CI workflow](../.github/workflows/tehran-phase1-security-ci.yml) (stored at repository root under `.github/workflows/`)
+- Live DB operations, migrations and production cutover: **none**.
