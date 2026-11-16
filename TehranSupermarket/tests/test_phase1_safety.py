@@ -66,6 +66,14 @@ class Phase1Safety(unittest.TestCase):
         self.assertNotIn("file_put_contents", body)
         self.assertNotIn("mkdir", body)
 
+    def test_staging_probe_is_cli_readonly_and_explicit(self):
+        probe = load("bin/preflight.php")
+        self.assertIn("PHP_SAPI !== 'cli'", probe)
+        self.assertIn("TEHRAN_STAGING", probe)
+        self.assertIn("TRANSACTION READ ONLY", probe)
+        self.assertNotIn("UPDATE products", probe)
+        self.assertNotIn("ALTER TABLE", probe)
+
     def test_sensitive_files_and_upload_executables_blocked(self):
         htaccess = load(".htaccess")
         for target in ("install", "schema", "pyramid_seed_1400",
