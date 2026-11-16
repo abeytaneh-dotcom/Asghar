@@ -1,0 +1,47 @@
+name: Tehran Pyramid bridge safety CI (no deployment)
+on:
+  push:
+    branches: [feature/pyramid-bridge-v1]
+    paths:
+      - 'TehranSupermarket/bridge-agent/**'
+      - '.github/workflows/pyramid-bridge-safety-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows_bridge_static_and_print_test:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse both PowerShell agent scripts
+        shell: pwsh
+        run: |
+          $scripts=@(
+            'TehranSupermarket/bridge-agent/TehranPyramidReadOnly.ps1',
+            'TehranSupermarket/bridge-agent/TehranOrdersInbox.ps1',
+            'TehranSupermarket/bridge-agent/SetupSiteKey.ps1'
+          )
+          foreach($file in $scripts) {
+            $tokens=$null; $errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path,[ref]$tokens,[ref]$errors) | Out-Null
+            if($errors.Count -gt 0) { throw "PowerShell parse failed for $file" }
+          }
+          Write-Output 'BRIDGE_POWERSHELL_SYNTAX=PASS'
+      - name: Synthetic printable orders and idempotency; no network
+        shell: pwsh
+        run: |
+          $work=Join-Path $env:RUNNER_TEMP 'tehran-orders-ci'
+          New-Item -Path $work -ItemType Directory -Force | Out-Null
+          $agent='TehranSupermarket/bridge-agent/TehranOrdersInbox.ps1'
+          $fixture='TehranSupermarket/bridge-agent/tests/order_fixture.json'
+          $first=@(& $agent -WorkDir $work -FixtureFile $fixture)
+          if('ORDERS_NEW_PRINTABLE=1' -notin $first){ throw 'First receipt creation failed' }
+          $second=@(& $agent -WorkDir $work -FixtureFile $fixture)
+          if('ORDERS_NEW_PRINTABLE=0' -notin $second -or 'ORDERS_ALREADY_QUEUED=1' -notin $second){throw 'Receipt deduplication failed'}
+          $files=@(Get-ChildItem (Join-Path $work 'orders-pending') -Filter '*.html')
+          if($files.Count -ne 1){throw 'Unexpected number of printable receipts'}
+          Write-Output 'ORDER_PRINTABLE_FIXTURE=PASS'
+          Write-Output 'ORDER_PRINTABLE_IDEMPOTENCY=PASS'
+          Write-Output 'PRODUCTION_SITE_CALLS=NO'
+          Write-Output 'PRODUCTION_POS_WRITES=NO'
