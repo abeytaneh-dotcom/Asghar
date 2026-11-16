@@ -38,7 +38,11 @@ Store: `TehranSupermarket/`
 - [ ] Review authentication/CSRF/authorization/rate-limiting, uploads, API keys, error handling and backup policy.
 - [x] PHP syntax check and static regression suite in isolated GitHub CI (no JS modified in this phase).
 - [ ] Test actual GET/POST flows against a restored staging clone and verify Apache protection, UI and checkout.
-- [ ] Obtain staging backup and execute restore drill; verify cPanel limits (CPU/RAM/DB connections/Cron).
+- [x] Verify historical SQL archive by restoring **18 tables and 9,849 products** into an isolated temporary MySQL 8 runner; run the source read-only schema preflight successfully.
+- [x] Verify DNS and TLS handshake independently without HTTP page requests.
+- [ ] Provision and verify **actual cPanel staging database**, restore there only after resource/preflight checks and safe isolation.
+- [ ] Verify cPanel limits (CPU/RAM/DB connections/Cron); requires missing `TEHRANMARKET_CPANEL_TOKEN`.
+- [ ] Restore/test full site files and execute staging end-to-end login/checkout/payment and browser regression tests.
 - [ ] Final human review. Phase stays open until staging tests pass.
 
 ### Phase 2 — Data schema and ledgers (NOT STARTED)
@@ -96,7 +100,7 @@ Each phase must document:
 
 ## Current known blockers
 
-- No verified working **staging clone** and database restore exercise.
+- Historical database **restore verification succeeded in disposable GitHub MySQL**, but no production-host cPanel staging database has been provisioned or verified.
 - Current MySQL/PHP/cPanel CPU, RAM, concurrency, disk and Cron limits unknown.
 - Pyramid's vendor documentation, version, price currency, official API and order/stock event semantics unknown.
 - Live payment provider configuration, checkout acceptance, DNS and TLS not independently verified.
@@ -112,3 +116,13 @@ Each phase must document:
 - [Staging-only read-only database preflight](bin/preflight.php)
 - [CI workflow](../.github/workflows/tehran-phase1-security-ci.yml) (stored at repository root under `.github/workflows/`)
 - Live DB operations, migrations and production cutover: **none**.
+
+## Independent staging restoration evidence (2026-11-16)
+
+See [STAGING_RECOVERY_REPORT_FA.md](STAGING_RECOVERY_REPORT_FA.md).
+
+- GitHub Actions restored original archived SQL successfully; **18 tables, 9,849 products**.
+- Real `bin/preflight.php` completed in explicit staging read-only mode against the restored copy.
+- TLS and DNS verified without requesting or modifying a PHP page.
+- Destination's `TEHRANMARKET_CPANEL_TOKEN` is still missing, so cPanel limit verification and new DB provisioning remain blocked.
+- **No production deployment or database modifications happened.**
