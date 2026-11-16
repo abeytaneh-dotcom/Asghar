@@ -66,6 +66,11 @@ $given=trim((string)($_SERVER['HTTP_X_SYNC_KEY']??''));
 if($given==='' || !hash_equals($expected,$given)) ts_json_fail('SYNC-701',401);
 
 $action=(string)($_GET['action']??'status');
+// Vendor contract, backups and signed staging checks are not yet verified.
+// Permanently fail closed for all POS-originating writes in Phase 1.
+if (in_array($action, ['product_update', 'products_batch', 'order_ack'], true)) {
+    out(['ok'=>false,'error'=>'sync_read_only','code'=>'SYNC-READONLY'],403);
+}
 $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
 $deviceId=trim((string)($_SERVER['HTTP_X_DEVICE_ID']??''));
 if($deviceId!=='' && !ts_sync_valid_device_id($deviceId)) out(['ok'=>false,'error'=>'bad_device_id','code'=>'SYNC-702'],422);
