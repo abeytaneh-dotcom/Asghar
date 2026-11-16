@@ -61,7 +61,7 @@ function off_images(string $q): array {
 if(empty($_SESSION['admin_id']))ts_json_fail('REQ-102',401);
 $configFile=__DIR__.'/config.php';if(!file_exists($configFile))ts_json_fail('SYS-100',503);
 $c=require $configFile;
-try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);require_once __DIR__.'/schema.php';ensure_product_schema($pdo);}catch(Throwable $e){ts_log_internal($e,'SYS-101');ts_json_fail('SYS-101',503);}
+try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=utf8mb4',$c['db_user'],$c['db_pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);require_once __DIR__.'/schema.php';/* Schema changes are CLI-only (Phase 1 hardening). */}catch(Throwable $e){ts_log_internal($e,'SYS-101');ts_json_fail('SYS-101',503);}
 
 $action=$_GET['action']??'';
 if($action==='barcode_lookup'){
