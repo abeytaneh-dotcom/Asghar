@@ -56,7 +56,7 @@ try{
         PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES=>false,
     ]);
-    require_once __DIR__.'/schema.php'; ensure_product_schema($pdo);
+    require_once __DIR__.'/schema.php'; /* Schema changes are CLI-only (Phase 1 hardening). */
     require_once __DIR__.'/store_lib.php';
 }catch(Throwable $e){ ts_log_internal($e,'AI-501'); ai_fail('ارتباط با فروشگاه برقرار نشد.',503,'AI-501'); }
 
