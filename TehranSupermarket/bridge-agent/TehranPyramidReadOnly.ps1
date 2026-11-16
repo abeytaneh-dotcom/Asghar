@@ -33,7 +33,7 @@ ORDER BY k.K_Code
 '@
   $param = $command.Parameters.Add('@wh',[System.Data.SqlDbType]::VarChar,12)
   $param.Value = $Warehouse
-  $reader = $command.ExecuteReader([System.Data.CommandBehavior]::SequentialAccess)
+  $reader = $command.ExecuteReader([System.Data.CommandBehavior]::Default)
   try {
     while ($reader.Read()) {
       $kcode = [string]$reader['K_Code']
@@ -56,7 +56,7 @@ ORDER BY k.K_Code
       if ($reserved -lt 0) { $safe = $false; $reasons.Add('negative_reserved_stock') }
       if ($barcode -ne '') { $seenBarcodes[$barcode] = $true }
       $seenCodes[$kcode] = $true
-      $available = [decimal]::Max([decimal]0, $quantity - $reserved)
+      $available = [Math]::Max([decimal]0, $quantity - $reserved)
       $entry = [pscustomobject]@{
         k_code = $kcode
         barcode = $barcode
