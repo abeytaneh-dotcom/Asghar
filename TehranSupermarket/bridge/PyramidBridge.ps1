@@ -220,6 +220,24 @@ function Post-Order($db,$config,$o,[bool]$dryRun) {
     throw
   }
 }
+function Save-ReceiptHtml($o,[string]$invoice) {
+  $dir='D:\TehranBridge\receipts'
+  if(!(Test-Path $dir)){[void](New-Item -ItemType Directory -Path $dir)}
+  $escape={param($v) [System.Net.WebUtility]::HtmlEncode([string]$v)}
+  $id=[long]$o.id
+  $name=(& $escape $o.customer_name);$phone=(& $escape $o.phone);$addr=(& $escape $o.address)
+  $lines=New-Object System.Collections.Generic.List[string]
+  foreach($line in @($o.items)){
+    $p=(& $escape $line.product_name)
+    $amount=[long]$line.quantity*[long]$line.unit_price
+    $lines.Add('<tr><td>'+$p+'</td><td>'+[int]$line.quantity+'</td><td>'+$amount.ToString('N0')+'</td></tr>')
+  }
+  $html='<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>فاکتور طهران مارکت</title><style>@page{size:80mm auto;margin:3mm}body{font:13px Tahoma,sans-serif;max-width:74mm;margin:auto;color:#111}h1{text-align:center;font-size:17px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px dashed #999;padding:5px 2px;text-align:right}h2{font-size:14px;text-align:center}.sum{font-size:16px;font-weight:bold}small{display:block;margin:5px 0}button{margin:12px 0}@media print{button{display:none}}</style></head><body><h1>طهران مارکت</h1><h2>فاکتور فروش اینترنتی #'+(& $escape $invoice)+'</h2><small>شماره سفارش سایت: '+$id+'</small><small>مشتری: '+$name+'</small><small>تلفن: '+$phone+'</small><small>نشانی: '+$addr+'</small><table><tr><th>کالا</th><th>تعداد</th><th>تومان</th></tr>'+($lines -join '')+'</table><p class="sum">مبلغ کل: '+([long]$o.total).ToString('N0')+' تومان</p><small>روش پرداخت: '+(& $escape $o.payment_method)+'</small><button onclick="window.print()">چاپ فاکتور</button></body></html>'
+  $file=Join-Path $dir ('order-'+$id+'.html')
+  [IO.File]::WriteAllText($file,$html,(New-Object System.Text.UTF8Encoding($false)))
+  return $file
+}
+
 function Main {
   $cfg=Read-Config
   $db=Open-Sql ([string]$cfg.database)
@@ -237,12 +255,15 @@ function Main {
       $testOrder=[pscustomobject]@{id=900001;status='new';payment_method='cod';payment_status='unpaid';delivery_fee=0;subtotal=$unit;total=$unit;customer_name='Sandbox';phone='09999999999';address='SANDBOX';delivery_slot='sandbox';items=@([pscustomobject]@{barcode=[string]$testRow['barcode'];unit_price=$unit;quantity=1})}
       $result=Post-Order $db $cfg $testOrder $false
       Write-Output ('SANDBOX_POS_ORDER='+$result.state+' INVOICE='+$result.invoice)
+      $receipt=Save-ReceiptHtml $testOrder ([string]$result.invoice)
+      Write-Output ('SANDBOX_RECEIPT_READY='+[bool](Test-Path $receipt))
       return
     }
 
     if(-not $cfg.enabled){throw 'Synchronization disabled in local config'}
     $status=Website $cfg 'status'
     Write-Output ('WEBSITE_STATUS=PASS PENDING_ORDERS='+$status.pending_orders)
+    if($Mode -eq 'SyncOnce' -and ((-not $status.write_permissions.catalog) -or (-not $status.write_permissions.order_ack))){throw 'Remote catalog and invoice acknowledgement permissions are not verified; no POS sales posted'}
     $ordersResult=Website $cfg 'orders'
     $orders=@($ordersResult.orders)
     $ready=0;$held=0
@@ -255,7 +276,8 @@ function Main {
           if(-not $cfg.allow_live_pos_writes){throw 'Live invoice posting is not enabled'}
           $result=Post-Order $db $cfg $o $false
           $ack=Website $cfg 'order_ack' @{order_id=[long]$o.id;invoice_no=[string]$result.invoice} ('ack-pos-'+[long]$o.id)
-          Write-Output ('ORDER_ACK_OK='+[long]$o.id+' POS_INVOICE='+$result.invoice)
+          $receipt=Save-ReceiptHtml $o ([string]$result.invoice)
+          Write-Output ('ORDER_ACK_OK='+[long]$o.id+' POS_INVOICE='+$result.invoice+' PRINT_READY='+[bool](Test-Path $receipt))
         }
       } catch { $held++;Write-Output ('ORDER_HELD='+[long]$o.id+' REASON='+$_.Exception.Message)}
     }
