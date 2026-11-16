@@ -116,6 +116,9 @@ try{
         $id=trim((string)($d['device_id']??$deviceId));
         if(!ts_sync_valid_device_id($id)) out(['ok'=>false,'error'=>'bad_device_id','code'=>'SYNC-702'],422);
         ts_sync_touch_device($pdo,$id,'heartbeat',mb_substr(trim((string)($d['device_name']??'')),0,160),mb_substr(trim((string)($d['app_version']??'')),0,60),mb_substr(trim((string)($d['platform']??'')),0,80),is_array($d['capabilities']??null)?array_slice($d['capabilities'],0,40):[]);
+        if(($d['cycle_complete']??false)===true && ts_bridge_write_enabled('products_batch') && ts_bridge_write_enabled('order_ack')){
+            $pdo->prepare("INSERT INTO store_settings(setting_key,setting_value,updated_at) VALUES('pyramid_bridge_last_cycle_utc',DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%d %H:%i:%s'),NOW()) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value),updated_at=NOW()")->execute();
+        }
         $pending=(int)$pdo->query("SELECT COUNT(*) FROM orders WHERE status<>'cancelled' AND pyramid_synced_at IS NULL")->fetchColumn();
         out(['ok'=>true,'server_time'=>date(DATE_ATOM),'pending_orders'=>$pending]);
     }
