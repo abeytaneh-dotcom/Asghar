@@ -277,6 +277,7 @@ function Send-Catalog($cfg,$cat) {
   [IO.File]::WriteAllText($temp,$json,(New-Object System.Text.UTF8Encoding($false)))
   Move-Item -LiteralPath $temp -Destination $delta.Path -Force
   Write-Output ('CATALOG_SYNC_SENT='+$sent+' MATCHED='+$matched)
+  if($matched -ne $sent){throw ('Catalog mappings require manual review: '+($sent-$matched)+' items excluded; healthy-cycle heartbeat withheld')}
 }
 
 function Save-ReceiptHtml($o,[string]$invoice) {
@@ -350,6 +351,11 @@ function Main {
       $freshRows=Catalog $db ([string]$cfg.warehouse)
       $fresh=Catalog-Items $freshRows $cfg
       Send-Catalog $cfg $fresh
+    }
+    if($Mode -eq 'SyncOnce'){
+      if($held -ne 0){throw ('Orders held for review: '+$held+'; healthy cycle withheld')}
+      [void](Website $cfg 'heartbeat' @{device_id='EXSOM-J3';device_name='Pyramid';app_version='Bridge-3';platform='Windows';cycle_complete=$true})
+      Write-Output 'BRIDGE_CYCLE_HEARTBEAT=PASS'
     }
     Write-Output ('ORDERS_PREVIEWED='+$ready+' HELD='+$held)
   } finally { $db.Dispose() }
