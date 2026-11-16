@@ -53,7 +53,7 @@ JOIN dbo.KalaId k ON k.K_Code=a.K_Code
 WHERE a.A_Code=@warehouse ORDER BY k.K_Code
 '@
   [void](Parameter $q '@warehouse' 'VarChar' $warehouse)
-  return (Rows $q)
+  return ,(Rows $q)
 }
 function To-Price($v,[string]$unit) {
   $n=[decimal]$v
@@ -123,7 +123,7 @@ WHERE k.Barcode=@barcode AND a.A_Code=@warehouse
 '@
   [void](Parameter $q '@barcode' 'VarChar' $barcode)
   [void](Parameter $q '@warehouse' 'VarChar' $warehouse)
-  return (Rows $q)
+  return ,(Rows $q)
 }
 function Post-Order($db,$config,$o,[bool]$dryRun) {
   $orderId=[long]$o.id
