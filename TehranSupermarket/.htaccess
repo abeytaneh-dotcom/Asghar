@@ -50,3 +50,11 @@ ErrorDocument 500 /tehran/error.php?s=500
   Substitute "s|assets/style.css?v=20261024-shop3|assets/style.css?v=20261027-critical7|ni"
   Substitute "s|</head>|<link id='tm-hq32-css' rel='stylesheet' href='assets/hero-hq-v32.css?v=20261027-32'></head>|ni"
 </IfModule>
+
+# Phase 1: deny direct web access to retired setup, migration/seed and private code.
+<FilesMatch "^(install\\.php|schema\\.php|pyramid_seed_1400(?:_data)?\\.php|product_image_seed\\.php|pyramid_sync_lib\\.php|ai_learning_lib\\.php|watermark_bootstrap\\.php|\\.env(?:\\..*)?|\\.user\\.ini|.*\\.(?:sql|sqlite|db|bak|backup|log|ini|zip|tar|gz))$">
+ Require all denied
+</FilesMatch>
+<IfModule mod_rewrite.c>
+ RewriteRule ^(?:storage|\\.git)(?:/|$) - [F,END]
+</IfModule>
