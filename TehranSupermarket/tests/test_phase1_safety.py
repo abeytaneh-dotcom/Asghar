@@ -49,17 +49,33 @@ class Phase1Safety(unittest.TestCase):
         self.assertNotIn("ensure_pyramid_mapping($pdo);", schema)
         self.assertNotIn("$stock = 10", schema)
 
-    def test_pyramid_writes_are_denied_before_action_handlers(self):
+    def test_pyramid_writes_require_explicit_protected_opt_in(self):
         api = load("pyramid_api.php")
-        gate = api.index("'error'=>'sync_read_only'")
+        self.assertIn("storage/pyramid_bridge_writes.php", api)
+        self.assertIn("function ts_bridge_write_enabled", api)
+        self.assertIn("if($action==='product_update') return false", api)
+        guard = api.index("&& !ts_bridge_write_enabled($action)")
         for action in ("product_update", "products_batch", "order_ack"):
-            self.assertIn(action, api[:gate])
-            handler = "if($action==='" + action + "' && $method==='POST')"
-            self.assertGreater(api.index(handler), gate)
-        self.assertIn("!ts_bridge_write_enabled($action)", api[:gate])
-        self.assertIn("if($action==='product_update') return false", api[:gate])
-        self.assertIn("storage/pyramid_bridge_writes.php", api[:gate])
+            with self.subTest(action=action):
+                self.assertIn(action, api[:guard])
+                handler = api.index("if($action==='" + action + "' && $method==='POST')")
+                self.assertGreater(handler, guard)
         self.assertNotIn("ts_sync_ensure_schema($pdo);", api)
+        self.assertIn("o.pyramid_synced_at IS NULL", api)
+        self.assertIn("SELECT id,barcode,pyramid_code2", api)
+        self.assertIn("AND o.pyramid_synced_at IS NULL", api)
+        self.assertIn("AND o.status<>'cancelled'", api)
+
+    def test_desktop_bridge_does_not_open_pos_or_site_writes_by_default(self):
+        bridge = load("bridge/PyramidBridge.ps1")
+        self.assertIn("if(-not $cfg.enabled)", bridge)
+        self.assertIn("if(-not $cfg.allow_live_pos_writes)", bridge)
+        self.assertIn("if(-not $cfg.allow_live_catalog_writes)", bridge)
+        self.assertIn("if($Mode -eq 'Audit'){return}", bridge)
+        self.assertIn("TehranBridgeSandbox1405", bridge)
+        self.assertIn("sp_getapplock", bridge)
+        self.assertIn("already_posted", bridge)
+
 
     def test_sync_key_loading_never_creates_one(self):
         helper = load("pyramid_sync_lib.php")
