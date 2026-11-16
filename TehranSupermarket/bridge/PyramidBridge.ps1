@@ -69,7 +69,8 @@ function Catalog-Items($table,$config) {
     $code=[string]$r['code'];$barcode=([string]$r['barcode']).Trim()
     if([string]::IsNullOrWhiteSpace($barcode) -or $seen.ContainsKey($barcode)){ $invalid++;continue }
     $seen[$barcode]=$true
-    $quantity=[decimal]$r['quantity'];$reserved=[decimal]$r['reserved']
+    $quantity=if($r['quantity'] -is [DBNull]){[decimal]0}else{[decimal]$r['quantity']}
+    $reserved=if($r['reserved'] -is [DBNull]){[decimal]0}else{[decimal]$r['reserved']}
     if($quantity -ne [math]::Truncate($quantity)){$frac++;continue}
     if($quantity -lt 0){$quantity=0}
     $qty=[long][math]::Floor([math]::Max(0,($quantity - [math]::Max(0,$reserved))))
