@@ -5,15 +5,13 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-require_once __DIR__.'/pyramid_seed_1400.php';
-ts_seed_pyramid_1400();
+// Legacy catalog seed is disabled on HTTP requests. Run reviewed migrations offline only.
 
 ob_start();
 require __DIR__.'/shop.php';
 $html = (string)ob_get_clean();
 
-require_once __DIR__.'/product_image_seed.php';
-if(isset($pdo) && $pdo instanceof PDO) ts_apply_product_image_manifest($pdo);
+// Image manifests must never mutate products during a customer GET request.
 
 $oldBrand = '<span class="logo">🛒</span><span><b>سوپرمارکت طهران</b><small>خرید سریع محلی</small></span>';
 $newBrand = '<span class="tehran-market-logo"><img src="pwa-icon.php?size=512&amp;v=20261026-gold" alt="طهران مارکت"></span>';
