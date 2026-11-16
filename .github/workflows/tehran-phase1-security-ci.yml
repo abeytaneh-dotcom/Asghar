@@ -1,0 +1,39 @@
+name: Tehran Phase 1 Safety CI (no deploy)
+on:
+  push:
+    branches: [feature/enterprise-v3]
+    paths:
+      - 'TehranSupermarket/**'
+      - '.github/workflows/tehran-phase1-security-ci.yml'
+  pull_request:
+    branches: [websaza-hosting]
+    paths:
+      - 'TehranSupermarket/**'
+      - '.github/workflows/tehran-phase1-security-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tehran-phase1-safety-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase1-static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP environment
+        run: php -v
+      - name: PHP syntax for entire store source
+        shell: bash
+        run: |
+          set -euo pipefail
+          find TehranSupermarket -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Python security regression checks (read-only)
+        run: python3 TehranSupermarket/tests/test_phase1_safety.py
+      - name: Ensure no live deployment in this job
+        run: |
+          echo "STATIC CHECKS ONLY: No cPanel/FTP/DB calls and no production deployment."
