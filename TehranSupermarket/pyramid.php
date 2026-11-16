@@ -7,13 +7,14 @@ try{$pdo=new PDO('mysql:host='.$c['db_host'].';dbname='.$c['db_name'].';charset=
 $currentAdmin=ts_require_roles($pdo,['owner']);
 function e($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
 function x($v){return htmlspecialchars((string)$v,ENT_QUOTES|ENT_XML1,'UTF-8');}
-function sync_key(): string {
-  $dir=__DIR__.'/storage';if(!is_dir($dir))@mkdir($dir,0755,true);
-  $file=$dir.'/pyramid_sync_key.php';
-  if(file_exists($file)){ $k=require $file; if(is_string($k)&&strlen($k)>=32)return $k; }
-  $k=bin2hex(random_bytes(24));file_put_contents($file,"<?php return '".$k."';",LOCK_EX);@chmod($file,0600);return $k;
+// The admin status screen must never create or reveal a synchronization secret.
+function sync_key_configured(): bool {
+    $file = __DIR__.'/storage/pyramid_sync_key.php';
+    if (!is_file($file)) return false;
+    $value = require $file;
+    return is_string($value) && strlen($value) >= 32;
 }
-$key=sync_key();
+$keyConfigured = sync_key_configured();
 $products=$pdo->query("SELECT id,barcode,pyramid_code2,pyramid_barcode_generated,name,brand,quantity_label,category,price,stock,updated_at FROM products WHERE active=1 ORDER BY id")->fetchAll();
 if(isset($_GET['download'])&&$_GET['download']==='excel'){
   header('Content-Type: application/vnd.ms-excel; charset=utf-8');
@@ -40,11 +41,11 @@ $pending=(int)$pdo->query("SELECT COUNT(*) FROM orders WHERE status<>'cancelled'
 ?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>اتصال پیرامید | سوپرمارکت طهران</title><link rel="stylesheet" href="assets/style.css?v=20261024-pyramid"></head><body>
 <header class="top"><a class="brand" href="admin.php"><span class="logo">🔄</span><span><b>اتصال حسابداری پیرامید</b><small>Pyramid ↔ Tehran Supermarket</small></span></a><a class="btn pale" href="admin.php">بازگشت به مدیریت</a></header>
 <main>
-<section class="panel"><div class="sectionhead"><div><h2>وضعیت تطبیق کالاها</h2><p>بارکد و Code2 سایت با فایل ورود پیرامید یکسان نگه داشته می‌شود.</p></div><span class="pill">آماده اتصال</span></div>
+<section class="panel"><div class="sectionhead"><div><h2>وضعیت تطبیق کالاها</h2><p>بارکد و Code2 سایت با فایل ورود پیرامید یکسان نگه داشته می‌شود.</p></div><span class="pill">در انتظار راستی‌آزمایی</span></div>
 <div class="stats"><div class="stat"><b><?=number_format($total)?></b><span>کالای فعال و تطبیق‌شده</span></div><div class="stat"><b><?=number_format($real)?></b><span>بارکد واقعی</span></div><div class="stat"><b><?=number_format($generated)?></b><span>بارکد داخلی EAN-13</span></div></div>
-<div class="stats"><div class="stat"><b><?=number_format($stock10)?></b><span>کالا با موجودی ۱۰</span></div><div class="stat"><b><?=number_format($pending)?></b><span>سفارش منتظر انتقال به پیرامید</span></div><div class="stat"><b>SQL Server</b><span>سمت حسابداری تأیید شده</span></div></div>
+<div class="stats"><div class="stat"><b><?=number_format($stock10)?></b><span>کالا با موجودی ۱۰</span></div><div class="stat"><b><?=number_format($pending)?></b><span>سفارش منتظر انتقال به پیرامید</span></div><div class="stat"><b>نامشخص</b><span>تأیید رسمی نرم‌افزار صندوق</span></div></div>
 <a class="btn" href="pyramid.php?download=excel">⬇️ دانلود Excel زنده برای پیرامید</a>
 <p class="muted">این فایل هر بار مستقیم از دیتابیس فعلی سایت ساخته می‌شود؛ بنابراین اگر کالا یا بارکد تغییر کند، فایل جدید هم همان تغییر را دارد.</p></section>
-<section class="panel"><h2>آمادگی Sync خودکار</h2><p>سمت سایت آماده است. برنامه Tehran Sync روی کامپیوتر فروشگاه می‌تواند با این API قیمت، موجودی و سفارش‌ها را هماهنگ کند.</p><label>کلید اتصال این فروشگاه<input readonly value="<?=e($key)?>" onclick="this.select()"></label><p class="notice">این کلید را فقط داخل برنامه Sync روی کامپیوتر فروشگاه وارد کنید و عمومی منتشر نکنید. چون کامپیوتر حسابداری فعلاً اینترنت ندارد، انتقال آنلاین تا زمان اتصال آن کامپیوتر یا یک دستگاه واسط به اینترنت انجام نمی‌شود؛ فایل Excel بالا برای ورود اولیه آفلاین آماده است.</p></section>
+<section class="panel"><h2>آمادگی Sync خودکار</h2><p>سمت سایت آماده است. برنامه Tehran Sync روی کامپیوتر فروشگاه می‌تواند با این API قیمت، موجودی و سفارش‌ها را هماهنگ کند.</p><label>وضعیت کلید اتصال این فروشگاه<input readonly value="<?=$keyConfigured?'موجود است':'تنظیم نشده'?>" onclick="this.select()"></label><p class="notice">این کلید را فقط داخل برنامه Sync روی کامپیوتر فروشگاه وارد کنید و عمومی منتشر نکنید. چون کامپیوتر حسابداری فعلاً اینترنت ندارد، انتقال آنلاین تا زمان اتصال آن کامپیوتر یا یک دستگاه واسط به اینترنت انجام نمی‌شود؛ فایل Excel بالا برای ورود اولیه آفلاین آماده است.</p></section>
 <section class="panel"><div class="sectionhead"><div><h2>تطبیق فعلی محصولات</h2><p>شناسه‌های زیر مبنای مشترک سایت و پیرامید هستند.</p></div></div><div class="tablewrap"><table><thead><tr><th>کالا</th><th>Barcode1</th><th>Code2</th><th>نوع بارکد</th><th>موجودی</th><th>قیمت</th></tr></thead><tbody><?php foreach($products as $p):?><tr><td><?=e($p['name'])?></td><td><code><?=e($p['barcode'])?></code></td><td><?=e($p['pyramid_code2'])?></td><td><?=$p['pyramid_barcode_generated']?'داخلی':'واقعی'?></td><td><?=number_format((int)$p['stock'])?></td><td><?=number_format((int)$p['price'])?></td></tr><?php endforeach;?></tbody></table></div></section>
 </main></body></html>
