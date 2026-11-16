@@ -53,7 +53,7 @@ JOIN dbo.KalaId k ON k.K_Code=a.K_Code
 WHERE a.A_Code=@warehouse ORDER BY k.K_Code
 '@
   [void](Parameter $q '@warehouse' 'VarChar' $warehouse)
-  return ,(Rows $q)
+  return [pscustomobject]@{Table=(Rows $q)}
 }
 function To-Price($v,[string]$unit) {
   $n=[decimal]$v
@@ -65,7 +65,7 @@ function To-Price($v,[string]$unit) {
 function Catalog-Items($table,$config) {
   $seen=@{};$items=New-Object System.Collections.Generic.List[object]
   $invalid=0;$frac=0
-  foreach($r in $table.Rows) {
+  foreach($r in $table.Table.Rows) {
     $code=[string]$r['code'];$barcode=([string]$r['barcode']).Trim()
     if([string]::IsNullOrWhiteSpace($barcode) -or $seen.ContainsKey($barcode)){ $invalid++;continue }
     $seen[$barcode]=$true
@@ -123,7 +123,7 @@ WHERE k.Barcode=@barcode AND a.A_Code=@warehouse
 '@
   [void](Parameter $q '@barcode' 'VarChar' $barcode)
   [void](Parameter $q '@warehouse' 'VarChar' $warehouse)
-  return ,(Rows $q)
+  return [pscustomobject]@{Table=(Rows $q)}
 }
 function Post-Order($db,$config,$o,[bool]$dryRun) {
   $orderId=[long]$o.id
@@ -159,8 +159,8 @@ function Post-Order($db,$config,$o,[bool]$dryRun) {
       $qty=[int]$line.quantity
       if(!$barcode -or $qty -lt 1 -or $qty -gt 1000){throw 'Missing barcode or invalid quantity'}
       $matches=Sql-StockMatch $db $tx $barcode ([string]$config.warehouse)
-      if($matches.Rows.Count -ne 1){throw 'Ambiguous or missing Pyramid barcode'}
-      $rec=$matches.Rows[0]
+      if($matches.Table.Rows.Count -ne 1){throw 'Ambiguous or missing Pyramid barcode'}
+      $rec=$matches.Table.Rows[0]
       if([decimal]$rec['quantity'] -lt $qty){throw 'Pyramid stock is not sufficient'}
       $unit=[decimal]$line.unit_price
       if($unit -le 0){throw 'Invalid unit price'}
@@ -225,12 +225,12 @@ function Main {
   try {
     $rows=Catalog $db ([string]$cfg.warehouse)
     $cat=Catalog-Items $rows $cfg
-    Write-Output ('AUDIT_DB='+$cfg.database+' WAREHOUSE='+$cfg.warehouse+' TOTAL='+$rows.Rows.Count+' VALID='+$cat.Items.Count+' UNMAPPED='+$cat.Invalid+' FRACTIONAL='+$cat.Fractional)
+    Write-Output ('AUDIT_DB='+$cfg.database+' WAREHOUSE='+$cfg.warehouse+' TOTAL='+$rows.Table.Rows.Count+' VALID='+$cat.Items.Count+' UNMAPPED='+$cat.Invalid+' FRACTIONAL='+$cat.Fractional)
     if($Mode -eq 'Audit'){return}
     if($Mode -eq 'SandboxTest'){
       if($cfg.database -ne 'TehranBridgeSandbox1405'){throw 'SandboxTest requires the isolated restored database'}
       $testRow=$null
-      foreach($p in $rows.Rows){if([decimal]$p['quantity'] -gt 2 -and [decimal]$p['sale_price'] -gt 0 -and ![string]::IsNullOrWhiteSpace([string]$p['barcode'])){$testRow=$p;break}}
+      foreach($p in $rows.Table.Rows){if([decimal]$p['quantity'] -gt 2 -and [decimal]$p['sale_price'] -gt 0 -and ![string]::IsNullOrWhiteSpace([string]$p['barcode'])){$testRow=$p;break}}
       if($null -eq $testRow){throw 'No safe sandbox SKU'}
       $unit=To-Price $testRow['sale_price'] $cfg.source_price_unit
       $testOrder=[pscustomobject]@{id=900001;status='new';payment_method='cod';payment_status='unpaid';delivery_fee=0;subtotal=$unit;total=$unit;customer_name='Sandbox';phone='09999999999';address='SANDBOX';delivery_slot='sandbox';items=@([pscustomobject]@{barcode=[string]$testRow['barcode'];unit_price=$unit;quantity=1})}
