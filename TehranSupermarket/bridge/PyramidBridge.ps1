@@ -283,6 +283,11 @@ function Main {
     }
     if($Mode -eq 'SyncOnce') {
       if(-not $cfg.allow_live_catalog_writes){throw 'Catalog update disabled: no data transmitted'}
+      # Re-read POS stock after each order is finalized/acknowledged.
+      # Uploading the pre-sale snapshot would restore stock just sold in POS.
+      $freshRows=Catalog $db ([string]$cfg.warehouse)
+      $cat=Catalog-Items $freshRows $cfg
+      Write-Output ('FRESH_POST_SALES_CATALOG='+$cat.Items.Count)
       $batchSize=150
       for($i=0;$i -lt $cat.Items.Count;$i+=$batchSize){
         $last=[Math]::Min($i+$batchSize,$cat.Items.Count)
