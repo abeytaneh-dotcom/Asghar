@@ -2,7 +2,7 @@
 # Default is read-only audit. POS posting and website pushes are opt-in only.
 [CmdletBinding()]
 param(
-  [ValidateSet('Audit','OrderPreview','SyncOnce','SandboxTest')][string]$Mode='Audit',
+  [ValidateSet('Audit','OrderPreview','SyncOnce','SandboxTest','CatalogPreview')][string]$Mode='Audit',
   [string]$ConfigPath='D:\TehranBridge\bridge-config.json'
 )
 Set-StrictMode -Version Latest
@@ -220,6 +220,65 @@ function Post-Order($db,$config,$o,[bool]$dryRun) {
     throw
   }
 }
+function Catalog-Delta($catalog) {
+  $file='D:\TehranBridge\catalog-state.json'
+  $previous=@{}
+  $lastFull=[DateTime]::MinValue
+  if(Test-Path $file){
+    try{
+      $obj=Get-Content -LiteralPath $file -Raw -Encoding UTF8 | ConvertFrom-Json
+      foreach($p in $obj.signatures.PSObject.Properties){$previous[$p.Name]=[string]$p.Value}
+      $lastFull=[DateTime]::Parse([string]$obj.last_full_utc).ToUniversalTime()
+    }catch{$previous=@{}}
+  }
+  $full=([DateTime]::UtcNow-$lastFull).TotalHours -ge 24
+  $changed=New-Object System.Collections.Generic.List[object]
+  foreach($item in $catalog.Items){
+    $sig=[string]$item.code2+'|'+[string]$item.stock+'|'+[string]$item.price
+    if($full -or -not $previous.ContainsKey([string]$item.barcode) -or $previous[[string]$item.barcode] -ne $sig){
+      $changed.Add($item)
+    }
+  }
+  return [pscustomobject]@{Path=$file;Signatures=$previous;Changes=$changed;Full=$full}
+}
+function Send-Catalog($cfg,$cat) {
+  $delta=Catalog-Delta $cat
+  $items=$delta.Changes
+  if($items.Count -eq 0){Write-Output 'CATALOG_UP_TO_DATE=YES';return}
+  Write-Output ('CATALOG_PENDING='+$items.Count+' FULL_RECONCILIATION='+$delta.Full)
+  $sent=0;$matched=0
+  for($i=0;$i -lt $items.Count;$i+=150){
+    $count=[Math]::Min(150,$items.Count-$i)
+    $batch=@($items.GetRange($i,$count))
+    $payload=@{price_unit='toman';products=$batch}
+    $blob=$payload | ConvertTo-Json -Depth 10 -Compress
+    $sha=[Security.Cryptography.SHA256]::Create()
+    try{$hash=[BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($blob))).Replace('-','').ToLowerInvariant()}
+    finally{$sha.Dispose()}
+    $rid='pyr-catalog-v3-'+$hash
+    $resp=Website $cfg 'products_batch' $payload $rid
+    if([int]$resp.received -ne $count){throw 'Catalog response count mismatch: no state saved'}
+    $excluded=@{}
+    foreach($u in @($resp.not_found)){$excluded[[int]$u.index]=$true}
+    foreach($j in @($resp.invalid_indexes)){$excluded[[int]$j]=$true}
+    for($j=0;$j -lt $count;$j++){
+      if($excluded.ContainsKey($j)){continue}
+      $p=$batch[$j]
+      $delta.Signatures[[string]$p.barcode]=([string]$p.code2+'|'+[string]$p.stock+'|'+[string]$p.price)
+      $matched++
+    }
+    $sent+=$count
+    Write-Output ('CATALOG_BATCH_SENT='+$count+' MATCHED='+($count-$excluded.Count))
+  }
+  # Save only successfully acknowledged items; unmatched products retry next run.
+  $state=[ordered]@{last_full_utc=([DateTime]::UtcNow.ToString('o'));signatures=$delta.Signatures}
+  $temp=$delta.Path+'.tmp'
+  $json=$state|ConvertTo-Json -Depth 5 -Compress
+  [IO.File]::WriteAllText($temp,$json,(New-Object System.Text.UTF8Encoding($false)))
+  Move-Item -LiteralPath $temp -Destination $delta.Path -Force
+  Write-Output ('CATALOG_SYNC_SENT='+$sent+' MATCHED='+$matched)
+}
+
 function Save-ReceiptHtml($o,[string]$invoice) {
   $dir='D:\TehranBridge\receipts'
   if(!(Test-Path $dir)){[void](New-Item -ItemType Directory -Path $dir)}
@@ -246,6 +305,7 @@ function Main {
     $cat=Catalog-Items $rows $cfg
     Write-Output ('AUDIT_DB='+$cfg.database+' WAREHOUSE='+$cfg.warehouse+' TOTAL='+$rows.Table.Rows.Count+' VALID='+$cat.Items.Count+' UNMAPPED='+$cat.Invalid+' FRACTIONAL='+$cat.Fractional)
     if($Mode -eq 'Audit'){return}
+    if($Mode -eq 'CatalogPreview'){$delta=Catalog-Delta $cat; Write-Output ('CATALOG_PREVIEW_TO_SEND='+$delta.Changes.Count);return}
     if($Mode -eq 'SandboxTest'){
       if($cfg.database -ne 'TehranBridgeSandbox1405'){throw 'SandboxTest requires the isolated restored database'}
       $testRow=$null
@@ -264,6 +324,10 @@ function Main {
     $status=Website $cfg 'status'
     Write-Output ('WEBSITE_STATUS=PASS PENDING_ORDERS='+$status.pending_orders)
     if($Mode -eq 'SyncOnce' -and ((-not $status.write_permissions.catalog) -or (-not $status.write_permissions.order_ack))){throw 'Remote catalog and invoice acknowledgement permissions are not verified; no POS sales posted'}
+    if($Mode -eq 'SyncOnce'){
+      if(-not $cfg.allow_live_catalog_writes){throw 'Catalog update disabled: no data transmitted'}
+      Send-Catalog $cfg $cat
+    }
     $ordersResult=Website $cfg 'orders'
     $orders=@($ordersResult.orders)
     $ready=0;$held=0
@@ -282,20 +346,10 @@ function Main {
       } catch { $held++;Write-Output ('ORDER_HELD='+[long]$o.id+' REASON='+$_.Exception.Message)}
     }
     if($Mode -eq 'SyncOnce') {
-      if(-not $cfg.allow_live_catalog_writes){throw 'Catalog update disabled: no data transmitted'}
-      # Re-read POS stock after each order is finalized/acknowledged.
-      # Uploading the pre-sale snapshot would restore stock just sold in POS.
+      # Refresh only changed stock after finalized website orders were deducted in Pyramid.
       $freshRows=Catalog $db ([string]$cfg.warehouse)
-      $cat=Catalog-Items $freshRows $cfg
-      Write-Output ('FRESH_POST_SALES_CATALOG='+$cat.Items.Count)
-      $batchSize=150
-      for($i=0;$i -lt $cat.Items.Count;$i+=$batchSize){
-        $last=[Math]::Min($i+$batchSize,$cat.Items.Count)
-        $items=@($cat.Items.GetRange($i,$last-$i))
-        $id='pyr-catalog-'+[DateTime]::UtcNow.ToString('yyyyMMddHHmm')+'-'+[int]($i/$batchSize)
-        $resp=Website $cfg 'products_batch' @{price_unit='toman';products=$items} $id
-        Write-Output ('CATALOG_SENT='+$items.Count+' UPDATED='+$resp.updated)
-      }
+      $fresh=Catalog-Items $freshRows $cfg
+      Send-Catalog $cfg $fresh
     }
     Write-Output ('ORDERS_PREVIEWED='+$ready+' HELD='+$held)
   } finally { $db.Dispose() }
