@@ -70,12 +70,33 @@ class Phase1Safety(unittest.TestCase):
         bridge = load("bridge/PyramidBridge.ps1")
         self.assertIn("if(-not $cfg.enabled)", bridge)
         self.assertIn("if(-not $cfg.allow_live_pos_writes)", bridge)
-        self.assertIn("if(-not $cfg.allow_live_catalog_writes)", bridge)
+        self.assertIn("not $cfg.allow_live_catalog_writes", bridge)
         self.assertIn("if($Mode -eq 'Audit'){return}", bridge)
         self.assertIn("TehranBridgeSandbox1405", bridge)
         self.assertIn("sp_getapplock", bridge)
         self.assertIn("already_posted", bridge)
 
+
+    def test_atomic_snapshot_is_fail_closed_and_staging_only(self):
+        api=load("pyramid_api.php")
+        helper=load("pyramid_snapshot_lib.php")
+        migration=load("bin/provision_bridge_staging.php")
+        store=load("store_lib.php")
+        for action in ("snapshot_batch","snapshot_finalize"):
+            self.assertIn(action, api)
+        self.assertIn("if($action==='products_batch') return false", api)
+        self.assertIn("ts_snapshot_finalize", api)
+        self.assertIn("pyramid_catalog_stage", helper)
+        self.assertIn("snapshot_incomplete", helper)
+        self.assertIn("snapshot_match_rate_too_low", helper)
+        self.assertIn("o.pyramid_synced_at IS NULL", helper)
+        self.assertIn("GREATEST(0,s.stock", helper)
+        self.assertIn("enforce_freshness", helper)
+        self.assertIn("ts_snapshot_fresh", store)
+        self.assertIn("PHP_SAPI !== 'cli'", migration)
+        self.assertIn("TEHRAN_STAGING", migration)
+        self.assertIn("ts_snapshot_provision_schema", migration)
+        self.assertNotIn("ts_snapshot_provision_schema($pdo);", api)
 
     def test_sync_key_loading_never_creates_one(self):
         helper = load("pyramid_sync_lib.php")
