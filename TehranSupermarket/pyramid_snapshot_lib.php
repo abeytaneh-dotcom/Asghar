@@ -122,7 +122,7 @@ function ts_snapshot_finalize(PDO $pdo,array $payload): array {
           WHERE p.active=1");
         $update->execute([$id]);
         $pdo->prepare('UPDATE pyramid_catalog_snapshots
-          SET completed_at=NOW(), source_count=?,matched_count=?,site_count=?
+          SET completed_at=UTC_TIMESTAMP(), source_count=?,matched_count=?,site_count=?
           WHERE snapshot_id=?')->execute([$actual,$matched,$site,$id]);
         $pdo->commit();
         // Best-effort bounded storage cleanup; never affect the newly completed snapshot.
@@ -142,10 +142,14 @@ function ts_snapshot_fresh(PDO $pdo,int $ttlSeconds=180): bool {
     $config=__DIR__.'/storage/pyramid_bridge_writes.php';
     if(!is_file($config))return true;
     $options=require $config;
-    if(!is_array($options) || ($options['enforce_freshness']??false)!==true)return true;
+    if(!is_array($options) || ($options['catalog']??false)!==true)return true;
+    if(($options['enforce_freshness']??true)===false)return true;
     try {
         $latest=$pdo->query('SELECT MAX(completed_at) FROM pyramid_catalog_snapshots')->fetchColumn();
         if(!$latest)return false;
-        return (time()-strtotime((string)$latest))<=max(30,$ttlSeconds);
+        $stamp=DateTimeImmutable::createFromFormat('!Y-m-d H:i:s',(string)$latest,new DateTimeZone('UTC'));
+        if($stamp===false)return false;
+        $age=time()-$stamp->getTimestamp();
+        return $age>=0 && $age<=max(30,$ttlSeconds);
     }catch(Throwable $e){return false;}
 }
