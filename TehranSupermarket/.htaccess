@@ -52,9 +52,9 @@ ErrorDocument 500 /tehran/error.php?s=500
 </IfModule>
 
 # Phase 1: deny direct web access to retired setup, migration/seed and private code.
-<FilesMatch "^(install\\.php|schema\\.php|pyramid_seed_1400(?:_data)?\\.php|product_image_seed\\.php|pyramid_sync_lib\\.php|ai_learning_lib\\.php|watermark_bootstrap\\.php|\\.env(?:\\..*)?|\\.user\\.ini|.*\\.(?:sql|sqlite|db|bak|backup|log|ini|zip|tar|gz))$">
+<FilesMatch "^(install\.php|schema\.php|pyramid_seed_1400(?:_data)?\.php|product_image_seed\.php|pyramid_sync_lib\.php|ai_learning_lib\.php|watermark_bootstrap\.php|\.env(?:\..*)?|\.user\.ini|.*\.(?:sql|sqlite|db|bak|backup|log|ini|zip|tar|gz))$">
  Require all denied
 </FilesMatch>
 <IfModule mod_rewrite.c>
- RewriteRule ^(?:storage|\\.git)(?:/|$) - [F,END]
+ RewriteRule ^(?:storage|\.git)(?:/|$) - [F,END]
 </IfModule>
