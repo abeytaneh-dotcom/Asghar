@@ -59,6 +59,7 @@ try{
     ]);
     // Database schema must be prepared by an explicit reviewed migration.
     require_once __DIR__.'/pyramid_sync_lib.php';
+    require_once __DIR__.'/pyramid_snapshot_lib.php';
     $expected=ts_sync_key();
 }catch(Throwable $e){ts_log_internal($e,'SYNC-703');ts_json_fail('SYNC-703',503);}
 
@@ -74,11 +75,12 @@ function ts_bridge_write_enabled(string $action): bool {
     $config=require $file;
     if(!is_array($config)) return false;
     if($action==='order_ack') return ($config['order_ack']??false)===true;
-    if($action==='products_batch') return ($config['catalog']??false)===true;
+    if(in_array($action,['snapshot_batch','snapshot_finalize'],true)) return ($config['catalog']??false)===true;
+    if($action==='products_batch') return false; // never publish partial snapshots
     if($action==='product_update') return false; // Single-row writes remain forbidden.
     return false;
 }
-if (in_array($action, ['product_update', 'products_batch', 'order_ack'], true) && !ts_bridge_write_enabled($action)) {
+if (in_array($action, ['product_update', 'products_batch', 'order_ack', 'snapshot_batch', 'snapshot_finalize'], true) && !ts_bridge_write_enabled($action)) {
     out(['ok'=>false,'error'=>'sync_read_only','code'=>'SYNC-READONLY'],403);
 }
 $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
@@ -94,8 +96,8 @@ try{
         out([
             'ok'=>true,'api_version'=>2,'protocol'=>'TEHRAN-SYNC-2','server_time'=>date(DATE_ATOM),'price_unit'=>'toman',
             'products'=>$counts,'pending_orders'=>$pending,'registered_devices'=>$devices,
-            'write_permissions'=>['catalog'=>ts_bridge_write_enabled('products_batch'),'order_ack'=>ts_bridge_write_enabled('order_ack')],
-            'capabilities'=>['products','products_batch','orders','order_ack','device_register','heartbeat','sync_pull']
+            'write_permissions'=>['catalog'=>ts_bridge_write_enabled('snapshot_batch'),'order_ack'=>ts_bridge_write_enabled('order_ack')],
+            'capabilities'=>['products','snapshot_batch','snapshot_finalize','orders','order_ack','device_register','heartbeat','sync_pull']
         ]);
     }
 
@@ -144,6 +146,23 @@ try{
         $limit=(int)($_GET['order_limit']??200);
         $serverTime=date(DATE_ATOM);
         out(['ok'=>true,'api_version'=>2,'server_time'=>$serverTime,'price_unit'=>'toman','products'=>get_products($pdo,$since),'orders'=>get_orders($pdo,$limit)]);
+    }
+
+    if($action==='snapshot_batch' && $method==='POST'){
+        $d=body_json();
+        try{
+            $response=ts_snapshot_batch($pdo,$d);
+            out($response);
+        }catch(InvalidArgumentException $e){out(['ok'=>false,'error'=>'invalid_snapshot_batch'],422);
+        }catch(LogicException $e){out(['ok'=>false,'error'=>'snapshot_not_editable'],409);}
+    }
+    if($action==='snapshot_finalize' && $method==='POST'){
+        $d=body_json();
+        try{
+            $response=ts_snapshot_finalize($pdo,$d);
+            out($response);
+        }catch(InvalidArgumentException $e){out(['ok'=>false,'error'=>'invalid_snapshot_finalization'],422);
+        }catch(LogicException $e){out(['ok'=>false,'error'=>'snapshot_not_ready'],409);}
     }
 
     if($action==='product_update' && $method==='POST'){
