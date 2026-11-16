@@ -74,7 +74,8 @@ function ts_bridge_write_enabled(string $action): bool {
     $config=require $file;
     if(!is_array($config)) return false;
     if($action==='order_ack') return ($config['order_ack']??false)===true;
-    if(in_array($action,['product_update','products_batch'],true)) return ($config['catalog']??false)===true;
+    if($action==='products_batch') return ($config['catalog']??false)===true;
+    if($action==='product_update') return false; // Single-row writes remain forbidden.
     return false;
 }
 if (in_array($action, ['product_update', 'products_batch', 'order_ack'], true) && !ts_bridge_write_enabled($action)) {
@@ -93,6 +94,7 @@ try{
         out([
             'ok'=>true,'api_version'=>2,'protocol'=>'TEHRAN-SYNC-2','server_time'=>date(DATE_ATOM),'price_unit'=>'toman',
             'products'=>$counts,'pending_orders'=>$pending,'registered_devices'=>$devices,
+            'write_permissions'=>['catalog'=>ts_bridge_write_enabled('products_batch'),'order_ack'=>ts_bridge_write_enabled('order_ack')],
             'capabilities'=>['products','products_batch','orders','order_ack','device_register','heartbeat','sync_pull']
         ]);
     }
