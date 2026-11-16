@@ -29,7 +29,9 @@ try {
         ]);
     require_once dirname(__DIR__).'/pyramid_sync_lib.php';
     ts_sync_ensure_schema($pdo);
-    foreach (['sync_devices','sync_idempotency'] as $table) {
+    require_once dirname(__DIR__).'/pyramid_snapshot_lib.php';
+    ts_snapshot_provision_schema($pdo);
+    foreach (['sync_devices','sync_idempotency','pyramid_catalog_snapshots','pyramid_catalog_stage'] as $table) {
         $q=$pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?');
         $q->execute([$table]);
         if ((int)$q->fetchColumn()!==1) throw new RuntimeException('missing '.$table);
