@@ -81,17 +81,36 @@ function Catalog-Items($table,$config) {
   }
   return [pscustomobject]@{Items=$items;Invalid=$invalid;Fractional=$frac}
 }
-function Website($cfg,[string]$action,$payload=$null,[string]$requestId='') {
-  $keyFile=[string]$cfg.sync_key_file
-  if(!(Test-Path -LiteralPath $keyFile)){throw 'Sync key missing: nothing uploaded'}
-  $key=(Get-Content -LiteralPath $keyFile -Raw -Encoding ASCII).Trim()
-  if($key.Length -lt 32){throw 'Sync key too short'}
-  $url=$cfg.website.TrimEnd('/')+'/pyramid_api.php?action='+[Uri]::EscapeDataString($action)
-  $heads=@{'X-Sync-Key'=$key;'X-Device-ID'='EXSOM-J3'}
-  if($requestId -ne ''){$heads['X-Request-ID']=$requestId}
-  $args=@{Uri=$url;Headers=$heads;TimeoutSec=35;ErrorAction='Stop'}
-  if($null -ne $payload){$args.Method='POST';$args.Body=($payload|ConvertTo-Json -Depth 12 -Compress);$args.ContentType='application/json; charset=utf-8'}
-  else{$args.Method='GET'}
+function Website($cfg,[string]$action,$payload=$null,[string]$requestId='',[string]$querySuffix='') {
+  $query='action='+[Uri]::EscapeDataString($action)+$querySuffix
+  if($query -notmatch '^action=[a-z_]+(&after_id=[0-9]{1,13})?$'){throw 'Invalid signed API query'}
+  $url=$cfg.website.TrimEnd('/')+'/pyramid_api.php?'+$query
+  $body=if($null -eq $payload){''}else{$payload|ConvertTo-Json -Depth 12 -Compress}
+  $method=if($null -eq $payload){'GET'}else{'POST'}
+  $req=if([string]::IsNullOrWhiteSpace($requestId)){'read-'+[Guid]::NewGuid().ToString('N')}else{'bridge-'+$requestId}
+  if($req.Length -gt 120){throw 'Request id too long'}
+  $headers=@{'X-Device-ID'='EXSOM-J3';'X-Request-ID'=$req}
+  $signer='D:\TehranBridge\SignPyramidRequest.js'
+  $private='D:\TehranBridge\keys\private.pem'
+  if((Test-Path $signer) -and (Test-Path $private)){
+    $sha=[Security.Cryptography.SHA256]::Create()
+    try {$hash=[BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($body))).Replace('-','').ToLowerInvariant()}
+    finally {$sha.Dispose()}
+    $timestamp=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds().ToString()
+    $signature=(& 'C:\Program Files\nodejs\node.exe' $signer $method $query $timestamp 'EXSOM-J3' $req $hash)
+    if($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($signature)){throw 'Local device signing failed'}
+    $headers['X-Pyramid-Timestamp']=$timestamp
+    $headers['X-Pyramid-Signature']=([string]$signature).Trim()
+  }else{
+    # Legacy sync secret fallback, never printed and never generated automatically.
+    $keyFile=[string]$cfg.sync_key_file
+    if(!(Test-Path -LiteralPath $keyFile)){throw 'Neither signed-device auth nor local sync secret is available'}
+    $key=(Get-Content -LiteralPath $keyFile -Raw -Encoding ASCII).Trim()
+    if($key.Length -lt 32){throw 'Sync key too short'}
+    $headers['X-Sync-Key']=$key
+  }
+  $args=@{Uri=$url;Headers=$headers;TimeoutSec=40;ErrorAction='Stop';Method=$method}
+  if($method -eq 'POST'){$args.Body=[Text.Encoding]::UTF8.GetBytes($body);$args.ContentType='application/json; charset=utf-8'}
   $r=Invoke-RestMethod @args
   if($null -eq $r -or !$r.ok){throw ('Remote API rejected '+$action)}
   return $r
@@ -347,55 +366,18 @@ function Main {
     Write-Output ('WEBSITE_STATUS=PASS PENDING_ORDERS='+$status.pending_orders)
     if($Mode -eq 'SyncOnce' -and ((-not $status.write_permissions.catalog) -or (-not $status.write_permissions.order_ack))){throw 'Remote catalog and invoice acknowledgement permissions are not verified; no POS sales posted'}
     if($Mode -eq 'SyncOnce' -and -not $cfg.allow_live_catalog_writes){throw 'Catalog update disabled: no data transmitted'}
-    $ordersResult=Website $cfg 'orders'
-    $orders=@($ordersResult.orders)
-    # Existing, possibly manually posted orders must not be imported twice.
-    # This cutoff is written only during a separate reviewed connection bootstrap.
+    # Never retrieve historical orders as live work if the reviewed cutoff exists.
     $orderCutoff=-1L
     if($Mode -eq 'SyncOnce' -and $cfg.database -eq '1405') {
       $cutoffFile='D:\TehranBridge\site_orders_start_after_id.txt'
       if(!(Test-Path -LiteralPath $cutoffFile)){throw 'Historical order cutoff missing; live posting remains blocked'}
       $cutoffText=(Get-Content -LiteralPath $cutoffFile -Raw).Trim()
-      if($cutoffText -notmatch '^[0-9]{1,13}
-    foreach($o in $orders) {
-      try {
-        if($Mode -eq 'SyncOnce' -and [long]$o.id -le $orderCutoff) {
-          Write-Output ('HISTORICAL_ORDER_REVIEW_REQUIRED='+[long]$o.id)
-          continue
-        }
-        if($Mode -eq 'OrderPreview'){
-          $result=Post-Order $db $cfg $o $true
-          $ready++
-        } else {
-          if(-not $cfg.allow_live_pos_writes){throw 'Live invoice posting is not enabled'}
-          $result=Post-Order $db $cfg $o $false
-          # Generate printable ticket before marking the remote order synchronized.
-          # A filesystem or printer-format error must keep the order retryable.
-          $receipt=Save-ReceiptHtml $o ([string]$result.invoice)
-          $ack=Website $cfg 'order_ack' @{order_id=[long]$o.id;invoice_no=[string]$result.invoice} ('ack-pos-'+[long]$o.id)
-          Write-Output ('ORDER_ACK_OK='+[long]$o.id+' POS_INVOICE='+$result.invoice+' PRINT_READY='+[bool](Test-Path $receipt))
-        }
-      } catch { $held++;Write-Output ('ORDER_HELD='+[long]$o.id+' REASON='+$_.Exception.Message)}
-    }
-    if($Mode -eq 'SyncOnce') {
-      if($held -ne 0){throw ('Orders held for review: '+$held+'; catalog snapshot intentionally not finalized')}
-      # Capture a fresh POS snapshot AFTER posting orders to prevent stock resurrection.
-      $freshRows=Catalog $db ([string]$cfg.warehouse)
-      $fresh=Catalog-Items $freshRows $cfg
-      Send-Snapshot $cfg $fresh
-    }
-    if($Mode -eq 'SyncOnce'){
-      if($held -ne 0){throw ('Orders held for review: '+$held+'; healthy cycle withheld')}
-      [void](Website $cfg 'heartbeat' @{device_id='EXSOM-J3';device_name='Pyramid';app_version='Bridge-3';platform='Windows';cycle_complete=$true})
-      Write-Output 'BRIDGE_CYCLE_HEARTBEAT=PASS'
-    }
-    Write-Output ('ORDERS_PREVIEWED='+$ready+' HELD='+$held)
-  } finally { $db.Dispose() }
-}
-Main
-){throw 'Invalid historical order cutoff'}
+      if($cutoffText -notmatch '^[0-9]{1,13}$'){throw 'Invalid historical order cutoff'}
       $orderCutoff=[long]$cutoffText
     }
+    $after=if($orderCutoff -ge 0){'&after_id='+$orderCutoff}else{''}
+    $ordersResult=Website $cfg 'orders' $null '' $after
+    $orders=@($ordersResult.orders)
     $ready=0;$held=0
     foreach($o in $orders) {
       try {
