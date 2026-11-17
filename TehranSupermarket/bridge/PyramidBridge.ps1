@@ -2,7 +2,7 @@
 # Default is read-only audit. POS posting and website pushes are opt-in only.
 [CmdletBinding()]
 param(
-  [ValidateSet('Audit','OrderPreview','SyncOnce','SandboxTest','CatalogPreview')][string]$Mode='Audit',
+  [ValidateSet('Audit','OrderPreview','SyncOnce','SandboxTest','CatalogPreview','AuthProbe')][string]$Mode='Audit',
   [string]$ConfigPath='D:\TehranBridge\bridge-config.json'
 )
 Set-StrictMode -Version Latest
@@ -136,7 +136,7 @@ function Call-Proc($db,$tx,[string]$name,[object[]]$parameters) {
 }
 function Sql-StockMatch($db,$tx,[string]$barcode,[string]$warehouse) {
   $q=Command $db $tx @'
-SELECT TOP (2) a.Id warehouse_id, a.Price_Forosh price_rial, a.Mojodi quantity
+SELECT TOP (2) a.Id warehouse_id, a.Price_Forosh price_rial, a.Mojodi quantity, a.Reserve reserved
 FROM dbo.KalaId k
 JOIN dbo.Anbar a ON a.K_Code=k.K_Code
 WHERE k.Barcode=@barcode AND a.A_Code=@warehouse
@@ -181,7 +181,8 @@ function Post-Order($db,$config,$o,[bool]$dryRun) {
       $matches=Sql-StockMatch $db $tx $barcode ([string]$config.warehouse)
       if($matches.Table.Rows.Count -ne 1){throw 'Ambiguous or missing Pyramid barcode'}
       $rec=$matches.Table.Rows[0]
-      if([decimal]$rec['quantity'] -lt $qty){throw 'Pyramid stock is not sufficient'}
+      $realStock=[decimal]$rec['quantity'];$reservedStock=if($rec['reserved'] -is [DBNull]){[decimal]0}else{[decimal]$rec['reserved']}
+      if(($realStock-[math]::Max(0,$reservedStock)) -lt $qty){throw 'Pyramid available stock after reservations is insufficient'}
       $unit=[decimal]$line.unit_price
       if($unit -le 0){throw 'Invalid unit price'}
       $sum+=$unit*$qty
@@ -346,6 +347,13 @@ function Main {
     $cat=Catalog-Items $rows $cfg
     Write-Output ('AUDIT_DB='+$cfg.database+' WAREHOUSE='+$cfg.warehouse+' TOTAL='+$rows.Table.Rows.Count+' VALID='+$cat.Items.Count+' UNMAPPED='+$cat.Invalid+' FRACTIONAL='+$cat.Fractional)
     if($Mode -eq 'Audit'){return}
+    if($Mode -eq 'AuthProbe'){
+      $stat=Website $cfg 'status'
+      if([int]$stat.api_version -ne 2){throw 'Unexpected site API protocol'}
+      $orders=Website $cfg 'orders' $null '' '&after_id=0'
+      Write-Output ('SIGNED_SITE_AUTH=PASS API_VERSION='+$stat.api_version+' PENDING_ORDERS='+@($orders.orders).Count)
+      return
+    }
     if($Mode -eq 'CatalogPreview'){$delta=Catalog-Delta $cat; Write-Output ('CATALOG_PREVIEW_TO_SEND='+$delta.Changes.Count);return}
     if($Mode -eq 'SandboxTest'){
       if($cfg.database -ne 'TehranBridgeSandbox1405'){throw 'SandboxTest requires the isolated restored database'}
