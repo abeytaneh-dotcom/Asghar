@@ -32,7 +32,7 @@ function price_to_toman($value,string $unit): ?int {
 function get_orders(PDO $pdo,int $limit=200,int $afterId=0): array {
     $limit=max(1,min(500,$limit));
     $afterId=max(0,$afterId);
-    $sql="SELECT o.id,o.status,o.payment_method,o.payment_status,o.delivery_slot,o.subtotal,o.delivery_fee,o.total,o.created_at,o.pyramid_synced_at,o.pyramid_invoice_no,c.name customer_name,c.phone,c.address FROM orders o JOIN customers c ON c.id=o.customer_id WHERE o.status<>'cancelled' AND o.pyramid_synced_at IS NULL AND o.id>".$afterId." ORDER BY o.id ASC LIMIT ".$limit;
+    $sql="SELECT o.id,o.status,o.payment_method,o.payment_status,o.delivery_slot,o.fulfillment_method,o.subtotal,o.delivery_fee,o.discount_total,o.total,o.created_at,o.pyramid_synced_at,o.pyramid_invoice_no,c.name customer_name,c.phone,c.address FROM orders o JOIN customers c ON c.id=o.customer_id WHERE o.status<>'cancelled' AND o.pyramid_synced_at IS NULL AND o.id>".$afterId." ORDER BY o.id ASC LIMIT ".$limit;
     $orders=$pdo->query($sql)->fetchAll();
     if($orders){
         $ids=array_column($orders,'id');
