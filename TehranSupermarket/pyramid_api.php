@@ -6,6 +6,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 header('X-Tehran-Sync-Version: 2');
+header('X-Pyramid-Auth-Mode: rsa-signed-v1');
 
 function out(array $d,int $s=200): never {
     http_response_code($s);
