@@ -352,12 +352,15 @@ function Save-ReceiptHtml($o,[string]$invoice) {
   $id=[long]$o.id
   $name=(& $escape $o.customer_name);$phone=(& $escape $o.phone);$addr=(& $escape $o.address)
   $lines=New-Object System.Collections.Generic.List[string]
+  $subtotalToman=[long]$o.subtotal
+  $shippingToman=[long]$o.delivery_fee
+  $discountToman=if($null -ne $o.PSObject.Properties['discount_total']){[long]$o.discount_total}else{[long]0}
   foreach($line in @($o.items)){
     $p=(& $escape $line.product_name)
     $amount=[long]$line.quantity*[long]$line.unit_price
     $lines.Add('<tr><td>'+$p+'</td><td>'+[int]$line.quantity+'</td><td>'+$amount.ToString('N0')+'</td></tr>')
   }
-  $html='<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>فاکتور طهران مارکت</title><style>@page{size:80mm auto;margin:3mm}body{font:13px Tahoma,sans-serif;max-width:74mm;margin:auto;color:#111}h1{text-align:center;font-size:17px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px dashed #999;padding:5px 2px;text-align:right}h2{font-size:14px;text-align:center}.sum{font-size:16px;font-weight:bold}small{display:block;margin:5px 0}button{margin:12px 0}@media print{button{display:none}}</style></head><body><h1>طهران مارکت</h1><h2>فاکتور فروش اینترنتی #'+(& $escape $invoice)+'</h2><small>شماره سفارش سایت: '+$id+'</small><small>مشتری: '+$name+'</small><small>تلفن: '+$phone+'</small><small>نشانی: '+$addr+'</small><table><tr><th>کالا</th><th>تعداد</th><th>تومان</th></tr>'+($lines -join '')+'</table><p class="sum">مبلغ کل: '+([long]$o.total).ToString('N0')+' تومان</p><small>روش پرداخت: '+(& $escape $o.payment_method)+'</small><button onclick="window.print()">چاپ فاکتور</button></body></html>'
+  $html='<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>فاکتور طهران مارکت</title><style>@page{size:80mm auto;margin:3mm}body{font:13px Tahoma,sans-serif;max-width:74mm;margin:auto;color:#111}h1{text-align:center;font-size:17px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px dashed #999;padding:5px 2px;text-align:right}h2{font-size:14px;text-align:center}.sum{font-size:16px;font-weight:bold}small{display:block;margin:5px 0}button{margin:12px 0}@media print{button{display:none}}</style></head><body><h1>طهران مارکت</h1><h2>فاکتور فروش اینترنتی #'+(& $escape $invoice)+'</h2><small>شماره سفارش سایت: '+$id+'</small><small>مشتری: '+$name+'</small><small>تلفن: '+$phone+'</small><small>نشانی: '+$addr+'</small><table><tr><th>کالا</th><th>تعداد</th><th>تومان</th></tr>'+($lines -join '')+'</table><small>جمع کالاها: '+$subtotalToman.ToString('N0')+' تومان</small><small>تخفیف: '+$discountToman.ToString('N0')+' تومان</small><small>هزینه ارسال: '+$shippingToman.ToString('N0')+' تومان (تسویه مجزا از فروش کالا در پیرامید)</small><p class="sum">مبلغ کل سفارش سایت: '+([long]$o.total).ToString('N0')+' تومان</p><small>روش پرداخت: '+(& $escape $o.payment_method)+'</small><button onclick="window.print()">چاپ فاکتور</button></body></html>'
   $file=Join-Path $dir ('order-'+$id+'.html')
   [IO.File]::WriteAllText($file,$html,(New-Object System.Text.UTF8Encoding($false)))
   return $file
