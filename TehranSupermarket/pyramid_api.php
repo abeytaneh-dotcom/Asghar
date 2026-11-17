@@ -28,9 +28,10 @@ function price_to_toman($value,string $unit): ?int {
     if($unit==='toman' || $unit==='') return (int)$v;
     return null;
 }
-function get_orders(PDO $pdo,int $limit=200): array {
+function get_orders(PDO $pdo,int $limit=200,int $afterId=0): array {
     $limit=max(1,min(500,$limit));
-    $sql="SELECT o.id,o.status,o.payment_method,o.payment_status,o.delivery_slot,o.subtotal,o.delivery_fee,o.total,o.created_at,o.pyramid_synced_at,o.pyramid_invoice_no,c.name customer_name,c.phone,c.address FROM orders o JOIN customers c ON c.id=o.customer_id WHERE o.status<>'cancelled' AND o.pyramid_synced_at IS NULL ORDER BY o.id ASC LIMIT ".$limit;
+    $afterId=max(0,$afterId);
+    $sql="SELECT o.id,o.status,o.payment_method,o.payment_status,o.delivery_slot,o.subtotal,o.delivery_fee,o.total,o.created_at,o.pyramid_synced_at,o.pyramid_invoice_no,c.name customer_name,c.phone,c.address FROM orders o JOIN customers c ON c.id=o.customer_id WHERE o.status<>'cancelled' AND o.pyramid_synced_at IS NULL AND o.id>".$afterId." ORDER BY o.id ASC LIMIT ".$limit;
     $orders=$pdo->query($sql)->fetchAll();
     if($orders){
         $ids=array_column($orders,'id');
@@ -64,7 +65,10 @@ try{
 }catch(Throwable $e){ts_log_internal($e,'SYNC-703');ts_json_fail('SYNC-703',503);}
 
 $given=trim((string)($_SERVER['HTTP_X_SYNC_KEY']??''));
-if($given==='' || !hash_equals($expected,$given)) ts_json_fail('SYNC-701',401);
+$oldKeyAuthorized=$given!=='' && hash_equals($expected,$given);
+require_once __DIR__.'/pyramid_signature_lib.php';
+$deviceSignatureAuthorized=ts_pyramid_verify_device_signature();
+if(!$oldKeyAuthorized && !$deviceSignatureAuthorized) ts_json_fail('SYNC-701',401);
 
 $action=(string)($_GET['action']??'status');
 // Backward-compatible Phase 1 safety: no API write until a separate protected
@@ -138,7 +142,7 @@ try{
 
     if($action==='orders'){
         $limit=(int)($_GET['limit']??200);
-        out(['ok'=>true,'price_unit'=>'toman','server_time'=>date(DATE_ATOM),'orders'=>get_orders($pdo,$limit)]);
+        out(['ok'=>true,'price_unit'=>'toman','server_time'=>date(DATE_ATOM),'orders'=>get_orders($pdo,$limit,max(0,(int)($_GET['after_id']??0)))]);
     }
 
     if($action==='sync_pull'){
