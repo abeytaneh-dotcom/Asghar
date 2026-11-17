@@ -2,7 +2,7 @@
 # Default is read-only audit. POS posting and website pushes are opt-in only.
 [CmdletBinding()]
 param(
-  [ValidateSet('Audit','OrderPreview','SyncOnce','SandboxTest','CatalogPreview','AuthProbe','CatalogSyncOnce')][string]$Mode='Audit',
+  [ValidateSet('Audit','OrderPreview','SyncOnce','SandboxTest','CatalogPreview','AuthProbe','CatalogSyncOnce','OrderSyncOnce')][string]$Mode='Audit',
   [string]$ConfigPath='D:\TehranBridge\bridge-config.json'
 )
 Set-StrictMode -Version Latest
@@ -413,10 +413,11 @@ function Main {
       return
     }
     if($Mode -eq 'SyncOnce' -and ((-not $status.write_permissions.catalog) -or (-not $status.write_permissions.order_ack))){throw 'Remote catalog and invoice acknowledgement permissions are not verified; no POS sales posted'}
+    if($Mode -eq 'OrderSyncOnce' -and ((-not $status.write_permissions.order_ack) -or (-not $cfg.allow_live_pos_writes))){throw 'Order-only posting is not authorized by both site and client'}
     if($Mode -eq 'SyncOnce' -and -not $cfg.allow_live_catalog_writes){throw 'Catalog update disabled: no data transmitted'}
     # Never retrieve historical orders as live work if the reviewed cutoff exists.
     $orderCutoff=-1L
-    if($Mode -eq 'SyncOnce' -and $cfg.database -eq '1405') {
+    if($Mode -in @('SyncOnce','OrderSyncOnce') -and $cfg.database -eq '1405') {
       $cutoffFile='D:\TehranBridge\site_orders_start_after_id.txt'
       if(!(Test-Path -LiteralPath $cutoffFile)){throw 'Historical order cutoff missing; live posting remains blocked'}
       $cutoffText=(Get-Content -LiteralPath $cutoffFile -Raw).Trim()
@@ -426,21 +427,26 @@ function Main {
     $after=if($orderCutoff -ge 0){'&after_id='+$orderCutoff}else{''}
     $ordersResult=Website $cfg 'orders' $null '' $after
     $orders=@($ordersResult.orders)
-    $ready=0;$held=0
+    $ready=0;$held=0;$posted=0
     foreach($o in $orders) {
       try {
-        if($Mode -eq 'SyncOnce' -and [long]$o.id -le $orderCutoff){throw 'Server returned historical order at or before cutoff'}
+        if($Mode -in @('SyncOnce','OrderSyncOnce') -and [long]$o.id -le $orderCutoff){throw 'Server returned historical order at or before cutoff'}
         if($Mode -eq 'OrderPreview'){
           $result=Post-Order $db $cfg $o $true
           $ready++
         } else {
           if(-not $cfg.allow_live_pos_writes){throw 'Live invoice posting is not enabled'}
+          if(($o.payment_method -ne 'cod') -and ($o.payment_status -ne 'paid')) {
+            Write-Output ('ORDER_AWAITING_PAYMENT='+[long]$o.id)
+            continue
+          }
           $result=Post-Order $db $cfg $o $false
           # Generate printable ticket before marking the remote order synchronized.
           # A filesystem or printer-format error must keep the order retryable.
           $receipt=Save-ReceiptHtml $o ([string]$result.invoice)
           $ack=Website $cfg 'order_ack' @{order_id=[long]$o.id;invoice_no=[string]$result.invoice} ('ack-pos-'+[long]$o.id)
           Write-Output ('ORDER_ACK_OK='+[long]$o.id+' POS_INVOICE='+$result.invoice+' PRINT_READY='+[bool](Test-Path $receipt))
+          $posted++
         }
       } catch { $held++;Write-Output ('ORDER_HELD='+[long]$o.id+' REASON='+$_.Exception.Message)}
     }
@@ -455,6 +461,10 @@ function Main {
       if($held -ne 0){throw ('Orders held for review: '+$held+'; healthy cycle withheld')}
       [void](Website $cfg 'heartbeat' @{device_id='EXSOM-J3';device_name='Pyramid';app_version='Bridge-3';platform='Windows';cycle_complete=$true})
       Write-Output 'BRIDGE_CYCLE_HEARTBEAT=PASS'
+    }
+    if($Mode -eq 'OrderSyncOnce'){
+      if($held -gt 0){throw ('POS order queue has '+$held+' held order(s) requiring review')}
+      Write-Output ('WEBSITE_SALES_POSTING_CYCLE=PASS POSTED='+$posted)
     }
     Write-Output ('ORDERS_PREVIEWED='+$ready+' HELD='+$held)
   } finally { $db.Dispose() }
