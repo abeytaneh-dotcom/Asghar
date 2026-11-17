@@ -150,7 +150,10 @@ function Post-Order($db,$config,$o,[bool]$dryRun) {
   if($orderId -lt 1 -or $orderId -gt 9999999){throw 'Order ID outside safe 8-digit invoice range'}
   if($o.status -eq 'cancelled'){throw 'Cancelled order skipped'}
   if(($o.payment_method -ne 'cod') -and ($o.payment_status -ne 'paid')){throw 'Unpaid online order skipped'}
-  if([decimal]$o.delivery_fee -ne 0 -or [decimal]$o.total -ne [decimal]$o.subtotal){throw 'Shipping/discount accounting mapping pending verification'}
+  $deliveryToman=[decimal]$o.delivery_fee
+  $discountToman=if($null -ne $o.PSObject.Properties['discount_total']){[decimal]$o.discount_total}else{[decimal]0}
+  if($deliveryToman -lt 0 -or $discountToman -lt 0 -or $discountToman -gt [decimal]$o.subtotal){throw 'Invalid shipping or coupon adjustment'}
+  if([decimal]$o.total -ne ([decimal]$o.subtotal-$discountToman+$deliveryToman)){throw 'Order shipping/discount arithmetic inconsistent'}
   $number=[int](70000000+$orderId)
   $tracking=Id-Guid $orderId 'tracking'
   $factor=Id-Guid $orderId 'factor'
@@ -199,8 +202,8 @@ function Post-Order($db,$config,$o,[bool]$dryRun) {
     $r=Call-Proc $db $tx 'dbo.EShop_FactorInsert' @(
       @('@Number','Decimal',0),@('@CustomerId','UniqueIdentifier',[Guid]::Empty),
       @('@WearhouseGoodsId','UniqueIdentifier',$first.Warehouse),
-      @('@TotalFactorPrice','Money',([decimal]$o.total*10)),
-      @('@Note','NText',('TehranMarket order '+$orderId)),
+      @('@TotalFactorPrice','Money',([decimal]$o.subtotal*10)),
+      @('@Note','NText',('TehranMarket order '+$orderId+'; coupon_toman='+$discountToman+'; site_delivery_fee_toman='+$deliveryToman+' (separate from merchandise POS sales)')),
       @('@GUID','UniqueIdentifier',$factor),@('@Date','Date',$date),
       @('@NumberOrder','Int',$number),@('@Name','NVarChar',$customer),
       @('@Mobile','VarChar',$mobile),@('@Addr','NVarChar',$address),
@@ -223,6 +226,21 @@ function Post-Order($db,$config,$o,[bool]$dryRun) {
       )
       if($dr -ne 0){throw 'Pyramid order detail failed'}
     }
+    if($discountToman -gt 0){
+      # Pyramid retail discount definition 6: تخفيف خرده. Tested in isolated SQL restore.
+      $discountRial=$discountToman*10
+      $discountStr=$discountRial.ToString('0',[Globalization.CultureInfo]::InvariantCulture)
+      $dproc=Command $db $tx 'dbo.PDA_InsertOverUnderFactor' $true
+      [void](Parameter $dproc '@Id_Havaleh' 'VarChar' ([string]$r))
+      [void](Parameter $dproc '@AutoIdOverUnder' 'VarChar' '6')
+      [void](Parameter $dproc '@OverUnderAmount' 'VarChar' $discountStr)
+      [void](Parameter $dproc '@OverUnderPercent' 'Int' 100)
+      [void]$dproc.ExecuteNonQuery()
+      $check=Command $db $tx "SELECT COUNT(*) FROM dbo.Tmp_Over_Under_Factor WHERE Id_Havaleh=@hid AND Code_Over_Under='6' AND Price=@amount"
+      [void](Parameter $check '@hid' 'Decimal' ([decimal]$r))
+      [void](Parameter $check '@amount' 'Money' $discountRial)
+      if([int]$check.ExecuteScalar() -ne 1){throw 'Pyramid draft coupon discount was not applied'}
+    }
     $fin=Command $db $tx 'dbo.Sodor_Factor' $true
     $rc=Parameter $fin '@RETURN_VALUE' 'Int' $null 'ReturnValue'
     $output=Parameter $fin '@msg_num' 'Decimal' $null 'Output'
@@ -233,6 +251,12 @@ function Post-Order($db,$config,$o,[bool]$dryRun) {
     $byId=Sql-Value $db $tx 'SELECT COUNT(*) FROM dbo.headH WHERE Id_Havaleh=@x AND Kind_Flag=''7''' '@x' ([decimal]$invoice) 'Decimal'
     $byNumber=Sql-Value $db $tx 'SELECT COUNT(*) FROM dbo.headH WHERE Nu_Havaleh=@n AND Kind_Flag=''7''' '@n' ([string]$number) 'VarChar'
     if([int]$byId -ne 1 -or [int]$byNumber -ne 1){throw 'Final invoice identity not confirmed'}
+    if($discountToman -gt 0){
+      $check=Command $db $tx "SELECT COUNT(*) FROM dbo.Over_Under_Factor WHERE Id_Havaleh=@id AND Code_Over_Under='6' AND Price=@amount"
+      [void](Parameter $check '@id' 'Decimal' ([decimal]$invoice))
+      [void](Parameter $check '@amount' 'Money' ($discountToman*10))
+      if([int]$check.ExecuteScalar() -ne 1){throw 'Pyramid final invoice coupon discount missing'}
+    }
     $tx.Commit()
     return [pscustomobject]@{state='posted';invoice=[string]$invoice}
   } catch {
