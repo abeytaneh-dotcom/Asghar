@@ -381,6 +381,7 @@ function Main {
     $ready=0;$held=0
     foreach($o in $orders) {
       try {
+        if($Mode -eq 'SyncOnce' -and [long]$o.id -le $orderCutoff){throw 'Server returned historical order at or before cutoff'}
         if($Mode -eq 'OrderPreview'){
           $result=Post-Order $db $cfg $o $true
           $ready++
