@@ -393,6 +393,13 @@ function Main {
       Write-Output ('SANDBOX_POS_ORDER='+$result.state+' INVOICE='+$result.invoice)
       $receipt=Save-ReceiptHtml $testOrder ([string]$result.invoice)
       Write-Output ('SANDBOX_RECEIPT_READY='+[bool](Test-Path $receipt))
+      $testDiscount=[long][math]::Min([math]::Max(1,[math]::Floor($unit/10)),[math]::Max(1,$unit-1))
+      $discountOrder=[pscustomobject]@{id=900102;status='new';payment_method='cod';payment_status='unpaid';delivery_fee=0;discount_total=$testDiscount;subtotal=$unit;total=([long]$unit-$testDiscount);customer_name='Sandbox';phone='09999999999';address='SANDBOX';delivery_slot='coupon sandbox';items=$testOrder.items}
+      $resultDiscount=Post-Order $db $cfg $discountOrder $false
+      Write-Output ('SANDBOX_COUPON_INVOICE='+$resultDiscount.state+' NO='+$resultDiscount.invoice)
+      $shippingOrder=[pscustomobject]@{id=900103;status='new';payment_method='cod';payment_status='unpaid';delivery_fee=15000;discount_total=0;subtotal=$unit;total=([long]$unit+15000);customer_name='Sandbox';phone='09999999999';address='SANDBOX';delivery_slot='delivery sandbox';items=$testOrder.items}
+      $resultShipping=Post-Order $db $cfg $shippingOrder $false
+      Write-Output ('SANDBOX_SHIPPING_SEPARATE_INVOICE='+$resultShipping.state+' NO='+$resultShipping.invoice)
       return
     }
 
