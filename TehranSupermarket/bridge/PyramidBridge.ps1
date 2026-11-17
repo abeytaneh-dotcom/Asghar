@@ -2,7 +2,7 @@
 # Default is read-only audit. POS posting and website pushes are opt-in only.
 [CmdletBinding()]
 param(
-  [ValidateSet('Audit','OrderPreview','SyncOnce','SandboxTest','CatalogPreview','AuthProbe')][string]$Mode='Audit',
+  [ValidateSet('Audit','OrderPreview','SyncOnce','SandboxTest','CatalogPreview','AuthProbe','CatalogSyncOnce')][string]$Mode='Audit',
   [string]$ConfigPath='D:\TehranBridge\bridge-config.json'
 )
 Set-StrictMode -Version Latest
@@ -372,6 +372,12 @@ function Main {
     if(-not $cfg.enabled){throw 'Synchronization disabled in local config'}
     $status=Website $cfg 'status'
     Write-Output ('WEBSITE_STATUS=PASS PENDING_ORDERS='+$status.pending_orders)
+    if($Mode -eq 'CatalogSyncOnce') {
+      if(-not $cfg.allow_live_catalog_writes -or -not $status.write_permissions.catalog){throw 'Live catalog synchronization not authorized in both client and server'}
+      Send-Snapshot $cfg $cat
+      Write-Output 'CATALOG_SYNC_COMPLETED_WITHOUT_POS_SALES=YES'
+      return
+    }
     if($Mode -eq 'SyncOnce' -and ((-not $status.write_permissions.catalog) -or (-not $status.write_permissions.order_ack))){throw 'Remote catalog and invoice acknowledgement permissions are not verified; no POS sales posted'}
     if($Mode -eq 'SyncOnce' -and -not $cfg.allow_live_catalog_writes){throw 'Catalog update disabled: no data transmitted'}
     # Never retrieve historical orders as live work if the reviewed cutoff exists.
