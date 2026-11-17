@@ -76,7 +76,7 @@ class Phase1Safety(unittest.TestCase):
         self.assertIn("sp_getapplock", bridge)
         self.assertIn("already_posted", bridge)
         self.assertIn("Historical order cutoff missing", bridge)
-        self.assertIn("HISTORICAL_ORDER_REVIEW_REQUIRED", bridge)
+        self.assertIn("Server returned historical order at or before cutoff", bridge)
 
 
     def test_atomic_snapshot_is_fail_closed_and_staging_only(self):
