@@ -1,10 +1,38 @@
-name: DirectYar Android build
+name: Build DirectYar Android APK
 on:
   push:
     branches: [feat/directyar-android-mvp]
+    paths:
+      - 'instagram-manager/**'
+      - '.github/workflows/build-directyar.yml'
   workflow_dispatch:
 jobs:
-  status:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - run: echo "Android project initialization"
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Install JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android Platform
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Compile and package APK
+        working-directory: instagram-manager
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Upload Android installation package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DirectYar-Android-APK
+          path: instagram-manager/app/build/outputs/apk/debug/app-debug.apk
