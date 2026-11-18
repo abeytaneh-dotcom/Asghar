@@ -4,7 +4,7 @@
     <application
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
-        android:label="دایرکت‌یار"
+        android:label="دایرکت‌یار ۱.۱"
         android:icon="@drawable/app_icon"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
