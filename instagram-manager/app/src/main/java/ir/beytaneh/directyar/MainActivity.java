@@ -110,7 +110,7 @@ public class MainActivity extends Activity {
         return r;
     }
     private LinearLayout.LayoutParams lp(int w, int h) {
-        return new LinearLayout.LayoutParams(w == -1 ? -1 : dp(w), h == -1 || h == -2 ? h : dp(h));
+        return new LinearLayout.LayoutParams(w == -1 || w == -2 ? w : dp(w), h == -1 || h == -2 ? h : dp(h));
     }
     private void padding(View v, int h, int vertical) { v.setPadding(dp(h), dp(vertical), dp(h), dp(vertical)); }
     private void gap(LinearLayout c, int amount) { c.addView(new View(this), lp(1, amount)); }
