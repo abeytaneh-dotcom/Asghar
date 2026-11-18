@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
@@ -18,6 +19,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.WebResourceError;
 import android.webkit.SslErrorHandler;
 import android.net.http.SslError;
 import android.webkit.ValueCallback;
@@ -50,6 +52,7 @@ public class MainActivity extends Activity {
     private static final int PINK = Color.rgb(242, 77, 145);
     private static final int PURPLE = Color.rgb(130, 92, 244);
     private static final int REQUEST_UPLOAD = 721;
+    private static final String VERSION = "۱.۱";
     private static final String INSTA = "https://www.instagram.com/";
     private static final String INBOX = "https://www.instagram.com/direct/inbox/";
     private static final String META = "https://business.facebook.com/latest/inbox/";
@@ -60,6 +63,9 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> uploadCallback;
     private String currentUrl = INSTA;
     private String currentTitle = "اینستاگرام";
+    private TextView browserTitle;
+    private TextView browserAccount;
+    private boolean showingBrowser = false;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -68,6 +74,7 @@ public class MainActivity extends Activity {
         defaults.add("لطفاً مدل دستگاه یا ECU، سال ساخت و شرح دقیق ایراد را ارسال کنید.");
         defaults.add("برای بررسی دقیق‌تر، لطفاً یک عکس واضح از قطعه یا خطای دستگاه بفرستید.");
         defaults.add("پیامتان دریافت شد. پس از بررسی، پاسخ دقیق را برایتان ارسال می‌کنیم.");
+        defaults.add("برای اعلام هزینه، لطفاً عکس برد، شماره قطعه یا مدل دقیق را بفرستید.");
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         getWindow().getDecorView().setSystemUiVisibility(0);
@@ -116,6 +123,9 @@ public class MainActivity extends Activity {
     private void gap(LinearLayout c, int amount) { c.addView(new View(this), lp(1, amount)); }
     private void setRoot() {
         if (web != null) { web.stopLoading(); web.destroy(); web = null; }
+        showingBrowser = false;
+        browserTitle = null;
+        browserAccount = null;
         root = column();
         root.setBackgroundColor(BG);
         setContentView(root);
@@ -167,69 +177,119 @@ public class MainActivity extends Activity {
     private String username() { return prefs.getString("username", "beytaneh1"); }
     private String profileUrl() { return INSTA + username() + "/"; }
 
+    private void addOutlineNote(LinearLayout parent, String message) {
+        TextView note = text(message, 12, MUTED, false);
+        padding(note, 13, 12);
+        note.setBackground(bordered(Color.rgb(19, 25, 40), 12, Color.rgb(51, 60, 83)));
+        parent.addView(note, lp(-1, -2));
+    }
+
+    private void quickTile(LinearLayout row, String icon, String name, String caption, Runnable action) {
+        LinearLayout tile = column();
+        padding(tile, 14, 15);
+        tile.setBackground(bordered(PANEL, 18, Color.rgb(47, 54, 80)));
+        TextView glyph = text(icon, 23, Color.rgb(200, 176, 255), true);
+        tile.addView(glyph, lp(-1, 32));
+        gap(tile, 10);
+        tile.addView(text(name, 15, WHITE, true), lp(-1, 24));
+        gap(tile, 4);
+        tile.addView(text(caption, 11, MUTED, false), lp(-1, -2));
+        tile.setOnClickListener(v -> action.run());
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(126), 1);
+        params.leftMargin = dp(6);
+        params.rightMargin = dp(6);
+        row.addView(tile, params);
+    }
+
     private void renderHome() {
         setRoot();
-        ScrollView sc = new ScrollView(this);
-        sc.setFillViewport(true);
-        root.addView(sc, new LinearLayout.LayoutParams(-1, 0, 1));
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout page = column();
-        padding(page, 20, 19);
-        sc.addView(page);
-        TextView branding = text("◉  دایرکت‌یار", 16, PINK, true);
-        page.addView(branding, lp(-1, -2));
-        gap(page, 20);
-        headline(page, "مدیریت اینستاگرام", "پنل اختصاصی فارسی • بدون ذخیره رمز عبور");
-        gap(page, 20);
+        padding(page, 15, 20);
+        scroll.addView(page);
+
+        LinearLayout wordmark = row();
+        TextView brand = text("◉  دایرکت‌یار", 19, WHITE, true);
+        wordmark.addView(brand, new LinearLayout.LayoutParams(0, dp(34), 1));
+        TextView ver = pill("نسخه " + VERSION, Color.rgb(49, 39, 79));
+        ver.setTextColor(Color.rgb(224, 209, 255));
+        wordmark.addView(ver);
+        page.addView(wordmark);
+        gap(page, 17);
+        headline(page, "مدیریت اینستاگرام", "سریع، فارسی و بدون نیاز به دریافت رمز عبور");
+        gap(page, 16);
 
         LinearLayout account = column();
-        padding(account, 19, 18);
-        GradientDrawable grad = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(77, 44, 121), Color.rgb(39, 56, 106)});
-        grad.setCornerRadius(dp(20));
-        account.setBackground(grad);
-        account.addView(text("حساب انتخاب‌شده", 12, Color.rgb(224, 215, 249), false));
-        gap(account, 8);
-        account.addView(text("@" + username(), 22, WHITE, true));
-        gap(account, 8);
-        account.addView(text("برای ورود امن از Chrome استفاده کن؛ مرورگر داخلی هم در دسترس است.", 12, WHITE, false));
-        gap(account, 14);
-        LinearLayout buttons = row();
-        TextView start = pill("ورود به اینستاگرام", PINK);
-        start.setOnClickListener(v -> openInstagram(INSTA, "اینستاگرام"));
-        buttons.addView(start);
-        TextView chrome = pill("Chrome  ↗", Color.rgb(34, 42, 65));
-        LinearLayout.LayoutParams c = lp(-2, -2); c.leftMargin = dp(10);
-        chrome.setOnClickListener(v -> openChrome(INSTA));
-        buttons.addView(chrome, c);
-        account.addView(buttons);
+        padding(account, 17, 19);
+        GradientDrawable gradient = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(70, 41, 119), Color.rgb(36, 53, 96)});
+        gradient.setCornerRadius(dp(20));
+        account.setBackground(gradient);
+        account.addView(text("میان‌بر پروفایل", 12, Color.rgb(224, 215, 249), false));
+        gap(account, 7);
+        account.addView(text("@" + username(), 23, WHITE, true));
+        gap(account, 4);
+        account.addView(text("حساب واقعی واردشده را اینستاگرام تعیین می‌کند.", 12, WHITE, false));
+        gap(account, 17);
+        LinearLayout actions = row();
+        TextView primary = pill("بازکردن دایرکت  ←", PINK);
+        primary.setOnClickListener(v -> openInstagram(INBOX, "دایرکت"));
+        actions.addView(primary);
+        TextView other = pill("مدیریت حساب‌ها", Color.rgb(33, 41, 65));
+        LinearLayout.LayoutParams otherParams = lp(-2, -2);
+        otherParams.rightMargin = dp(10);
+        other.setOnClickListener(v -> showAccounts());
+        actions.addView(other, otherParams);
+        account.addView(actions);
         page.addView(account, lp(-1, -2));
 
         section(page, "دسترسی سریع");
-        actionCard(page, "✉", "دایرکت", "نمایش و پاسخ‌دادن به پیام‌ها در سایت اینستاگرام", () -> openInstagram(INBOX, "دایرکت"));
-        actionCard(page, "◈", "پست، ریلز و استوری", "انتشار از محیط رسمی اینستاگرام؛ بسته به امکانات نسخه وب", () -> openInstagram(INSTA, "انتشار محتوا"));
-        actionCard(page, "▣", "نمایه و کامنت‌ها", "پروفایل، پست‌ها و دیدگاه‌های حساب", () -> openInstagram(profileUrl(), "پروفایل"));
-        actionCard(page, "⚡", "پاسخ‌های آماده", "متن‌ها را ویرایش و کپی کن و در دایرکت قرار بده", this::showTemplates);
-        actionCard(page, "⇄", "چند حساب", "میان‌بر حساب‌ها؛ جابه‌جایی واقعی از طریق خود اینستاگرام", this::showAccounts);
-        actionCard(page, "▤", "صندوق Meta", "مدیریت Business Suite در صورت نیاز", () -> openInstagram(META, "Meta Business Suite"));
+        LinearLayout tiles1 = row();
+        quickTile(tiles1, "✉", "صندوق دایرکت", "Primary / General / Requests", () -> openInstagram(INBOX, "دایرکت"));
+        quickTile(tiles1, "⚡", "پاسخ آماده", "ویرایش، حذف و کپی سریع", this::showTemplates);
+        page.addView(tiles1, lp(-1, -2));
+        gap(page, 12);
+        LinearLayout tiles2 = row();
+        quickTile(tiles2, "⊞", "پست و استوری", "انتشار از سایت رسمی", () -> openInstagram(INSTA, "اینستاگرام"));
+        quickTile(tiles2, "♙", "نمایه و کامنت", "نمایش پروفایل و نظرات", () -> openInstagram(profileUrl(), "پروفایل"));
+        page.addView(tiles2, lp(-1, -2));
 
-        section(page, "ابزارها");
-        actionCard(page, "⚙", "تنظیمات و حریم خصوصی", "مرورگر پیش‌فرض، حذف داده‌های داخلی و اطلاعات نسخه", this::showSettings);
-        bottomBar();
+        section(page, "مدیریت و تنظیمات");
+        actionCard(page, "▣", "صندوق Meta Business Suite", "ورود مستقیم به ابزار رسمی مدیریت صفحه", () -> openInstagram(META, "صندوق Meta"));
+        actionCard(page, "⇄", "مدیریت چند حساب", "میان‌بر و انتخاب پروفایل؛ بدون ذخیره گذرواژه", this::showAccounts);
+        actionCard(page, "⚙", "تنظیمات و حریم خصوصی", "مرورگر پیش‌فرض، پاک‌کردن کوکی و اطلاعات برنامه", this::showSettings);
+        gap(page, 6);
+        addOutlineNote(page, "برای امنیت حساب، دایرکت‌یار پیام‌ها را از سایت اصلی نمایش می‌دهد و ارسال خودکار انجام نمی‌دهد.");
+        gap(page, 18);
+        homeBar();
     }
-    private void bottomBar() {
-        LinearLayout bar = row();
-        bar.setBackgroundColor(Color.rgb(22, 27, 42));
-        TextView home = pill("⌂  خانه", Color.rgb(48, 56, 79));
-        TextView inbox = pill("✉  دایرکت", Color.rgb(48, 56, 79));
-        TextView responses = pill("⚡  پاسخ آماده", Color.rgb(48, 56, 79));
-        home.setOnClickListener(v -> renderHome());
-        inbox.setOnClickListener(v -> openInstagram(INBOX, "دایرکت"));
-        responses.setOnClickListener(v -> showTemplates());
-        bar.addView(home, new LinearLayout.LayoutParams(0, dp(42), 1));
-        bar.addView(inbox, new LinearLayout.LayoutParams(0, dp(42), 1));
-        bar.addView(responses, new LinearLayout.LayoutParams(0, dp(42), 1));
-        padding(bar, 8, 7);
-        root.addView(bar, lp(-1, -2));
+
+    private void homeBar() {
+        LinearLayout nav = row();
+        nav.setBackgroundColor(Color.rgb(22, 27, 42));
+        padding(nav, 8, 9);
+        navButton(nav, "⌂", "خانه", this::renderHome);
+        navButton(nav, "✉", "دایرکت", () -> openInstagram(INBOX, "دایرکت"));
+        navButton(nav, "⚡", "پاسخ‌ها", this::showTemplates);
+        navButton(nav, "⇄", "حساب‌ها", this::showAccounts);
+        root.addView(nav, lp(-1, -2));
+    }
+
+    private void navButton(LinearLayout nav, String glyph, String caption, Runnable action) {
+        LinearLayout item = column();
+        item.setGravity(Gravity.CENTER);
+        item.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        TextView icon = text(glyph, 20, Color.rgb(219, 218, 239), true);
+        icon.setGravity(Gravity.CENTER);
+        item.addView(icon, lp(-1, 25));
+        TextView label = text(caption, 11, WHITE, false);
+        label.setGravity(Gravity.CENTER);
+        item.addView(label, lp(-1, 17));
+        item.setContentDescription(caption);
+        item.setOnClickListener(v -> action.run());
+        nav.addView(item, new LinearLayout.LayoutParams(0, dp(52), 1));
     }
 
     private void openInstagram(String url, String title) {
@@ -251,83 +311,128 @@ public class MainActivity extends Activity {
         String scheme = u.getScheme(), host = u.getHost();
         if (scheme == null || host == null || !(scheme.equals("https") || scheme.equals("http"))) return false;
         host = host.toLowerCase(Locale.ROOT);
+        if (!scheme.equalsIgnoreCase("https")) return false;
         return host.equals("instagram.com") || host.endsWith(".instagram.com")
                 || host.equals("facebook.com") || host.endsWith(".facebook.com")
                 || host.equals("meta.com") || host.endsWith(".meta.com")
                 || host.equals("fbcdn.net") || host.endsWith(".fbcdn.net");
     }
+    private String contextualTitle(String url) {
+        if (url == null) return currentTitle;
+        Uri u = Uri.parse(url);
+        String host = u.getHost() == null ? "" : u.getHost();
+        String path = u.getPath() == null ? "" : u.getPath().toLowerCase(Locale.ROOT);
+        if (host.contains("instagram.com")) {
+            if (path.startsWith("/direct")) return "دایرکت • " + username();
+            if (path.equals("/" + username().toLowerCase(Locale.ROOT) + "/")) return "پروفایل • " + username();
+            return "اینستاگرام";
+        }
+        if (host.endsWith("facebook.com") || host.endsWith("meta.com")) return "Meta Business Suite";
+        return currentTitle;
+    }
+
+    private void updateBrowserTitle(String url) {
+        if (!showingBrowser || browserTitle == null) return;
+        currentUrl = url == null ? currentUrl : url;
+        browserTitle.setText(contextualTitle(currentUrl));
+        if (browserAccount != null) browserAccount.setText("@" + username());
+    }
+
     private void openInternal(String url, String title) {
         currentUrl = url; currentTitle = title;
         setRoot();
-        LinearLayout h = row();
-        padding(h, 10, 9);
-        TextView back = pill("⌂", Color.rgb(42, 50, 75));
-        back.setOnClickListener(v -> renderHome());
-        h.addView(back, lp(48, 40));
-        TextView t = text(title, 16, WHITE, true);
-        t.setGravity(Gravity.CENTER);
-        h.addView(t, new LinearLayout.LayoutParams(0, dp(40), 1));
-        TextView browser = pill("Chrome ↗", PURPLE);
-        browser.setOnClickListener(v -> openChrome(web != null ? web.getUrl() == null ? url : web.getUrl() : url));
-        h.addView(browser);
-        root.addView(h);
+        showingBrowser = true;
+        LinearLayout toolbar = row();
+        padding(toolbar, 11, 10);
+        toolbar.setBackgroundColor(BG);
+        TextView goHome = pill("⌂", Color.rgb(46, 55, 82));
+        goHome.setContentDescription("صفحه اصلی دایرکت‌یار");
+        goHome.setOnClickListener(v -> renderHome());
+        toolbar.addView(goHome, lp(49, 45));
+        LinearLayout center = column();
+        browserTitle = text(contextualTitle(url), 15, WHITE, true);
+        browserTitle.setGravity(Gravity.CENTER);
+        center.addView(browserTitle, lp(-1, 25));
+        browserAccount = text("@" + username(), 10, MUTED, false);
+        browserAccount.setGravity(Gravity.CENTER);
+        center.addView(browserAccount, lp(-1, 18));
+        toolbar.addView(center, new LinearLayout.LayoutParams(0, dp(45), 1));
+        TextView chrome = pill("Chrome ↗", PURPLE);
+        chrome.setContentDescription("بازکردن در مرورگر Chrome");
+        chrome.setOnClickListener(v -> openChrome(web != null && web.getUrl() != null ? web.getUrl() : url));
+        toolbar.addView(chrome, lp(-2, 45));
+        root.addView(toolbar, lp(-1, -2));
         ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progress.setMax(100);
         root.addView(progress, lp(-1, 3));
         web = new WebView(this);
-        WebSettings st = web.getSettings();
-        st.setJavaScriptEnabled(true);
-        st.setDomStorageEnabled(true);
-        st.setAllowFileAccess(false);
-        st.setAllowContentAccess(true);
-        st.setJavaScriptCanOpenWindowsAutomatically(false);
-        st.setSupportMultipleWindows(false);
-        st.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        st.setBuiltInZoomControls(true);
-        st.setDisplayZoomControls(false);
-        st.setMediaPlaybackRequiresUserGesture(true);
+        WebSettings settings = web.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(true);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        settings.setSupportMultipleWindows(false);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        settings.setBuiltInZoomControls(true);
+        settings.setDisplayZoomControls(false);
+        settings.setMediaPlaybackRequiresUserGesture(true);
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
         web.setBackgroundColor(Color.WHITE);
         web.setWebViewClient(new WebViewClient() {
-            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
-                if (!req.isForMainFrame()) return false;
-                Uri u = req.getUrl();
-                if (allowedHost(u)) return false;
-                if ("http".equals(u.getScheme()) || "https".equals(u.getScheme())) openChrome(u.toString());
+            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                if (!request.isForMainFrame()) return false;
+                Uri link = request.getUrl();
+                if (allowedHost(link)) return false;
+                String scheme = link.getScheme();
+                if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) openChrome(link.toString());
                 return true;
+            }
+            @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
+                updateBrowserTitle(url);
+                progress.setVisibility(View.VISIBLE);
+            }
+            @Override public void onPageFinished(WebView view, String url) {
+                updateBrowserTitle(url);
             }
             @Override public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
                 handler.cancel();
                 Toast.makeText(MainActivity.this, "خطای امنیتی اتصال؛ صفحه باز نشد", Toast.LENGTH_LONG).show();
             }
+            @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    Toast.makeText(MainActivity.this, "ارتباط برقرار نشد؛ اینترنت را بررسی کنید", Toast.LENGTH_LONG).show();
+                }
+            }
         });
         web.setWebChromeClient(new WebChromeClient() {
-            @Override public void onProgressChanged(WebView view, int newProgress) {
-                progress.setProgress(newProgress);
-                progress.setVisibility(newProgress >= 100 ? View.GONE : View.VISIBLE);
+            @Override public void onProgressChanged(WebView view, int percent) {
+                progress.setProgress(percent);
+                progress.setVisibility(percent >= 100 ? View.GONE : View.VISIBLE);
             }
             @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (uploadCallback != null) uploadCallback.onReceiveValue(null);
                 uploadCallback = callback;
                 try { startActivityForResult(params.createIntent(), REQUEST_UPLOAD); return true; }
-                catch (Exception e) { uploadCallback = null; Toast.makeText(MainActivity.this, "انتخاب فایل در دسترس نیست", Toast.LENGTH_SHORT).show(); return false; }
+                catch (Exception e) {
+                    uploadCallback.onReceiveValue(null);
+                    uploadCallback = null;
+                    Toast.makeText(MainActivity.this, "انتخاب فایل در دسترس نیست", Toast.LENGTH_SHORT).show();
+                    return false;
+                }
             }
         });
-        web.setDownloadListener((downloadUrl, userAgent, contentDisposition, mimeType, length) -> openChrome(downloadUrl));
+        web.setDownloadListener((link, userAgent, contentDisposition, mimeType, length) -> openChrome(link));
         root.addView(web, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout nav = row();
-        padding(nav, 7, 8);
-        String[] names = {"→ عقب", "↻ تازه‌سازی", "⌂ خانه", "✉ دایرکت"};
-        Runnable[] ops = {() -> { if (web != null && web.canGoBack()) web.goBack(); else renderHome(); },
-                () -> {if (web != null) web.reload();}, this::renderHome,
-                () -> {if (web != null) web.loadUrl(INBOX);} };
-        for (int k=0; k<names.length; k++) {
-            TextView b = pill(names[k], Color.rgb(43, 49, 68));
-            final int ix = k;
-            b.setOnClickListener(v -> ops[ix].run());
-            nav.addView(b, new LinearLayout.LayoutParams(0, dp(45), 1));
-        }
+        nav.setBackgroundColor(Color.rgb(22, 27, 42));
+        padding(nav, 5, 8);
+        navButton(nav, "←", "عقب", () -> { if (web != null && web.canGoBack()) web.goBack(); else renderHome(); });
+        navButton(nav, "↻", "تازه‌سازی", () -> { if (web != null) web.reload(); });
+        navButton(nav, "✉", "دایرکت", () -> { if (web != null) web.loadUrl(INBOX); });
+        navButton(nav, "⚡", "پاسخ‌ها", this::showTemplates);
+        navButton(nav, "⌂", "خانه", this::renderHome);
         root.addView(nav, lp(-1, -2));
         web.loadUrl(url);
     }
@@ -358,7 +463,7 @@ public class MainActivity extends Activity {
         }
         items[items.length - 1] = "＋ افزودن پاسخ جدید";
         new AlertDialog.Builder(this)
-                .setTitle("پاسخ‌های آماده")
+                .setTitle("پاسخ‌های آماده • لمس برای کپی")
                 .setItems(items, (d, which) -> {
                     if (which == a.length()) editTemplate(-1);
                     else new AlertDialog.Builder(this).setTitle("پاسخ آماده")
@@ -366,7 +471,7 @@ public class MainActivity extends Activity {
                             .setPositiveButton("کپی متن", (d2, w) -> {
                                 ClipboardManager c = (ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
                                 c.setPrimaryClip(ClipData.newPlainText("پاسخ آماده", a.optString(which)));
-                                Toast.makeText(this, "متن کپی شد؛ در دایرکت جای‌گذاری کن", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(this, "کپی شد؛ در گفتگوی دلخواه جای‌گذاری کن", Toast.LENGTH_LONG).show();
                             })
                             .setNeutralButton("ویرایش", (d2, w) -> editTemplate(which))
                             .setNegativeButton("حذف", (d2, w) -> confirmDeleteTemplate(which))
@@ -408,17 +513,35 @@ public class MainActivity extends Activity {
         String[] entries = new String[a.length()+1];
         for (int i=0;i<a.length();i++) entries[i]="@" + a.optString(i) + (a.optString(i).equals(username()) ? "  ✓" : "");
         entries[a.length()] = "＋ افزودن نام حساب";
-        new AlertDialog.Builder(this).setTitle("میان‌بر حساب‌ها")
-                .setMessage("این فهرست فقط میان‌بر محلی است. ورود و جابه‌جایی حساب از سایت رسمی اینستاگرام انجام می‌شود.")
+        new AlertDialog.Builder(this).setTitle("حساب‌ها • فقط میان‌بر")
                 .setItems(entries, (d, item) -> {
                     if (item == a.length()) addAccount();
                     else {
                         String selected=a.optString(item);
-                        prefs.edit().putString("username", selected).apply();
-                        renderHome();
-                        openInstagram("https://www.instagram.com/" + selected + "/", "پروفایل");
+                        new AlertDialog.Builder(this).setTitle("@" + selected)
+                            .setMessage("این گزینه فقط میان‌بر پروفایل است. تغییر حساب واردشده باید از داخل اینستاگرام انجام شود.")
+                            .setPositiveButton("انتخاب میان‌بر", (d2,w) -> {
+                                prefs.edit().putString("username", selected).apply();
+                                renderHome();
+                            })
+                            .setNeutralButton("نمایش پروفایل", (d2,w) -> openInstagram(INSTA + selected + "/", "پروفایل"))
+                            .setNegativeButton(a.length() > 1 ? "حذف از فهرست" : "انصراف", (d2,w) -> { if(a.length() > 1) confirmRemoveAccount(selected); })
+                            .show();
                     }
                 }).setNegativeButton("بستن", null).show();
+    }
+    private void confirmRemoveAccount(String name) {
+        new AlertDialog.Builder(this).setTitle("حذف میان‌بر حساب")
+                .setMessage("@" + name + " فقط از فهرست محلی دایرکت‌یار حذف شود؟")
+                .setPositiveButton("حذف", (d,w) -> {
+                    JSONArray original=accountsArray(), result=new JSONArray();
+                    for(int i=0;i<original.length();i++) if(!name.equals(original.optString(i))) result.put(original.optString(i));
+                    if(result.length() == 0) result.put("beytaneh1");
+                    SharedPreferences.Editor editor=prefs.edit().putString("accounts", result.toString());
+                    if (name.equals(username())) editor.putString("username", result.optString(0));
+                    editor.apply();
+                    renderHome();
+                }).setNegativeButton("انصراف", null).show();
     }
     private void addAccount() {
         EditText f = new EditText(this);
@@ -449,7 +572,7 @@ public class MainActivity extends Activity {
                         case 1: editUsername(); break;
                         case 2: confirmClearCookies(); break;
                         case 3: new AlertDialog.Builder(this).setTitle("حریم خصوصی")
-                                .setMessage("دایرکت‌یار نسخه ۱.۰: بدون API، بدون سرور، بدون دریافت یا ذخیره رمز. در حالت مرورگر داخلی، کوکی‌های ورود فقط در Android WebView نگهداری می‌شوند. ارسال خودکار پیام و انتشار خودکار در این نسخه وجود ندارد. امکان ورود یا انتشار در نسخه وب تابع محدودیت‌های رسمی اینستاگرام است.")
+                                .setMessage("دایرکت‌یار نسخه ۱.۱: بدون API، بدون سرور، بدون دریافت یا ذخیره رمز. در حالت مرورگر داخلی، کوکی‌های ورود فقط در Android WebView نگهداری می‌شوند. ارسال خودکار پیام و انتشار خودکار در این نسخه وجود ندارد. امکان ورود یا انتشار در نسخه وب تابع محدودیت‌های رسمی اینستاگرام است.")
                                 .setPositiveButton("متوجه شدم", null).show(); break;
                     }
                 }).setNegativeButton("بستن", null).show();
