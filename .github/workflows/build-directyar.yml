@@ -1,0 +1,10 @@
+name: DirectYar Android build
+on:
+  push:
+    branches: [feat/directyar-android-mvp]
+  workflow_dispatch:
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Android project initialization"
