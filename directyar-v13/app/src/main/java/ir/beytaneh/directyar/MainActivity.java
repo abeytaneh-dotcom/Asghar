@@ -46,7 +46,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.net.URL;
-import java.net.HttpsURLConnection;
+import javax.net.ssl.HttpsURLConnection;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.ByteArrayOutputStream;
