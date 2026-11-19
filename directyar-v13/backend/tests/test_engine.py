@@ -102,6 +102,13 @@ class TestFlows(unittest.TestCase):
         self.assertEqual(self.engine.process_comment(e), "simulated")
         self.assertEqual(self.meta.calls, [])
 
+    def test_follow_daram_text_from_user_rechecks(self):
+        e={"type":"comment","business_id":BUSINESS,"comment_id":"C6","media_id":"M1","text":"آموزش", "user_id":USER}
+        self.engine.process_comment(e)
+        self.assertEqual(self.engine.process_dm(self.dm("USERFOLLOW", "فالو دارم")), "follow_requested")
+        self.meta.follow=True
+        self.assertEqual(self.engine.process_dm(self.dm("USERFOLLOW2", "فالو دارم")), "delivered")
+
     def test_comment_initial_does_not_require_keyword_again(self):
         e={"type":"comment","business_id":BUSINESS,"comment_id":"C5","media_id":"M1","text":"آموزش لطفا", "user_id":USER}
         self.engine.process_comment(e)
