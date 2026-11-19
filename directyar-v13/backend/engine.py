@@ -207,7 +207,7 @@ class RuleEngine:
                 except (ValueError, TypeError): return "invalid_timestamp"
             rules = self.repo.get_rules()
             pending = self.repo.get_pending(user)
-            pressed = payload.startswith("FOLLOW_CHECK:") or normalize(text) in (normalize(FOLLOW_BUTTON), normalize("فالو کردم"))
+            pressed = payload.startswith("FOLLOW_CHECK:") or normalize(text) in (normalize(FOLLOW_BUTTON), normalize("فالو کردم"), normalize("فالو دارم"))
             if pressed:
                 rule_id = payload.split(":", 1)[1] if payload.startswith("FOLLOW_CHECK:") else pending
                 # Never let a forged/unrelated button trigger delivery.
