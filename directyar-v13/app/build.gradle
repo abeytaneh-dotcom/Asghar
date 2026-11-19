@@ -1,0 +1,16 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'ir.beytaneh.directyar'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'ir.beytaneh.directyar.v13'
+        minSdk 24
+        targetSdk 34
+        versionCode 4
+        versionName '1.3.0'
+    }
+    buildTypes {
+        release { minifyEnabled false }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
