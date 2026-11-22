@@ -1,0 +1,50 @@
+name: Build PI FieldLab Android APK
+on:
+  push:
+    branches:
+      - pi-fieldlab-android-apk-20261122
+    paths:
+      - .github/workflows/build-pi-fieldlab-apk.yml
+      - pi-fieldlab-revD-src.zip
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Extract full PI FieldLab Rev D Android Studio project
+        run: |
+          mkdir -p PIFieldLab
+          unzip -q pi-fieldlab-revD-src.zip -d PIFieldLab
+          find PIFieldLab/app/src/main -type f | sort | head -30
+      - name: Compile signed debug APK
+        working-directory: PIFieldLab
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Verify APK
+        run: |
+          test -s PIFieldLab/app/build/outputs/apk/debug/app-debug.apk
+          cp PIFieldLab/app/build/outputs/apk/debug/app-debug.apk PI-FieldLab-3D-RevD-debug.apk
+          sha256sum PI-FieldLab-3D-RevD-debug.apk
+          ls -lh PI-FieldLab-3D-RevD-debug.apk
+      - name: Publish APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PI-FieldLab-3D-RevD-Android-APK
+          path: PI-FieldLab-3D-RevD-debug.apk
+          if-no-files-found: error
+          retention-days: 30
