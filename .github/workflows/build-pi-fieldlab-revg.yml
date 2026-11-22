@@ -1,0 +1,57 @@
+name: Build PI FieldLab Rev G APK
+on:
+  push:
+    branches: [pi-fieldlab-revg-20261122]
+    paths:
+      - 'PIFieldLab_RevG_Android_Source.zip'
+      - '.github/workflows/build-pi-fieldlab-revg.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK present
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          test -d "$ANDROID_HOME/platforms"
+          ls "$ANDROID_HOME/platforms"
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Extract isolated app
+        run: |
+          mkdir -p PIFieldLabRevG
+          unzip -q PIFieldLab_RevG_Android_Source.zip -d PIFieldLabRevG
+          find PIFieldLabRevG/app/src/main/assets -type f | sort
+      - name: JavaScript unit tests
+        working-directory: PIFieldLabRevG
+        run: |
+          node tests/test_metal_id.js
+          node tests/test_smart.js
+          for f in app/src/main/assets/*.js; do node --check "$f"; done
+      - name: Build debug APK
+        working-directory: PIFieldLabRevG
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Verify APK and checksum
+        run: |
+          test -s PIFieldLabRevG/app/build/outputs/apk/debug/app-debug.apk
+          cp PIFieldLabRevG/app/build/outputs/apk/debug/app-debug.apk PI_FieldLab_3D_RevG.apk
+          sha256sum PI_FieldLab_3D_RevG.apk
+          unzip -t PI_FieldLab_3D_RevG.apk | tail -1
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PI-FieldLab-3D-RevG-Android-APK
+          path: PI_FieldLab_3D_RevG.apk
+          retention-days: 30
+          if-no-files-found: error
