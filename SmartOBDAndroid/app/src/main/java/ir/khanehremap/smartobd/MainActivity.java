@@ -21,9 +21,9 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class MainActivity extends Activity {
-    static final UUID BLE_SERVICE = UUID.fromString("7f640101-7c7d-4f0a-8b6f-4f484f4d4501");
-    static final UUID BLE_CMD     = UUID.fromString("7f640102-7c7d-4f0a-8b6f-4f484f4d4501");
-    static final UUID BLE_DATA    = UUID.fromString("7f640103-7c7d-4f0a-8b6f-4f484f4d4501");
+    static final UUID BLE_SERVICE = UUID.fromString("7f640201-7c7d-4f0a-8b6f-4f484f4d4501");
+    static final UUID BLE_CMD     = UUID.fromString("7f640202-7c7d-4f0a-8b6f-4f484f4d4501");
+    static final UUID BLE_DATA    = UUID.fromString("7f640203-7c7d-4f0a-8b6f-4f484f4d4501");
     static final UUID CCCD        = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 
     final int BG=Color.rgb(1,12,21), CARD=Color.rgb(8,34,51), CARD2=Color.rgb(10,39,57);
@@ -38,6 +38,14 @@ public class MainActivity extends Activity {
     boolean connected=false, demo=false, soundAlert=true, alive=true, waitingIdentity=false;
     String deviceSerial="", pendingSerial="", protocol="NONE", ecuName="هنوز شناسایی نشده";
     int rpm=0, speed=0, coolant=0;
+    boolean noWater=true, sensorFault=true, waterKnown=false, ecuConnected=false;
+    boolean coolantKnown=false,fuelKnown=false,voltageKnown=false;
+    float waterLevel=0;
+    long lastAlarmSpeech=0;
+    int txId=0,writeGeneration=0,scanGeneration=0;
+    boolean writeInFlight=false;
+    final ArrayDeque<byte[]> writeQueue=new ArrayDeque<>();
+    final BleFrames frames=new BleFrames();
     float fuel=0, voltage=0;
     String dtcText="برای بررسی خودرو «اسکن خطاها» را بزنید";
 
@@ -76,11 +84,9 @@ public class MainActivity extends Activity {
     }
 
     void beginConnect(){
-        if(demo){ toast("حالت دمو را خاموش کنید"); return; }
+        if(demo){toast("حالت دمو را خاموش کنید");return;}
         pendingSerial=prefs.getString("activated_serial","");
-        if(pendingSerial.isEmpty()){
-            askSerialThenScan();
-        }else scanBle();
+        scanBle();
     }
 
     void askSerialThenScan(){
@@ -118,9 +124,10 @@ public class MainActivity extends Activity {
     }
 
     String normalizeSerial(String s){return s==null?"":s.trim().toUpperCase(Locale.US).replace(" ","");}
-    boolean validSerial(String s){return s.matches("[A-Z0-9]{2,8}-\\d{2}-\\d{6}");}
+    boolean validSerial(String s){return s.matches("KR-ESP32-[0-9A-F]{8}|[A-Z0-9]{2,8}-\\d{2}-\\d{6}");}
 
     void scanBle(){
+        try{if(scanner!=null&&scanCallback!=null)scanner.stopScan(scanCallback);}catch(Exception ignored){}
         requestBluetoothPermissions();
         if(!btAllowed()){toast("مجوز بلوتوث را تأیید کنید");return;}
         BluetoothManager bm=(BluetoothManager)getSystemService(BLUETOOTH_SERVICE);
@@ -130,16 +137,17 @@ public class MainActivity extends Activity {
         scanner=ad.getBluetoothLeScanner();
         if(scanner==null){toast("BLE در دسترس نیست");return;}
 
-        final LinkedHashMap<String,BluetoothDevice> found=new LinkedHashMap<>();
+        final ConcurrentHashMap<String,BluetoothDevice> found=new ConcurrentHashMap<>();
+        final int scanToken=++scanGeneration;
         proView.message="در حال جستجوی SMART OBD ..."; proView.invalidate();
 
         scanCallback=new ScanCallback(){
             @Override public void onScanResult(int callbackType, ScanResult result){
-                BluetoothDevice d=result.getDevice(); if(d==null)return;
+                BluetoothDevice d=result.getDevice(); if(d==null||scanToken!=scanGeneration)return;
                 boolean ours=false;
                 String name="";
                 try{name=d.getName()==null?"":d.getName();}catch(Exception ignored){}
-                if(name.contains("KhanehRemap")||name.contains("OBD-C3")||name.contains("SMART OBD")) ours=true;
+                if(name.startsWith("KR_OBD_")||name.contains("KhanehRemap")||name.contains("OBD-C3")||name.contains("SMART OBD")) ours=true;
                 ScanRecord rec=result.getScanRecord();
                 if(rec!=null&&rec.getServiceUuids()!=null){
                     for(ParcelUuid p:rec.getServiceUuids()) if(BLE_SERVICE.equals(p.getUuid())) ours=true;
@@ -152,6 +160,7 @@ public class MainActivity extends Activity {
         };
         try{scanner.startScan(scanCallback);}catch(Exception ex){toast("شروع جستجو ناموفق بود");return;}
         h.postDelayed(()->{
+            if(!alive||scanToken!=scanGeneration)return;
             try{scanner.stopScan(scanCallback);}catch(Exception ignored){}
             if(found.isEmpty()){
                 proView.message="SMART OBD پیدا نشد";
@@ -159,119 +168,154 @@ public class MainActivity extends Activity {
                 toast("ESP32-C3 پیدا نشد؛ برق دستگاه و BLE را بررسی کنید");
                 return;
             }
-            BluetoothDevice best=found.values().iterator().next();
-            connectTo(best);
+            ArrayList<BluetoothDevice> choices=new ArrayList<>(found.values());
+            if(choices.size()==1){connectTo(choices.get(0));return;}
+            String[] labels=new String[choices.size()];
+            for(int i=0;i<labels.length;i++){
+                BluetoothDevice device=choices.get(i);
+                labels[i]=(device.getName()==null?"SMART OBD":device.getName())+" • "+device.getAddress();
+            }
+            new AlertDialog.Builder(this).setTitle("دستگاه خود را انتخاب کنید")
+                    .setItems(labels,(dialog,index)->connectTo(choices.get(index))).show();
         },4300);
     }
 
-    void connectTo(BluetoothDevice d){
-        connectedDevice=d;
+    void connectTo(BluetoothDevice device){
+        connectedDevice=device;frames.reset();writeQueue.clear();writeInFlight=false;++writeGeneration;
         proView.message="در حال اتصال BLE ...";proView.invalidate();
         try{
-            if(Build.VERSION.SDK_INT>=31&&checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)!=PackageManager.PERMISSION_GRANTED){requestBluetoothPermissions();return;}
-            gatt=d.connectGatt(this,false,new BluetoothGattCallback(){
-                @Override public void onConnectionStateChange(BluetoothGatt g,int status,int newState){
-                    if(newState==BluetoothProfile.STATE_CONNECTED){
-                        connected=true;
-                        try{g.requestMtu(185);}catch(Exception ignored){}
-                        g.discoverServices();
-                        runOnUiThread(()->{proView.message="BLE متصل شد؛ در حال بررسی سریال";proView.invalidate();});
-                    } else if(newState==BluetoothProfile.STATE_DISCONNECTED){
-                        connected=false;cmdCh=null;dataCh=null;deviceSerial="";
-                        runOnUiThread(()->{proView.message="اتصال OBD قطع شد";proView.invalidate();});
-                    }
-                }
-                @Override public void onServicesDiscovered(BluetoothGatt g,int status){
-                    BluetoothGattService s=g.getService(BLE_SERVICE);
-                    if(s==null){runOnUiThread(()->connectionFailed("Firmware SMART OBD روی ESP32 پیدا نشد"));return;}
-                    cmdCh=s.getCharacteristic(BLE_CMD); dataCh=s.getCharacteristic(BLE_DATA);
-                    if(cmdCh==null||dataCh==null){runOnUiThread(()->connectionFailed("کانال ارتباطی BLE کامل نیست"));return;}
-                    g.setCharacteristicNotification(dataCh,true);
-                    BluetoothGattDescriptor dd=dataCh.getDescriptor(CCCD);
-                    if(dd!=null){dd.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);g.writeDescriptor(dd);}
-                    runOnUiThread(()->{
-                        waitingIdentity=true;
-                        send("GET_SERIAL");
-                        h.postDelayed(()->{
-                            if(waitingIdentity&&connected){
-                                connectionFailed("Firmware دستگاه پاسخ سریال نداد؛ Firmware سریال‌دار را روی ESP32-C3 نصب کنید");
-                            }
-                        },2200);
+            gatt=device.connectGatt(this,false,new BluetoothGattCallback(){
+                @Override public void onConnectionStateChange(BluetoothGatt g,int status,int state){
+                    h.post(()->{
+                        if(g!=gatt||!alive)return;
+                        if(status==BluetoothGatt.GATT_SUCCESS&&state==BluetoothProfile.STATE_CONNECTED){
+                            connected=true;waitingIdentity=true;
+                            proView.message="متصل؛ در حال خواندن سریال دستگاه";proView.invalidate();
+                            if(!g.discoverServices())connectionFailed("شروع شناسایی سرویس ناموفق بود");
+                        }else if(state==BluetoothProfile.STATE_DISCONNECTED||status!=BluetoothGatt.GATT_SUCCESS){
+                            disconnect();proView.message="اتصال OBD قطع شد";proView.invalidate();
+                        }
                     });
                 }
-                @Override public void onCharacteristicChanged(BluetoothGatt g,BluetoothGattCharacteristic c){
-                    if(BLE_DATA.equals(c.getUuid())){
-                        String line=new String(c.getValue(), StandardCharsets.UTF_8).trim();
-                        runOnUiThread(()->handleLine(line));
-                    }
+                @Override public void onServicesDiscovered(BluetoothGatt g,int status){
+                    h.post(()->{
+                        if(g!=gatt||!alive)return;
+                        BluetoothGattService service=g.getService(BLE_SERVICE);
+                        if(status!=BluetoothGatt.GATT_SUCCESS||service==null){connectionFailed("Firmware Diagnostic v3 روی دستگاه پیدا نشد");return;}
+                        cmdCh=service.getCharacteristic(BLE_CMD);dataCh=service.getCharacteristic(BLE_DATA);
+                        if(cmdCh==null||dataCh==null||!g.setCharacteristicNotification(dataCh,true)){
+                            connectionFailed("کانال ارتباطی BLE کامل نیست");return;
+                        }
+                        BluetoothGattDescriptor descriptor=dataCh.getDescriptor(CCCD);
+                        if(descriptor==null){connectionFailed("کانال دریافت پیام در دسترس نیست");return;}
+                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                        if(!g.writeDescriptor(descriptor))connectionFailed("فعال‌سازی دریافت پیام ناموفق بود");
+                    });
+                }
+                @Override public void onDescriptorWrite(BluetoothGatt g,BluetoothGattDescriptor descriptor,int status){
+                    h.post(()->{
+                        if(g!=gatt||!alive||!CCCD.equals(descriptor.getUuid()))return;
+                        if(status!=BluetoothGatt.GATT_SUCCESS){connectionFailed("دریافت پیام BLE فعال نشد");return;}
+                        send("GET_SERIAL");
+                        h.postDelayed(()->{if(g==gatt&&waitingIdentity&&connected)connectionFailed("دستگاه پاسخ سریال نداد");},5000);
+                    });
+                }
+                @Override public void onCharacteristicWrite(BluetoothGatt g,BluetoothGattCharacteristic characteristic,int status){
+                    h.post(()->{
+                        if(g!=gatt||!alive||!BLE_CMD.equals(characteristic.getUuid()))return;
+                        if(status!=BluetoothGatt.GATT_SUCCESS){connectionFailed("ارسال فرمان BLE ناموفق بود");return;}
+                        if(!writeInFlight)return;
+                        ++writeGeneration;writeInFlight=false;
+                        if(!writeQueue.isEmpty())writeQueue.removeFirst();pumpWrites();
+                    });
+                }
+                @Override public void onCharacteristicChanged(BluetoothGatt g,BluetoothGattCharacteristic characteristic){
+                    byte[] value=characteristic.getValue();
+                    if(value!=null)receive(g,characteristic.getUuid(),value.clone());
+                }
+                @Override public void onCharacteristicChanged(BluetoothGatt g,BluetoothGattCharacteristic characteristic,byte[] value){
+                    if(value!=null)receive(g,characteristic.getUuid(),value.clone());
                 }
             },BluetoothDevice.TRANSPORT_LE);
         }catch(Exception e){connectionFailed("اتصال BLE برقرار نشد");}
     }
 
+    void receive(BluetoothGatt g,UUID characteristic,byte[] value){
+        h.post(()->{
+            if(g!=gatt||!alive||!BLE_DATA.equals(characteristic))return;
+            String message=frames.accept(value,SystemClock.elapsedRealtime());
+            if(message!=null)handleLine(message);
+        });
+    }
+    void bindSerial(String serial){
+        deviceSerial=serial;pendingSerial=serial;
+        prefs.edit().putString("activated_serial",serial)
+                .putString("bound_addr",connectedDevice==null?"":connectedDevice.getAddress()).apply();
+        activationOk(false);
+    }
+    void updateWater(boolean low,boolean fault,float level){
+        boolean changed=!waterKnown||noWater!=low||sensorFault!=fault;
+        waterKnown=true;noWater=low;sensorFault=fault;waterLevel=level;
+        if(low&&soundAlert&&(changed||SystemClock.elapsedRealtime()-lastAlarmSpeech>=15000)){
+            lastAlarmSpeech=SystemClock.elapsedRealtime();
+            speak(fault?"هشدار، سنسور سطح آب را بررسی کنید":"هشدار، سطح آب خنک کننده پایین است");
+        }
+    }
+
     void handleLine(String s){
         if(s==null||s.isEmpty())return;
-        if(s.startsWith("SERIAL:")){
+        if(s.startsWith("S|")){
+            String got=normalizeSerial(s.substring(2));
+            if(!validSerial(got)){connectionFailed("سریال دستگاه معتبر نیست");return;}
             waitingIdentity=false;
-            String payload=s.substring(7).trim();
-            String got=normalizeSerial(payload);
-            if(got.equals("UNSET")||got.isEmpty()){
-                waitingIdentity=true;
-                send("SET_SERIAL:"+pendingSerial);
-                return;
-            }
-            if(got.startsWith("SET,")){
-                deviceSerial=normalizeSerial(got.substring(4));
-                if(deviceSerial.equals(pendingSerial)){
-                    prefs.edit().putString("activated_serial",deviceSerial)
-                            .putString("bound_addr",connectedDevice==null?"":connectedDevice.getAddress()).apply();
-                    activationOk(false);
-                }else connectionFailed("سریال ذخیره‌شده با سریال واردشده مطابقت ندارد");
-                return;
-            }
-            if(got.equals("LOCKED")){
-                connectionFailed("این ESP32 قبلاً با سریال دیگری ثبت شده است");
-                return;
-            }
-            if(got.equals("INVALID")){
-                connectionFailed("فرمت سریال معتبر نیست");
-                return;
-            }
-            deviceSerial=got;
-            if(pendingSerial.isEmpty()) pendingSerial=prefs.getString("activated_serial","");
-            if(got.equals(pendingSerial)){
-                prefs.edit().putString("activated_serial",got)
-                        .putString("bound_addr",connectedDevice==null?"":connectedDevice.getAddress()).apply();
-                activationOk(false);
-            }else connectionFailed("سریال دستگاه با سریال واردشده مطابقت ندارد");
+            if(!pendingSerial.isEmpty()&&!pendingSerial.equals(got)){
+                new AlertDialog.Builder(this).setTitle("دستگاه متفاوت")
+                        .setMessage("سریال این دستگاه: "+got+"\nاین دستگاه به جای دستگاه قبلی ثبت شود؟")
+                        .setNegativeButton("انصراف",(dialog,index)->disconnect())
+                        .setPositiveButton("ثبت این دستگاه",(dialog,index)->{if(connected)bindSerial(got);})
+                        .setOnCancelListener(dialog->disconnect()).show();
+            }else bindSerial(got);
             return;
         }
 
         if(!isActivated()) return;
         try{
-            if(s.startsWith("RPM:")) rpm=Integer.parseInt(s.substring(4).trim());
-            else if(s.startsWith("SPEED:")) speed=Integer.parseInt(s.substring(6).trim());
-            else if(s.startsWith("ECT:")) coolant=Integer.parseInt(s.substring(4).trim());
-            else if(s.startsWith("FUEL:")) fuel=Float.parseFloat(s.substring(5).trim());
-            else if(s.startsWith("VOLT:")) voltage=Float.parseFloat(s.substring(5).trim());
-            else if(s.startsWith("ECU:CONNECTED,")){protocol=s.substring(14);ecuName="ECU شناسایی شد — "+protocol;}
-            else if(s.startsWith("STATUS,")){
-                int p=s.indexOf("PROTO:");
-                if(p>=0){int e=s.indexOf(",",p);protocol=s.substring(p+6,e<0?s.length():e);ecuName="ECU شناسایی شد — "+protocol;}
+            String[] fields=s.split("\\|",-1);
+            if(s.startsWith("Q|")&&fields.length==3){speed=Integer.parseInt(fields[1]);rpm=Integer.parseInt(fields[2]);}
+            else if(BleFrames.isTelemetry(fields)){
+                speed=Integer.parseInt(fields[1]);rpm=Integer.parseInt(fields[2]);
+                coolantKnown=!fields[3].equals("-");if(coolantKnown)coolant=Math.round(Float.parseFloat(fields[3]));
+                fuelKnown=!fields[4].equals("-");if(fuelKnown)fuel=Float.parseFloat(fields[4]);
+                voltageKnown=!fields[5].equals("-");if(voltageKnown)voltage=Float.parseFloat(fields[5]);
+                updateWater(fields[7].equals("1"),fields[8].equals("1"),Float.parseFloat(fields[6]));
+                protocol=fields[9];ecuConnected=!protocol.equals("NONE");
+                ecuName=ecuConnected?"پروتکل متصل: "+protocol:"ECU متصل نیست";
             }
-            else if(s.startsWith("DTC:")){
-                if(s.equals("DTC:NONE"))dtcText="هیچ خطای فعالی ثبت نشده";
-                else dtcText=s.substring(4).replace(",","\n");
+            else if(s.startsWith("DT|")){
+                if(s.equals("DT|BEGIN"))dtcText="";
+                else if(s.equals("DT|NONE"))dtcText="خطایی در پاسخ ECU گزارش نشد";
+                else if(s.equals("DT|ERROR"))dtcText="خواندن خطا ناموفق بود؛ پروتکل و اتصال ECU را بررسی کنید";
+                else if(!s.equals("DT|END"))dtcText+=(dtcText.isEmpty()?"":"\n")+s.substring(3);
             }
-            else if(s.startsWith("CLEAR_DTC:SENT"))dtcText="حافظه خطا پاک شد";
-            else if(s.startsWith("ALARM:LOW_COOLANT")&&soundAlert)speak("هشدار، سطح آب خنک کننده پایین است");
+            else if(s.startsWith("ID|")){proView.message="اطلاعات ECU دریافت شد";}
+            else if(s.startsWith("DENY|")){
+                if(s.equals("DENY|HARDWARE_UNVERIFIED"))proView.message="نسخه تست؛ ارتباط خودرو تا تأیید برد غیرفعال است";
+                else if(s.equals("DENY|BENCH_READ_ONLY"))proView.message="پاک‌کردن خطا و ریست در این نسخه غیرفعال است";
+                else if(s.equals("DENY|OTA_DISABLED"))proView.message="به‌روزرسانی OTA در این نسخه غیرفعال است";
+                else proView.message="فرمان اجرا نشد: "+s.substring(5);
+                toast(proView.message);
+            }
+            else if(s.startsWith("ECU:CONNECTED,")){protocol=s.substring(14);ecuConnected=true;ecuName="پروتکل متصل: "+protocol;}
+            else if(s.equals("ECU:NOT_FOUND")){ecuConnected=false;protocol="NONE";ecuName="ECU پیدا نشد";}
+            else if(s.startsWith("ALARM:LOW_COOLANT")){updateWater(true,sensorFault,waterLevel);}
+            else if(s.equals("COOLANT:OK")){updateWater(false,false,waterLevel);}
         }catch(Exception ignored){}
         proView.invalidate();
     }
 
     boolean isActivated(){
         String act=prefs.getString("activated_serial","");
-        return connected&&!act.isEmpty()&&(deviceSerial.isEmpty()||act.equals(deviceSerial));
+        return connected&&!waitingIdentity&&!deviceSerial.isEmpty()&&act.equals(deviceSerial);
     }
 
     void activationOk(boolean legacy){
@@ -279,7 +323,7 @@ public class MainActivity extends Activity {
         connected=true;
         proView.message="اتصال OBD با موفقیت برقرار شد • سریال تأیید شد";
         send("STATUS");
-        h.postDelayed(()->send("REDETECT"),350);
+        // Explicit protocol selection is required; never start a vehicle scan here.
         proView.invalidate();
         toast("سریال "+prefs.getString("activated_serial","")+" تأیید شد");
     }
@@ -291,16 +335,37 @@ public class MainActivity extends Activity {
         disconnect();
     }
 
-    void send(String s){
+    void send(String command){
         if(!connected||gatt==null||cmdCh==null)return;
         try{
-            cmdCh.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
-            cmdCh.setValue(s.getBytes(StandardCharsets.UTF_8));
-            gatt.writeCharacteristic(cmdCh);
-        }catch(Exception ignored){}
+            List<byte[]> packets=BleFrames.command(command,++txId);
+            if(writeQueue.size()+packets.size()>128){toast("صف ارسال پر است؛ کمی صبر کنید");return;}
+            writeQueue.addAll(packets);pumpWrites();
+        }catch(IllegalArgumentException ignored){toast("فرمان بیش از حد طولانی است");}
+    }
+    void pumpWrites(){
+        if(writeInFlight||writeQueue.isEmpty()||gatt==null||cmdCh==null)return;
+        try{
+            cmdCh.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+            cmdCh.setValue(writeQueue.peekFirst());
+            if(!gatt.writeCharacteristic(cmdCh)){connectionFailed("ارسال فرمان BLE آغاز نشد");return;}
+            writeInFlight=true;final int token=++writeGeneration;
+            h.postDelayed(()->{if(writeInFlight&&writeGeneration==token)connectionFailed("پاسخ ارسال BLE دریافت نشد");},5000);
+        }catch(Exception e){connectionFailed("ارسال BLE ناموفق بود");}
+    }
+    void selectProtocol(){
+        if(!isActivated()){toast("ابتدا به دستگاه متصل شوید");return;}
+        String[] names={"CAN 500","CAN 250","K-Line Fast","K-Line 5-baud","قطع ارتباط ECU"};
+        String[] commands={"BUS|CAN500","BUS|CAN250","BUS|KLINE_FAST","BUS|KLINE_5BAUD","BUS|OFF"};
+        new AlertDialog.Builder(this).setTitle("پروتکل ECU")
+                .setItems(names,(dialog,index)->send(commands[index]))
+                .setNegativeButton("انصراف",null).show();
     }
 
     void disconnect(){
+        ++scanGeneration;++writeGeneration;writeQueue.clear();writeInFlight=false;frames.reset();
+        ecuConnected=false;waterKnown=false;protocol="NONE";ecuName="ECU متصل نیست";
+        rpm=speed=0;coolantKnown=fuelKnown=voltageKnown=false;
         try{if(scanner!=null&&scanCallback!=null)scanner.stopScan(scanCallback);}catch(Exception ignored){}
         try{if(gatt!=null){gatt.disconnect();gatt.close();}}catch(Exception ignored){}
         gatt=null;cmdCh=null;dataCh=null;connected=false;waitingIdentity=false;deviceSerial="";
@@ -324,6 +389,7 @@ public class MainActivity extends Activity {
     }
 
     void clearDtc(){
+        if(!demo){toast("پاک‌کردن خطا در نسخه تست غیرفعال است");return;}
         if(!demo&&!isActivated()){toast("ابتدا به OBD متصل شوید");return;}
         new AlertDialog.Builder(this)
                 .setTitle("پاک‌کردن DTC")
@@ -367,14 +433,24 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c){
             super.onDraw(c);
             float w=getWidth(),h=getHeight();
-            if(getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE){drawLandscape(c,w,h);return;}
+            c.save();
+            boolean landscape=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE;
+            c.scale(w/(landscape?950f:480f),h/(landscape?480f:960f));
+            w=landscape?950f:480f;h=landscape?480f:960f;
+            if(getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE){drawLandscape(c,w,h);drawAlarm(c,w,h);c.restore();return;}
             drawBackground(c,w,h);
             drawHeader(c,w,h);
             if(page==0)drawDashboard(c,w,h);
             else if(page==1)drawDiag(c,w,h);
             else if(page==2)drawLive(c,w,h);
             else drawConnect(c,w,h);
-            drawBottom(c,w,h);
+            drawBottom(c,w,h);drawAlarm(c,w,h);c.restore();
+        }
+
+        void drawAlarm(Canvas c,float w,float h){
+            if(!waterKnown||!noWater)return;
+            rr(c,16,h-164,w-16,h-110,14,Color.rgb(115,12,28),RED);
+            txt(c,sensorFault?"هشدار: سنسور سطح آب را بررسی کنید":"هشدار: سطح آب پایین است — تشنمه",w/2,h-132,18,WHITE,Paint.Align.CENTER,true);
         }
 
         void drawBackground(Canvas c,float w,float h){
@@ -421,9 +497,9 @@ public class MainActivity extends Activity {
 
             float y=t+220;
             rr(c,28,y,w-28,y+118,24,CARD,0);
-            txt(c,"شناسایی خودکار ECU",w-58,y+36,15,MUTED,Paint.Align.RIGHT,false);
+            txt(c,"انتخاب پروتکل ECU • لمس کنید",w-58,y+36,15,MUTED,Paint.Align.RIGHT,false);
             txt(c,ecuName,w-58,y+72,17,WHITE,Paint.Align.RIGHT,true);
-            txt(c,"تشخیص خودکار • PID استاندارد • "+protocol,w-58,y+101,12,CYAN,Paint.Align.RIGHT,false);
+            txt(c,"نسخه تست • انتخاب پروتکل دستی • "+protocol,w-58,y+101,12,CYAN,Paint.Align.RIGHT,false);
 
             y+=140;
             rr(c,28,y,w-28,y+84,22,CARD,0);
@@ -435,7 +511,7 @@ public class MainActivity extends Activity {
             txt(c,"هشدار صوتی پارامترهای بحرانی",w-58,y+48,17,WHITE,Paint.Align.RIGHT,false);
             drawSwitch(c,68,y+42,soundAlert);
 
-            txt(c,"نسخه حرفه‌ای  2.3 Serial  •  طراحی اختصاصی خانه ریمپ",w/2,y+128,11,Color.rgb(70,94,109),Paint.Align.CENTER,false);
+            txt(c,"نسخه تست  2.5 Diagnostic  •  طراحی اختصاصی خانه ریمپ",w/2,y+128,11,Color.rgb(70,94,109),Paint.Align.CENTER,false);
             String act=prefs.getString("activated_serial","");
             if(!act.isEmpty()) txt(c,"سریال فعال: "+act,w/2,y+150,11,Color.rgb(78,120,137),Paint.Align.CENTER,false);
         }
@@ -447,7 +523,7 @@ public class MainActivity extends Activity {
 
         void drawDashboard(Canvas c,float w,float h){
             txt(c,"داشبورد",w-36,155,28,WHITE,Paint.Align.RIGHT,false);
-            txt(c,connected?"خودرو و ECU متصل":"آماده اتصال به خودرو",w-36,181,13,connected?GREEN:MUTED,Paint.Align.RIGHT,false);
+            txt(c,ecuConnected?"پروتکل ECU متصل":"ECU متصل نیست",w-36,181,13,connected?GREEN:MUTED,Paint.Align.RIGHT,false);
 
             float gy=300,rad=112;
             gauge(c,w*.28f,gy,rad,rpm,8000,"RPM");
@@ -457,14 +533,14 @@ public class MainActivity extends Activity {
             txt(c,protocol,w*.5f,322,11,CYAN,Paint.Align.CENTER,true);
 
             float y=440, gap=9, cw=(w-56-gap)/2;
-            dataCard(c,28,y,28+cw,y+88,"دمای مایع خنک‌کننده",coolant>0?coolant+" °C":"—",RED);
-            dataCard(c,28+cw+gap,y,w-28,y+88,"ولتاژ کنترلر",voltage>0?String.format(Locale.US,"%.1f V",voltage):"—",GREEN);
+            dataCard(c,28,y,28+cw,y+88,"دمای مایع خنک‌کننده",coolantKnown?coolant+" °C":"—",RED);
+            dataCard(c,28+cw+gap,y,w-28,y+88,"ولتاژ کنترلر",voltageKnown?String.format(Locale.US,"%.1f V",voltage):"—",GREEN);
             y+=100;
-            dataCard(c,28,y,28+cw,y+88,"سطح سوخت",fuel>0?String.format(Locale.US,"%.0f %%",fuel):"—",AMBER);
-            dataCard(c,28+cw+gap,y,w-28,y+88,"وضعیت ECU",connected?"مطلوب است":"بدون اتصال",connected?GREEN:MUTED);
+            dataCard(c,28,y,28+cw,y+88,"سطح سوخت",fuelKnown?String.format(Locale.US,"%.0f %%",fuel):"—",AMBER);
+            dataCard(c,28+cw+gap,y,w-28,y+88,"وضعیت ECU",ecuConnected?"پروتکل متصل":"بدون ارتباط ECU",ecuConnected?GREEN:MUTED);
 
             rr(c,28,y+110,w-28,y+182,22,CARD,0);
-            txt(c,connected?"ارتباط پایدار با ECU":"برای شروع از بخش اتصال وارد شوید",w/2,y+154,15,connected?GREEN:MUTED,Paint.Align.CENTER,true);
+            txt(c,ecuConnected?"ارتباط با پروتکل ECU برقرار است":"BLE به‌تنهایی به معنی ارتباط ECU نیست",w/2,y+154,15,connected?GREEN:MUTED,Paint.Align.CENTER,true);
         }
 
         void gauge(Canvas c,float cx,float cy,float rad,int value,int max,String unit){
@@ -487,9 +563,10 @@ public class MainActivity extends Activity {
             String[][] rows={
                     {"دور موتور",rpm+" RPM"},
                     {"سرعت خودرو",speed+" km/h"},
-                    {"دمای مایع خنک‌کننده",coolant>0?coolant+" °C":"—"},
-                    {"سطح سوخت",fuel>0?String.format(Locale.US,"%.0f %%",fuel):"—"},
-                    {"ولتاژ کنترلر",voltage>0?String.format(Locale.US,"%.2f V",voltage):"—"},
+                    {"دمای مایع خنک‌کننده",coolantKnown?coolant+" °C":"—"},
+                    {"سطح سوخت",fuelKnown?String.format(Locale.US,"%.0f %%",fuel):"—"},
+                    {"ولتاژ کنترلر",voltageKnown?String.format(Locale.US,"%.2f V",voltage):"—"},
+                    {"سطح آب",waterKnown?(noWater?"هشدار کمبود آب":"سنسور تر"):"در انتظار داده"},
                     {"پروتکل",protocol}
             };
             float y=214;
@@ -524,7 +601,7 @@ public class MainActivity extends Activity {
             rr(c,0,y,w,h,0,Color.rgb(2,19,29),0);
             line(c,0,y,w,y,Color.rgb(7,45,59),1);
             String[] icons={"⌂","▥","≋","⌁"};
-            String[] labels={"داشبورد","داده زنده","عیب‌یابی","اتصال"};
+            String[] labels={"داشبورد","عیب‌یابی","داده زنده","اتصال"};
             for(int i=0;i<4;i++){
                 float cx=w*(i+.5f)/4;
                 boolean on=page==i;
@@ -541,7 +618,7 @@ public class MainActivity extends Activity {
             rr(c,12,12,220,h-12,22,Color.argb(230,5,29,43),0);
             txt(c,"خانه ریمپ",200,52,21,WHITE,Paint.Align.RIGHT,true);
             txt(c,"SMART OBD",200,76,12,CYAN,Paint.Align.RIGHT,true);
-            String[] n={"داشبورد","داده زنده","عیب‌یابی","اتصال"};
+            String[] n={"داشبورد","عیب‌یابی","داده زنده","اتصال"};
             for(int i=0;i<4;i++){float y=110+i*58;rr(c,25,y,207,y+46,14,page==i?Color.rgb(5,67,84):Color.TRANSPARENT,page==i?CYAN:0);txt(c,n[i],190,y+30,14,page==i?CYAN:WHITE,Paint.Align.RIGHT,page==i);}
             if(page==3){
                 txt(c,"اتصال و تنظیمات",w-35,55,25,WHITE,Paint.Align.RIGHT,true);
@@ -559,12 +636,15 @@ public class MainActivity extends Activity {
 
         @Override public boolean onTouchEvent(MotionEvent e){
             if(e.getAction()!=MotionEvent.ACTION_UP)return true;
-            float x=e.getX(),y=e.getY(),w=getWidth(),h=getHeight();
+            boolean landscape=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE;
+            float w=landscape?950f:480f,h=landscape?480f:960f;
+            float x=e.getX()*w/getWidth(),y=e.getY()*h/getHeight();
             if(getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE){
                 if(x<230){
                     if(y>110&&y<156)page=0; else if(y>168&&y<214)page=1; else if(y>226&&y<272)page=2; else if(y>284&&y<330)page=3;
                     invalidate();return true;
                 }
+                if(page==3&&y>82&&y<220){selectProtocol();return true;}
                 if(page==3&&y>220&&y<300){if(connected)disconnect();else beginConnect();return true;}
                 return true;
             }
@@ -574,12 +654,11 @@ public class MainActivity extends Activity {
             if(page==3){
                 float t=205;
                 if(y>t+145&&y<t+198){if(connected)disconnect();else beginConnect();return true;}
+                if(y>t+220&&y<t+338){selectProtocol();return true;}
                 float sw1=t+220+140+42;
                 if(y>sw1-42&&y<sw1+42){demo=!demo;if(demo)disconnect();invalidate();return true;}
                 float sw2=t+220+140+100+42;
                 if(y>sw2-42&&y<sw2+42){soundAlert=!soundAlert;toast(soundAlert?"هشدار صوتی فعال شد":"هشدار صوتی خاموش شد");invalidate();return true;}
-                // long-ish tap footer area clears serial binding
-                if(y>h-190&&y<h-110&&x<w*.45f){clearActivation();return true;}
             }else if(page==1){
                 if(y>348&&y<414){readDtc();return true;}
                 if(y>414&&y<480){clearDtc();return true;}

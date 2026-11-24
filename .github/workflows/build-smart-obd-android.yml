@@ -19,6 +19,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Test diagnostic BLE framing
+        run: |
+          javac -d /tmp/smartobd-java-tests SmartOBDAndroid/app/src/main/java/ir/khanehremap/smartobd/BleFrames.java SmartOBDAndroid/tests/BleFramesTest.java
+          java -cp /tmp/smartobd-java-tests ir.khanehremap.smartobd.BleFramesTest
       - name: Build debug APK
         working-directory: SmartOBDAndroid
         run: gradle --no-daemon assembleDebug

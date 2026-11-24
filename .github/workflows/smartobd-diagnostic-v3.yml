@@ -1,0 +1,47 @@
+name: SmartOBD Diagnostic v3
+
+on:
+  push:
+    branches: [smartobd-diagnostic-v3]
+  pull_request:
+    paths:
+      - 'SmartOBD-Diagnostic-v3/**'
+      - '.github/workflows/smartobd-diagnostic-v3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PlatformIO
+        run: pip install platformio==6.2.0
+      - name: Protocol and alarm regression tests
+        run: |
+          g++ -std=c++11 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -I SmartOBD-Diagnostic-v3/tests/stubs SmartOBD-Diagnostic-v3/tests/safety_test.cpp -o /tmp/smartobd-safety-test
+          /tmp/smartobd-safety-test
+      - name: Verify conflicting buzzer pin is rejected
+        run: |
+          if g++ -std=c++11 -DKR_BUZZER_PIN=10 -I SmartOBD-Diagnostic-v3/tests/stubs SmartOBD-Diagnostic-v3/tests/safety_test.cpp -o /tmp/unsafe-pin-test; then
+            echo "Unsafe K-Line/buzzer conflict was accepted"
+            exit 1
+          fi
+      - name: Build ESP32-C3 firmware
+        working-directory: SmartOBD-Diagnostic-v3/firmware/KhanehRemap_SmartOBD_Diag_v5
+        run: pio run -e esp32-c3 -e esp32-c3-verified-bench
+      - name: Upload firmware binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: KhanehRemap-SmartOBD-Diag-v5
+          if-no-files-found: error
+          path: |
+            SmartOBD-Diagnostic-v3/firmware/KhanehRemap_SmartOBD_Diag_v5/.pio/build/esp32-c3/firmware.bin
+            SmartOBD-Diagnostic-v3/firmware/KhanehRemap_SmartOBD_Diag_v5/.pio/build/esp32-c3/firmware.elf
+            SmartOBD-Diagnostic-v3/firmware/KhanehRemap_SmartOBD_Diag_v5/.pio/build/esp32-c3/partitions.bin
+            SmartOBD-Diagnostic-v3/firmware/KhanehRemap_SmartOBD_Diag_v5/.pio/build/esp32-c3/bootloader.bin
